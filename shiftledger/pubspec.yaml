@@ -1,0 +1,54 @@
+name: shiftledger
+description: "A new Flutter project."
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.10.4
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.8
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+  package_rename: ^1.10.1
+
+flutter:
+  uses-material-design: true
+
+package_rename_config:
+  android:
+    app_name: "ShiftLedger"
+    package_name: "com.allysoftsolutions.shiftledger"
+    lang: "kotlin"
+
+  ios:
+    app_name: "ShiftLedger"
+    bundle_name: "ShiftLedger"
+    package_name: "com.allysoftsolutions.shiftledger"
+
+  linux:
+    app_name: "ShiftLedger"
+    package_name: "com.allysoftsolutions.shiftledger"
+    exe_name: "shiftledger"
+
+  macos:
+    app_name: "ShiftLedger"
+    package_name: "com.allysoftsolutions.shiftledger"
+    copyright_notice: "Copyright © 2024"
+
+  web:
+    app_name: "ShiftLedger"
+    short_app_name: "ShiftLedger"
+    description: "Best App"
+
+  windows:
+    app_name: "ShiftLedger"
+    organization: "Allysoft Solutions"
+    copyright_notice: "Copyright © 2024"
+    exe_name: "shiftledger"
