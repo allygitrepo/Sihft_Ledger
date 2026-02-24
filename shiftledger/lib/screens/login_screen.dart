@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/auth_provider.dart';
 import '../routes/app_routes.dart';
-import '../utills/app_assets.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -53,10 +52,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     // Logo/Title
-                    Image.asset(
-                      AppAssets.appLogo,
-                      height: AppAssets.logoSizeAuth,
-                      width: AppAssets.logoSizeAuth,
+                    Icon(
+                      Icons.login,
+                      size: screenHeight * 0.1,
+                      color: Theme.of(context).primaryColor,
                     ),
                     SizedBox(height: screenHeight * 0.03),
                     Text(

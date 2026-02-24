@@ -11,7 +11,7 @@ class AppAssets {
   static const String whatsapp = 'assets/whatsapp.png';
   
   // Logo Dimensions
-  static const double logoSizeSplash = 120.0;
-  static const double logoSizeAuth = 100.0;
+  static const double logoSizeSplash = 180.0;
+  static const double logoSizeAuth = 180.0;
   static const double allyLogoHeight = 40.0;
 }
