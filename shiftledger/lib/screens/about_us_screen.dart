@@ -190,8 +190,14 @@ class _AboutUsScreenState extends State<AboutUsScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("About Us")),
-      drawer: const AppDrawer(),
+      appBar: AppBar(
+        title: const Text("About Us"),
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () => Navigator.of(context).pop(),
+        ),
+      ),
+      // drawer: const AppDrawer(),
 
       body: Container(
         padding: const EdgeInsets.all(24),

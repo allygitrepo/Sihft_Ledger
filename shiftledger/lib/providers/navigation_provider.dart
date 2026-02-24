@@ -1,6 +1,5 @@
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/legacy.dart';
-import 'package:riverpod/riverpod.dart';  // ADD THIS LINE
+import 'package:riverpod/riverpod.dart';
 
 class NavigationNotifier extends StateNotifier<int> {
   NavigationNotifier() : super(0);

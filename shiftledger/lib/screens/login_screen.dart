@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/auth_provider.dart';
 import '../routes/app_routes.dart';
+import '../utills/app_assets.dart';
+import '../widgets/loader.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -36,10 +38,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
     return Scaffold(
       resizeToAvoidBottomInset: true,
-      body: GestureDetector(
-        onTap: () => FocusScope.of(context).unfocus(),
-        child: SafeArea(
-          child: SingleChildScrollView(
+      body: Stack(
+        children: [
+          GestureDetector(
+            onTap: () => FocusScope.of(context).unfocus(),
+            child: SafeArea(
+              child: SingleChildScrollView(
             padding: const EdgeInsets.all(24.0),
             child: ConstrainedBox(
               constraints: BoxConstraints(
@@ -52,12 +56,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     // Logo/Title
-                    Icon(
-                      Icons.login,
-                      size: screenHeight * 0.1,
-                      color: Theme.of(context).primaryColor,
+                   Image.asset(
+                      AppAssets.appLogo,
+                      height: AppAssets.logoSizeAuth,
+                      width: AppAssets.logoSizeAuth,
                     ),
-                    SizedBox(height: screenHeight * 0.03),
+                    // SizedBox(height: screenHeight * 0.03),
                     Text(
                       'Welcome Back',
                       style: Theme.of(context)
@@ -142,17 +146,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                                 authNotifier.login();
                               }
                             },
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 12.0),
-                        child: authState.isLoading
-                            ? const SizedBox(
-                                height: 20,
-                                width: 20,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                ),
-                              )
-                            : const Text('Login'),
+                      child: const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 12.0),
+                        child: Text('Login'),
                       ),
                     ),
                     SizedBox(height: screenHeight * 0.02),
@@ -182,6 +178,16 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             ),
           ),
         ),
+      ),
+          // Full screen loader
+          if (authState.isLoading)
+            Container(
+              color: Colors.black.withValues(alpha: 0.5),
+              child: const Center(
+                child: AppLoader(size: 80),
+              ),
+            ),
+        ],
       ),
     );
   }

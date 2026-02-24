@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/navigation_provider.dart';
+import '../utills/app_colors.dart';
 
 class BottomNav extends ConsumerWidget {
   const BottomNav({super.key});
@@ -12,15 +13,26 @@ class BottomNav extends ConsumerWidget {
 
     return BottomNavigationBar(
       currentIndex: currentIndex,
-      onTap: (index) => navigationNotifier.setIndex(index),
+      onTap: (index) {
+        if (index != 1) { // Skip the center button (index 1)
+          navigationNotifier.setIndex(index);
+        }
+      },
+      type: BottomNavigationBarType.fixed,
+      selectedItemColor: AppColors.primary,
+      unselectedItemColor: Colors.grey,
       items: const [
         BottomNavigationBarItem(
           icon: Icon(Icons.home),
           label: 'Home',
         ),
         BottomNavigationBarItem(
-          icon: Icon(Icons.person),
-          label: 'Profile',
+          icon: SizedBox.shrink(), // Hidden, replaced by FAB
+          label: '',
+        ),
+        BottomNavigationBarItem(
+          icon: Icon(Icons.settings),
+          label: 'Settings',
         ),
       ],
     );

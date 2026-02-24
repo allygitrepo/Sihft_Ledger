@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/auth_provider.dart';
+import '../routes/app_routes.dart';
 
 class ProfileScreen extends ConsumerWidget {
   const ProfileScreen({super.key});
@@ -52,6 +53,18 @@ class ProfileScreen extends ConsumerWidget {
               },
               icon: const Icon(Icons.edit),
               label: const Text('Edit Profile'),
+            ),
+            const SizedBox(height: 20),
+            ElevatedButton.icon(
+              onPressed: () {
+                ref.read(authProvider.notifier).logout();
+                Navigator.pushReplacementNamed(context, AppRoutes.login);
+              },
+              icon: const Icon(Icons.logout),
+              label: const Text('Logout'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red,
+              ),
             ),
           ],
         ),
