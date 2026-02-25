@@ -2,18 +2,20 @@ class EmployeeModel {
   final String id;
   final String name;
   final String employeeCode;
-  final double? baseSalary;
-  final double? hourlyRate;
-  final double? perUnitRate;
+  final String mobileNo;
+  final String position;
+  final String department;
+  final double salary;
   final DateTime createdAt;
 
   const EmployeeModel({
     required this.id,
     required this.name,
     required this.employeeCode,
-    this.baseSalary,
-    this.hourlyRate,
-    this.perUnitRate,
+    required this.mobileNo,
+    required this.position,
+    required this.department,
+    required this.salary,
     required this.createdAt,
   });
 
@@ -22,9 +24,10 @@ class EmployeeModel {
       'id': id,
       'name': name,
       'employeeCode': employeeCode,
-      'baseSalary': baseSalary,
-      'hourlyRate': hourlyRate,
-      'perUnitRate': perUnitRate,
+      'mobileNo': mobileNo,
+      'position': position,
+      'department': department,
+      'salary': salary,
       'createdAt': createdAt.toIso8601String(),
     };
   }
@@ -34,9 +37,10 @@ class EmployeeModel {
       id: json['id'] as String,
       name: json['name'] as String,
       employeeCode: json['employeeCode'] as String,
-      baseSalary: (json['baseSalary'] as num?)?.toDouble(),
-      hourlyRate: (json['hourlyRate'] as num?)?.toDouble(),
-      perUnitRate: (json['perUnitRate'] as num?)?.toDouble(),
+      mobileNo: json['mobileNo'] as String,
+      position: json['position'] as String,
+      department: json['department'] as String,
+      salary: (json['salary'] as num).toDouble(),
       createdAt: DateTime.parse(json['createdAt'] as String),
     );
   }
@@ -45,18 +49,20 @@ class EmployeeModel {
     String? id,
     String? name,
     String? employeeCode,
-    double? baseSalary,
-    double? hourlyRate,
-    double? perUnitRate,
+    String? mobileNo,
+    String? position,
+    String? department,
+    double? salary,
     DateTime? createdAt,
   }) {
     return EmployeeModel(
       id: id ?? this.id,
       name: name ?? this.name,
       employeeCode: employeeCode ?? this.employeeCode,
-      baseSalary: baseSalary ?? this.baseSalary,
-      hourlyRate: hourlyRate ?? this.hourlyRate,
-      perUnitRate: perUnitRate ?? this.perUnitRate,
+      mobileNo: mobileNo ?? this.mobileNo,
+      position: position ?? this.position,
+      department: department ?? this.department,
+      salary: salary ?? this.salary,
       createdAt: createdAt ?? this.createdAt,
     );
   }

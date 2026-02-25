@@ -27,14 +27,18 @@ class EmployeeState {
 class EmployeeNotifier extends Notifier<EmployeeState> {
   @override
   EmployeeState build() {
+    print('[EmployeeProvider] Initializing provider, loading employees...');
     loadEmployees();
     return const EmployeeState();
   }
 
   Future<void> loadEmployees() async {
+    print('[EmployeeProvider] loadEmployees() called');
     state = state.copyWith(isLoading: true);
     final employees = await EmployeeService.loadEmployees();
+    print('[EmployeeProvider] Loaded ${employees.length} employees from storage');
     state = state.copyWith(employees: employees, isLoading: false);
+    print('[EmployeeProvider] State updated with ${state.employees.length} employees');
   }
 
   Future<void> addEmployee(EmployeeModel employee) async {
@@ -60,10 +64,20 @@ class EmployeeNotifier extends Notifier<EmployeeState> {
 
   Future<void> importEmployees(List<EmployeeModel> employees) async {
     state = state.copyWith(isLoading: true);
+    print('[EmployeeProvider] Starting import of ${employees.length} employees');
+    
     final currentEmployees = await EmployeeService.loadEmployees();
+    print('[EmployeeProvider] Current employees count: ${currentEmployees.length}');
+    
     currentEmployees.addAll(employees);
+    print('[EmployeeProvider] Total after adding: ${currentEmployees.length}');
+    
     await EmployeeService.saveEmployees(currentEmployees);
+    print('[EmployeeProvider] Employees saved to storage');
+    
     await loadEmployees();
+    print('[EmployeeProvider] Employees reloaded, new count: ${state.employees.length}');
+    
     ToastHelper.success('${employees.length} employees imported successfully');
   }
 

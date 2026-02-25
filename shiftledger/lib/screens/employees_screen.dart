@@ -2,25 +2,112 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:file_picker/file_picker.dart';
 import 'dart:io';
+import 'dart:developer' as developer;
 import '../providers/employee_provider.dart';
-import '../providers/settings_provider.dart';
-import '../models/settings_model.dart';
 import '../models/employee_model.dart';
 import '../services/csv_import_service.dart';
 import '../utills/app_colors.dart';
 import '../utills/app_spacing.dart';
 import '../widgets/loader.dart';
 
-class EmployeesScreen extends ConsumerWidget {
+class EmployeesScreen extends ConsumerStatefulWidget {
   const EmployeesScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final employeeState = ref.watch(employeeProvider);
-    final settings = ref.watch(settingsProvider);
-    final horizontalPadding = AppSpacing.getHorizontalPadding(context);
+  ConsumerState<EmployeesScreen> createState() => _EmployeesScreenState();
+}
 
+class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
+
+  @override
+  Widget build(BuildContext context) {
+    final employeeState = ref.watch(employeeProvider);
+    final horizontalPadding = AppSpacing.getHorizontalPadding(context);
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isDesktop = screenWidth > 800;
+
+    // Desktop: No AppBar, MainLayout provides it
+    if (isDesktop) {
+      return Scaffold(
+        backgroundColor: Colors.white,
+        body: employeeState.isLoading
+            ? const Center(child: AppLoader(size: 50))
+            : employeeState.employees.isEmpty
+                ? _buildEmptyState(context)
+                : ListView.builder(
+                    padding: EdgeInsets.all(horizontalPadding),
+                    itemCount: employeeState.employees.length,
+                    itemBuilder: (context, index) {
+                      final employee = employeeState.employees[index];
+                      return Card(
+                        margin: const EdgeInsets.only(bottom: 12),
+                        child: ListTile(
+                          leading: CircleAvatar(
+                            backgroundColor: AppColors.primary,
+                            child: Text(
+                              employee.name[0].toUpperCase(),
+                              style: const TextStyle(color: Colors.white),
+                            ),
+                          ),
+                          title: Text(employee.name),
+                          subtitle: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('ID: ${employee.employeeCode}'),
+                              Text('${employee.position} • ${employee.department}'),
+                              Text('Mobile: ${employee.mobileNo}', 
+                                style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                              ),
+                            ],
+                          ),
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                crossAxisAlignment: CrossAxisAlignment.end,
+                                children: [
+                                  Text(
+                                    '₹${employee.salary.toStringAsFixed(0)}',
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 16,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(width: 8),
+                              IconButton(
+                                icon: const Icon(Icons.edit, size: 20),
+                                color: Colors.blue,
+                                onPressed: () => _showEditEmployeeDialog(context, employee),
+                                tooltip: 'Edit',
+                              ),
+                              IconButton(
+                                icon: const Icon(Icons.delete, size: 20),
+                                color: Colors.red,
+                                onPressed: () => _confirmDelete(context, employee),
+                                tooltip: 'Delete',
+                              ),
+                            ],
+                          ),
+                          isThreeLine: true,
+                        ),
+                      );
+                    },
+                  ),
+        floatingActionButton: FloatingActionButton(
+          onPressed: () => _showAddEmployeeOptions(context),
+          backgroundColor: AppColors.primary,
+          child: const Icon(Icons.add, color: Colors.white),
+        ),
+      );
+    }
+
+    // Mobile: Keep existing Scaffold with AppBar
     return Scaffold(
+      key: _scaffoldKey,
       appBar: AppBar(
         title: const Text('Employees'),
       ),
@@ -44,19 +131,74 @@ class EmployeesScreen extends ConsumerWidget {
                           ),
                         ),
                         title: Text(employee.name),
-                        subtitle: Text('Code: ${employee.employeeCode}'),
-                        trailing: Text(
-                          _getRateText(employee, settings.attendanceType),
-                          style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                          ),
+                        subtitle: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('ID: ${employee.employeeCode}'),
+                            Text('${employee.position} • ${employee.department}'),
+                            Text('Mobile: ${employee.mobileNo}', 
+                              style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                            ),
+                          ],
                         ),
+                        trailing: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: [
+                                Text(
+                                  '₹${employee.salary.toStringAsFixed(0)}',
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 16,
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(width: 8),
+                            PopupMenuButton(
+                              icon: const Icon(Icons.more_vert),
+                              itemBuilder: (context) => [
+                                const PopupMenuItem(
+                                  value: 'edit',
+                                  child: Row(
+                                    children: [
+                                      Icon(Icons.edit, size: 20, color: Colors.blue),
+                                      SizedBox(width: 8),
+                                      Text('Edit'),
+                                    ],
+                                  ),
+                                ),
+                                const PopupMenuItem(
+                                  value: 'delete',
+                                  child: Row(
+                                    children: [
+                                      Icon(Icons.delete, size: 20, color: Colors.red),
+                                      SizedBox(width: 8),
+                                      Text('Delete'),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                              onSelected: (value) {
+                                if (value == 'edit') {
+                                  _showEditEmployeeDialog(context, employee);
+                                } else if (value == 'delete') {
+                                  _confirmDelete(context, employee);
+                                }
+                              },
+                            ),
+                          ],
+                        ),
+                        isThreeLine: true,
                       ),
                     );
                   },
                 ),
       floatingActionButton: FloatingActionButton(
-        onPressed: () => _showAddEmployeeOptions(context, ref, settings),
+        onPressed: () => _showAddEmployeeOptions(context),
         backgroundColor: AppColors.primary,
         child: const Icon(Icons.add, color: Colors.white),
       ),
@@ -82,7 +224,7 @@ class EmployeesScreen extends ConsumerWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            'Import employees using CSV file',
+            'Add employees manually or import from CSV',
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                   color: Colors.grey[500],
                 ),
@@ -92,18 +234,7 @@ class EmployeesScreen extends ConsumerWidget {
     );
   }
 
-  String _getRateText(EmployeeModel employee, AttendanceType attendanceType) {
-    switch (attendanceType) {
-      case AttendanceType.daily:
-        return '₹${employee.baseSalary?.toStringAsFixed(0) ?? '0'}/day';
-      case AttendanceType.hourly:
-        return '₹${employee.hourlyRate?.toStringAsFixed(0) ?? '0'}/hr';
-      case AttendanceType.unit:
-        return '₹${employee.perUnitRate?.toStringAsFixed(0) ?? '0'}/unit';
-    }
-  }
-
-  void _showAddEmployeeOptions(BuildContext context, WidgetRef ref, SettingsModel settings) {
+  void _showAddEmployeeOptions(BuildContext context) {
     showModalBottomSheet(
       context: context,
       shape: const RoundedRectangleBorder(
@@ -144,7 +275,7 @@ class EmployeesScreen extends ConsumerWidget {
               trailing: const Icon(Icons.arrow_forward_ios, size: 16),
               onTap: () {
                 Navigator.pop(context);
-                _showAddEmployeeForm(context, ref, settings);
+                _showAddEmployeeForm(context);
               },
             ),
             const SizedBox(height: 12),
@@ -162,7 +293,7 @@ class EmployeesScreen extends ConsumerWidget {
               trailing: const Icon(Icons.arrow_forward_ios, size: 16),
               onTap: () {
                 Navigator.pop(context);
-                _showImportDialog(context, ref, settings);
+                _showImportDialog(context);
               },
             ),
             const SizedBox(height: 12),
@@ -180,7 +311,7 @@ class EmployeesScreen extends ConsumerWidget {
               trailing: const Icon(Icons.arrow_forward_ios, size: 16),
               onTap: () {
                 Navigator.pop(context);
-                _downloadCSVTemplate(context, settings);
+                _downloadCSVTemplate(context);
               },
             ),
             const SizedBox(height: 20),
@@ -190,10 +321,13 @@ class EmployeesScreen extends ConsumerWidget {
     );
   }
 
-  void _showAddEmployeeForm(BuildContext context, WidgetRef ref, SettingsModel settings) {
+  void _showAddEmployeeForm(BuildContext context) {
     final nameController = TextEditingController();
     final codeController = TextEditingController();
-    final rateController = TextEditingController();
+    final mobileController = TextEditingController();
+    final positionController = TextEditingController();
+    final departmentController = TextEditingController();
+    final salaryController = TextEditingController();
     final formKey = GlobalKey<FormState>();
 
     showModalBottomSheet(
@@ -210,97 +344,149 @@ class EmployeesScreen extends ConsumerWidget {
           padding: const EdgeInsets.all(24),
           child: Form(
             key: formKey,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Container(
-                  width: 40,
-                  height: 4,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: Colors.grey[300],
-                    borderRadius: BorderRadius.circular(2),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Container(
+                    width: 40,
+                    height: 4,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: Colors.grey[300],
+                      borderRadius: BorderRadius.circular(2),
+                    ),
                   ),
-                ),
-                const SizedBox(height: 20),
-                Text(
-                  'Add New Employee',
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 24),
-                TextFormField(
-                  controller: nameController,
-                  decoration: const InputDecoration(
-                    labelText: 'Employee Name',
-                    prefixIcon: Icon(Icons.person),
-                    border: OutlineInputBorder(),
+                  const SizedBox(height: 20),
+                  Text(
+                    'Add New Employee',
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                    textAlign: TextAlign.center,
                   ),
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Please enter employee name';
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 16),
-                TextFormField(
-                  controller: codeController,
-                  decoration: const InputDecoration(
-                    labelText: 'Employee Code',
-                    prefixIcon: Icon(Icons.badge),
-                    border: OutlineInputBorder(),
+                  const SizedBox(height: 24),
+                  TextFormField(
+                    controller: codeController,
+                    decoration: const InputDecoration(
+                      labelText: 'Employee ID',
+                      prefixIcon: Icon(Icons.badge),
+                      border: OutlineInputBorder(),
+                    ),
+                    validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        return 'Please enter employee ID';
+                      }
+                      return null;
+                    },
                   ),
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Please enter employee code';
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 16),
-                TextFormField(
-                  controller: rateController,
-                  decoration: InputDecoration(
-                    labelText: _getRateColumnName(settings.attendanceType),
-                    prefixIcon: const Icon(Icons.currency_rupee),
-                    border: const OutlineInputBorder(),
+                  const SizedBox(height: 16),
+                  TextFormField(
+                    controller: nameController,
+                    decoration: const InputDecoration(
+                      labelText: 'Employee Name',
+                      prefixIcon: Icon(Icons.person),
+                      border: OutlineInputBorder(),
+                    ),
+                    validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        return 'Please enter employee name';
+                      }
+                      return null;
+                    },
                   ),
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Please enter rate';
-                    }
-                    if (double.tryParse(value) == null) {
-                      return 'Please enter valid number';
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 24),
-                ElevatedButton(
-                  onPressed: () {
-                    if (formKey.currentState!.validate()) {
-                      _addEmployeeManually(
-                        context,
-                        ref,
-                        settings,
-                        nameController.text,
-                        codeController.text,
-                        double.parse(rateController.text),
-                      );
-                    }
-                  },
-                  style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
+                  const SizedBox(height: 16),
+                  TextFormField(
+                    controller: mobileController,
+                    decoration: const InputDecoration(
+                      labelText: 'Mobile Number',
+                      prefixIcon: Icon(Icons.phone),
+                      border: OutlineInputBorder(),
+                    ),
+                    keyboardType: TextInputType.phone,
+                    validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        return 'Please enter mobile number';
+                      }
+                      if (value.length != 10) {
+                        return 'Mobile number must be 10 digits';
+                      }
+                      return null;
+                    },
                   ),
-                  child: const Text('Add Employee'),
-                ),
-                const SizedBox(height: 12),
-              ],
+                  const SizedBox(height: 16),
+                  TextFormField(
+                    controller: positionController,
+                    decoration: const InputDecoration(
+                      labelText: 'Position',
+                      prefixIcon: Icon(Icons.work),
+                      border: OutlineInputBorder(),
+                    ),
+                    validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        return 'Please enter position';
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 16),
+                  TextFormField(
+                    controller: departmentController,
+                    decoration: const InputDecoration(
+                      labelText: 'Department',
+                      prefixIcon: Icon(Icons.business),
+                      border: OutlineInputBorder(),
+                    ),
+                    validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        return 'Please enter department';
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 16),
+                  TextFormField(
+                    controller: salaryController,
+                    decoration: const InputDecoration(
+                      labelText: 'Salary',
+                      prefixIcon: Icon(Icons.currency_rupee),
+                      border: OutlineInputBorder(),
+                    ),
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        return 'Please enter salary';
+                      }
+                      if (double.tryParse(value) == null) {
+                        return 'Please enter valid number';
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 24),
+                  ElevatedButton(
+                    onPressed: () {
+                      if (formKey.currentState!.validate()) {
+                        _addEmployeeManually(
+                          context,
+                          nameController.text,
+                          codeController.text,
+                          mobileController.text,
+                          positionController.text,
+                          departmentController.text,
+                          double.parse(salaryController.text),
+                        );
+                      }
+                    },
+                    style: ElevatedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                    ),
+                    child: const Text('Add Employee'),
+                  ),
+                  const SizedBox(height: 12),
+                ],
+              ),
             ),
           ),
         ),
@@ -308,7 +494,7 @@ class EmployeesScreen extends ConsumerWidget {
     );
   }
 
-  void _showImportDialog(BuildContext context, WidgetRef ref, SettingsModel settings) {
+  void _showImportDialog(BuildContext context) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -353,11 +539,11 @@ class EmployeesScreen extends ConsumerWidget {
                         color: Colors.grey[100],
                         borderRadius: BorderRadius.circular(4),
                       ),
-                      child: Text(
-                        'Name, Employee Code, ${_getRateColumnName(settings.attendanceType)}',
-                        style: const TextStyle(
+                      child: const Text(
+                        'Employee ID, Employee Name, Employee Mobile No, Employee Position, Employee Department, Employee Salary',
+                        style: TextStyle(
                           fontFamily: 'monospace',
-                          fontSize: 12,
+                          fontSize: 11,
                         ),
                       ),
                     ),
@@ -377,7 +563,8 @@ class EmployeesScreen extends ConsumerWidget {
               _buildBulletPoint('First row must be headers'),
               _buildBulletPoint('Each row = one employee'),
               _buildBulletPoint('All fields are required'),
-              _buildBulletPoint('Rate must be a number'),
+              _buildBulletPoint('Salary must be a number'),
+              _buildBulletPoint('Mobile number should be 10 digits'),
               const SizedBox(height: 16),
               Container(
                 padding: const EdgeInsets.all(12),
@@ -410,14 +597,14 @@ class EmployeesScreen extends ConsumerWidget {
           TextButton(
             onPressed: () {
               Navigator.pop(context);
-              _downloadCSVTemplate(context, settings);
+              _downloadCSVTemplate(context);
             },
             child: const Text('Download Template'),
           ),
           ElevatedButton.icon(
             onPressed: () {
               Navigator.pop(context);
-              _pickAndImportCSV(context, ref, settings);
+              _pickAndImportCSV(context);
             },
             icon: const Icon(Icons.file_upload),
             label: const Text('Select CSV File'),
@@ -445,282 +632,453 @@ class EmployeesScreen extends ConsumerWidget {
     );
   }
 
-  String _getRateColumnName(AttendanceType attendanceType) {
-    switch (attendanceType) {
-      case AttendanceType.daily:
-        return 'Base Salary';
-      case AttendanceType.hourly:
-        return 'Hourly Rate';
-      case AttendanceType.unit:
-        return 'Per Unit Rate';
-    }
-  }
-
-  Future<void> _pickAndImportCSV(
-    BuildContext context,
-    WidgetRef ref,
-    SettingsModel settings,
-  ) async {
+  Future<void> _pickAndImportCSV(BuildContext context) async {
+    developer.log('=== CSV IMPORT STARTED ===', name: 'EmployeesScreen');
+    
+    // Store navigator and scaffold messenger before any async operations
+    final navigator = Navigator.of(context);
+    final scaffoldMessenger = ScaffoldMessenger.of(context);
+    
     try {
-      // Show file picker
+      developer.log('Opening file picker...', name: 'EmployeesScreen');
+      
       final result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
         allowedExtensions: ['csv'],
         allowMultiple: false,
+        withData: true,
       );
 
       if (result == null || result.files.isEmpty) {
-        // User cancelled - no message needed
+        developer.log('User cancelled file selection', name: 'EmployeesScreen');
         return;
       }
 
       final platformFile = result.files.single;
+      developer.log('File selected: ${platformFile.name}', name: 'EmployeesScreen');
+      developer.log('File size: ${platformFile.size} bytes', name: 'EmployeesScreen');
+      developer.log('Has bytes: ${platformFile.bytes != null}', name: 'EmployeesScreen');
 
-      // Check if we have a valid path or bytes
-      if (platformFile.path == null && platformFile.bytes == null) {
-        if (context.mounted) {
-          _showErrorDialog(
-            context,
-            'File Error',
-            'Unable to read the selected file. Please try again.',
-          );
-        }
+      // Validate file type
+      if (!platformFile.name.toLowerCase().endsWith('.csv')) {
+        developer.log('ERROR: File is not a CSV file: ${platformFile.name}', name: 'EmployeesScreen');
+        if (!mounted) return;
+        
+        scaffoldMessenger.showSnackBar(
+          SnackBar(
+            content: Text('Please select a CSV file (.csv), not ${platformFile.name.split('.').last}'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 4),
+          ),
+        );
         return;
       }
 
-      // Show processing snackbar
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+      // Validate file data
+      if (platformFile.bytes == null && platformFile.path == null) {
+        developer.log('ERROR: No bytes or path available', name: 'EmployeesScreen');
+        if (!mounted) return;
+        
+        scaffoldMessenger.showSnackBar(
           const SnackBar(
-            content: Row(
-              children: [
-                SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                  ),
-                ),
-                SizedBox(width: 16),
-                Text('Processing CSV file...'),
-              ],
-            ),
-            duration: Duration(seconds: 30),
+            content: Text('Unable to read the selected file. Please try again.'),
+            backgroundColor: Colors.red,
           ),
         );
+        return;
       }
 
-      // Read file content - handle both path and bytes
+      // Show loading snackbar instead of dialog
+      if (!mounted) return;
+      scaffoldMessenger.showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Text('Processing ${platformFile.name}...'),
+              ),
+            ],
+          ),
+          duration: const Duration(minutes: 1),
+        ),
+      );
+
+      // Read file content
       String content;
-      if (platformFile.path != null) {
+      if (platformFile.bytes != null) {
+        developer.log('Reading file from bytes...', name: 'EmployeesScreen');
+        content = String.fromCharCodes(platformFile.bytes!);
+      } else if (platformFile.path != null) {
+        developer.log('Reading file from path...', name: 'EmployeesScreen');
         final file = File(platformFile.path!);
         content = await file.readAsString();
-      } else if (platformFile.bytes != null) {
-        content = String.fromCharCodes(platformFile.bytes!);
       } else {
         throw Exception('Unable to read file content');
       }
 
+      developer.log('Content length: ${content.length} characters', name: 'EmployeesScreen');
+
       // Validate CSV format
       if (!CsvImportService.validateCSVFormat(content)) {
-        if (context.mounted) {
-          ScaffoldMessenger.of(context).clearSnackBars();
-          _showErrorDialog(
-            context,
-            'Invalid CSV Format',
-            'The CSV file must have headers: Name, Employee Code, and Rate column.\n\nPlease download the template and use the correct format.',
-          );
-        }
-        return;
-      }
-
-      // Parse CSV with timeout protection
-      List<EmployeeModel> employees;
-      try {
-        employees = await CsvImportService.parseCSV(
-          content,
-          settings.attendanceType,
-        ).timeout(
-          const Duration(seconds: 10),
-          onTimeout: () {
-            throw Exception('CSV parsing timed out. The file might be too large or corrupted.');
-          },
-        );
-      } catch (parseError) {
-        if (context.mounted) {
-          ScaffoldMessenger.of(context).clearSnackBars();
-          _showErrorDialog(
-            context,
-            'Parsing Error',
-            parseError.toString(),
-          );
-        }
-        return;
-      }
-
-      if (employees.isEmpty) {
-        if (context.mounted) {
-          ScaffoldMessenger.of(context).clearSnackBars();
-          _showErrorDialog(
-            context,
-            'No Data Found',
-            'The CSV file contains no employee data.\n\nPlease add employee records and try again.',
-          );
-        }
-        return;
-      }
-
-      // Import employees
-      await ref.read(employeeProvider.notifier).importEmployees(employees);
-
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).clearSnackBars();
+        developer.log('CSV validation failed', name: 'EmployeesScreen');
+        if (!mounted) return;
         
-        // Show success dialog
-        showDialog(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: Row(
-              children: const [
-                Icon(Icons.check_circle, color: Colors.green, size: 28),
-                SizedBox(width: 12),
-                Text('Import Successful'),
-              ],
-            ),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '${employees.length} employees imported successfully!',
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                const Text('Imported employees:'),
-                const SizedBox(height: 8),
-                Container(
-                  constraints: const BoxConstraints(maxHeight: 200),
-                  child: SingleChildScrollView(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: employees.map((emp) {
-                        return Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 4),
-                          child: Row(
-                            children: [
-                              const Icon(Icons.person, size: 16, color: Colors.green),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Text(
-                                  '${emp.name} (${emp.employeeCode})',
-                                  style: const TextStyle(fontSize: 14),
-                                ),
-                              ),
-                            ],
-                          ),
-                        );
-                      }).toList(),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('OK'),
-              ),
-            ],
+        scaffoldMessenger.hideCurrentSnackBar();
+        scaffoldMessenger.showSnackBar(
+          const SnackBar(
+            content: Text('Invalid CSV format. Please download the template and use the correct format.'),
+            backgroundColor: Colors.red,
+            duration: Duration(seconds: 5),
           ),
         );
+        return;
       }
-    } catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).clearSnackBars();
-        _showErrorDialog(
-          context,
-          'Import Failed',
-          'Error: ${e.toString()}\n\nPlease check your CSV file format and try again.',
+
+      // Parse CSV
+      developer.log('Parsing CSV...', name: 'EmployeesScreen');
+      final employees = await CsvImportService.parseCSV(content);
+      developer.log('Parsed ${employees.length} employees', name: 'EmployeesScreen');
+
+      if (employees.isEmpty) {
+        developer.log('No employees found in CSV', name: 'EmployeesScreen');
+        if (!mounted) return;
+        
+        scaffoldMessenger.hideCurrentSnackBar();
+        scaffoldMessenger.showSnackBar(
+          const SnackBar(
+            content: Text('No employee data found in CSV file.'),
+            backgroundColor: Colors.orange,
+          ),
         );
+        return;
       }
+
+      // Check for duplicates
+      final existingEmployees = ref.read(employeeProvider).employees;
+      final duplicateCheck = _checkForDuplicates(employees, existingEmployees);
+      
+      developer.log('Found ${duplicateCheck.newEmployees.length} new, ${duplicateCheck.duplicates.length} duplicates', name: 'EmployeesScreen');
+
+      // Hide loading snackbar
+      scaffoldMessenger.hideCurrentSnackBar();
+
+      // Check if there are new employees to import
+      if (duplicateCheck.newEmployees.isEmpty) {
+        developer.log('No new employees to import', name: 'EmployeesScreen');
+        if (!mounted) return;
+        
+        scaffoldMessenger.showSnackBar(
+          SnackBar(
+            content: Text('All ${employees.length} employees already exist in the system.'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+        return;
+      }
+
+      // Show preview dialog - use a new context from navigator
+      if (!mounted) return;
+      final shouldImport = await showDialog<bool>(
+        context: navigator.context,
+        barrierDismissible: false,
+        builder: (dialogContext) => _buildPreviewDialog(dialogContext, employees, duplicateCheck),
+      );
+
+      if (shouldImport != true) {
+        developer.log('Import cancelled by user', name: 'EmployeesScreen');
+        return;
+      }
+
+      // Show importing snackbar
+      if (!mounted) return;
+      scaffoldMessenger.showSnackBar(
+        SnackBar(
+          content: Row(
+            children: [
+              const SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                ),
+              ),
+              const SizedBox(width: 16),
+              Text('Importing ${duplicateCheck.newEmployees.length} employees...'),
+            ],
+          ),
+          duration: const Duration(minutes: 1),
+        ),
+      );
+
+      // Import employees
+      developer.log('Importing ${duplicateCheck.newEmployees.length} employees...', name: 'EmployeesScreen');
+      await ref.read(employeeProvider.notifier).importEmployees(duplicateCheck.newEmployees);
+      developer.log('Import completed successfully', name: 'EmployeesScreen');
+
+      // Hide importing snackbar
+      scaffoldMessenger.hideCurrentSnackBar();
+
+      // Show success dialog
+      if (!mounted) return;
+      await showDialog(
+        context: navigator.context,
+        builder: (dialogContext) => AlertDialog(
+          title: Row(
+            children: const [
+              Icon(Icons.check_circle, color: Colors.green, size: 28),
+              SizedBox(width: 12),
+              Text('Import Successful'),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '✅ ${duplicateCheck.newEmployees.length} employees imported successfully!',
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.green,
+                ),
+              ),
+              if (duplicateCheck.duplicates.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Text(
+                  '⏭️  ${duplicateCheck.duplicates.length} duplicates were skipped',
+                  style: const TextStyle(
+                    fontSize: 14,
+                    color: Colors.orange,
+                  ),
+                ),
+              ],
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      );
+      
+    } catch (e, stackTrace) {
+      developer.log('Import failed: $e', name: 'EmployeesScreen');
+      developer.log('Stack trace: $stackTrace', name: 'EmployeesScreen');
+      
+      if (!mounted) return;
+      
+      scaffoldMessenger.hideCurrentSnackBar();
+      scaffoldMessenger.showSnackBar(
+        SnackBar(
+          content: Text('Import failed: ${e.toString()}'),
+          backgroundColor: Colors.red,
+          duration: const Duration(seconds: 5),
+        ),
+      );
     }
   }
 
-  void _showErrorDialog(BuildContext context, String title, String message) {
+  void _addEmployeeManually(
+    BuildContext context,
+    String name,
+    String code,
+    String mobileNo,
+    String position,
+    String department,
+    double salary,
+  ) {
+    final id = DateTime.now().millisecondsSinceEpoch.toString() +
+        code.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '');
+
+    final employee = EmployeeModel(
+      id: id,
+      name: name,
+      employeeCode: code,
+      mobileNo: mobileNo,
+      position: position,
+      department: department,
+      salary: salary,
+      createdAt: DateTime.now(),
+    );
+
+    ref.read(employeeProvider.notifier).addEmployee(employee);
+    Navigator.pop(context);
+    
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Employee $name added successfully'),
+        backgroundColor: Colors.green,
+      ),
+    );
+  }
+
+  void _showEditEmployeeDialog(BuildContext context, EmployeeModel employee) {
+    final nameController = TextEditingController(text: employee.name);
+    final codeController = TextEditingController(text: employee.employeeCode);
+    final mobileController = TextEditingController(text: employee.mobileNo);
+    final positionController = TextEditingController(text: employee.position);
+    final departmentController = TextEditingController(text: employee.department);
+    final salaryController = TextEditingController(text: employee.salary.toString());
+    final formKey = GlobalKey<FormState>();
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: Row(
-          children: [
-            const Icon(Icons.error, color: Colors.red, size: 28),
-            const SizedBox(width: 12),
-            Text(title),
-          ],
+        title: const Text('Edit Employee'),
+        content: SingleChildScrollView(
+          child: Form(
+            key: formKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextFormField(
+                  controller: nameController,
+                  decoration: const InputDecoration(
+                    labelText: 'Employee Name',
+                    border: OutlineInputBorder(),
+                  ),
+                  validator: (value) => value?.isEmpty ?? true ? 'Required' : null,
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: codeController,
+                  decoration: const InputDecoration(
+                    labelText: 'Employee Code',
+                    border: OutlineInputBorder(),
+                  ),
+                  validator: (value) => value?.isEmpty ?? true ? 'Required' : null,
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: mobileController,
+                  decoration: const InputDecoration(
+                    labelText: 'Mobile Number',
+                    border: OutlineInputBorder(),
+                  ),
+                  keyboardType: TextInputType.phone,
+                  validator: (value) => value?.isEmpty ?? true ? 'Required' : null,
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: positionController,
+                  decoration: const InputDecoration(
+                    labelText: 'Position',
+                    border: OutlineInputBorder(),
+                  ),
+                  validator: (value) => value?.isEmpty ?? true ? 'Required' : null,
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: departmentController,
+                  decoration: const InputDecoration(
+                    labelText: 'Department',
+                    border: OutlineInputBorder(),
+                  ),
+                  validator: (value) => value?.isEmpty ?? true ? 'Required' : null,
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: salaryController,
+                  decoration: const InputDecoration(
+                    labelText: 'Salary',
+                    border: OutlineInputBorder(),
+                  ),
+                  keyboardType: TextInputType.number,
+                  validator: (value) {
+                    if (value?.isEmpty ?? true) return 'Required';
+                    if (double.tryParse(value!) == null) return 'Invalid number';
+                    return null;
+                  },
+                ),
+              ],
+            ),
+          ),
         ),
-        content: Text(message),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('OK'),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              if (formKey.currentState!.validate()) {
+                final updatedEmployee = EmployeeModel(
+                  id: employee.id,
+                  name: nameController.text,
+                  employeeCode: codeController.text,
+                  mobileNo: mobileController.text,
+                  position: positionController.text,
+                  department: departmentController.text,
+                  salary: double.parse(salaryController.text),
+                  createdAt: employee.createdAt,
+                );
+                
+                ref.read(employeeProvider.notifier).updateEmployee(updatedEmployee);
+                Navigator.pop(context);
+                
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Employee updated successfully'),
+                    backgroundColor: Colors.green,
+                  ),
+                );
+              }
+            },
+            child: const Text('Update'),
           ),
         ],
       ),
     );
   }
 
-  void _addEmployeeManually(
-    BuildContext context,
-    WidgetRef ref,
-    SettingsModel settings,
-    String name,
-    String code,
-    double rate,
-  ) {
-    final id = DateTime.now().millisecondsSinceEpoch.toString() +
-        code.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '');
-
-    EmployeeModel employee;
-
-    switch (settings.attendanceType) {
-      case AttendanceType.daily:
-        employee = EmployeeModel(
-          id: id,
-          name: name,
-          employeeCode: code,
-          baseSalary: rate,
-          createdAt: DateTime.now(),
-        );
-        break;
-      case AttendanceType.hourly:
-        employee = EmployeeModel(
-          id: id,
-          name: name,
-          employeeCode: code,
-          hourlyRate: rate,
-          createdAt: DateTime.now(),
-        );
-        break;
-      case AttendanceType.unit:
-        employee = EmployeeModel(
-          id: id,
-          name: name,
-          employeeCode: code,
-          perUnitRate: rate,
-          createdAt: DateTime.now(),
-        );
-        break;
-    }
-
-    ref.read(employeeProvider.notifier).addEmployee(employee);
-    Navigator.pop(context);
+  void _confirmDelete(BuildContext context, EmployeeModel employee) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Employee'),
+        content: Text('Are you sure you want to delete ${employee.name}?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              ref.read(employeeProvider.notifier).deleteEmployee(employee.id);
+              Navigator.pop(context);
+              
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('${employee.name} deleted successfully'),
+                  backgroundColor: Colors.red,
+                ),
+              );
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
   }
 
-  void _downloadCSVTemplate(BuildContext context, SettingsModel settings) {
-    final template = CsvImportService.generateSampleCSV(settings.attendanceType);
+  void _downloadCSVTemplate(BuildContext context) {
+    final template = CsvImportService.generateSampleCSV();
     
     showDialog(
       context: context,
@@ -784,4 +1142,235 @@ class EmployeesScreen extends ConsumerWidget {
       ),
     );
   }
+
+  DuplicateCheckResult _checkForDuplicates(
+    List<EmployeeModel> newEmployees,
+    List<EmployeeModel> existingEmployees,
+  ) {
+    developer.log('=== DUPLICATE CHECK START ===', name: 'EmployeesScreen');
+    developer.log('New employees to check: ${newEmployees.length}', name: 'EmployeesScreen');
+    developer.log('Existing employees: ${existingEmployees.length}', name: 'EmployeesScreen');
+    
+    final duplicates = <EmployeeModel>[];
+    final newOnes = <EmployeeModel>[];
+    
+    // Create a map of existing employees by employee code (case-insensitive)
+    final existingMap = <String, EmployeeModel>{};
+    for (final emp in existingEmployees) {
+      existingMap[emp.employeeCode.toLowerCase()] = emp;
+      developer.log('Existing employee code: ${emp.employeeCode}', name: 'EmployeesScreen');
+    }
+    
+    // Check each new employee
+    for (final newEmp in newEmployees) {
+      final code = newEmp.employeeCode.toLowerCase();
+      developer.log('Checking new employee: ${newEmp.name} (${newEmp.employeeCode})', name: 'EmployeesScreen');
+      
+      if (existingMap.containsKey(code)) {
+        developer.log('  → DUPLICATE found!', name: 'EmployeesScreen');
+        duplicates.add(newEmp);
+      } else {
+        developer.log('  → NEW employee', name: 'EmployeesScreen');
+        newOnes.add(newEmp);
+      }
+    }
+    
+    developer.log('=== DUPLICATE CHECK RESULT ===', name: 'EmployeesScreen');
+    developer.log('New: ${newOnes.length}, Duplicates: ${duplicates.length}', name: 'EmployeesScreen');
+    
+    return DuplicateCheckResult(
+      newEmployees: newOnes,
+      duplicates: duplicates,
+    );
+  }
+
+  Widget _buildPreviewDialog(
+    BuildContext dialogContext,
+    List<EmployeeModel> allEmployees,
+    DuplicateCheckResult duplicateCheck,
+  ) {
+    return AlertDialog(
+      title: Row(
+        children: const [
+          Icon(Icons.preview, color: AppColors.primary),
+          SizedBox(width: 12),
+          Text('Preview Import Data'),
+        ],
+      ),
+      content: SizedBox(
+        width: double.maxFinite,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Summary
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.blue.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.blue.withValues(alpha: 0.3)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: const [
+                      Icon(Icons.info_outline, size: 20, color: Colors.blue),
+                      SizedBox(width: 8),
+                      Text(
+                        'Import Summary',
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Text('Total in CSV: ${allEmployees.length}'),
+                  Text(
+                    '✅ New employees: ${duplicateCheck.newEmployees.length}',
+                    style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold),
+                  ),
+                  if (duplicateCheck.duplicates.isNotEmpty)
+                    Text(
+                      '⚠️  Duplicates (will be skipped): ${duplicateCheck.duplicates.length}',
+                      style: const TextStyle(color: Colors.orange, fontWeight: FontWeight.bold),
+                    ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            
+            // Preview list
+            const Text(
+              'Preview of employees to be imported:',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+            
+            Flexible(
+              child: Container(
+                constraints: const BoxConstraints(maxHeight: 300),
+                decoration: BoxDecoration(
+                  border: Border.all(color: Colors.grey[300]!),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: allEmployees.length,
+                  itemBuilder: (context, index) {
+                    final emp = allEmployees[index];
+                    final isDuplicate = duplicateCheck.duplicates.any(
+                      (d) => d.employeeCode.toLowerCase() == emp.employeeCode.toLowerCase(),
+                    );
+                    
+                    return Container(
+                      decoration: BoxDecoration(
+                        color: isDuplicate 
+                          ? Colors.orange.withValues(alpha: 0.1)
+                          : Colors.green.withValues(alpha: 0.05),
+                        border: Border(
+                          bottom: BorderSide(color: Colors.grey[200]!),
+                        ),
+                      ),
+                      child: ListTile(
+                        dense: true,
+                        leading: Icon(
+                          isDuplicate ? Icons.warning : Icons.check_circle,
+                          color: isDuplicate ? Colors.orange : Colors.green,
+                          size: 20,
+                        ),
+                        title: Text(
+                          emp.name,
+                          style: TextStyle(
+                            fontSize: 14,
+                            decoration: isDuplicate ? TextDecoration.lineThrough : null,
+                          ),
+                        ),
+                        subtitle: Text(
+                          '${emp.employeeCode} • ${emp.position} • ${emp.department}',
+                          style: const TextStyle(fontSize: 12),
+                        ),
+                        trailing: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            Text(
+                              '₹${emp.salary.toStringAsFixed(0)}',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 13,
+                              ),
+                            ),
+                            Text(
+                              emp.mobileNo,
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: Colors.grey[600],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ),
+            
+            if (duplicateCheck.duplicates.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: Colors.orange.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.orange.withValues(alpha: 0.3)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.info, size: 16, color: Colors.orange),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Duplicate employees (marked with ⚠️) will be skipped to prevent duplicates.',
+                        style: TextStyle(fontSize: 12, color: Colors.grey[700]),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(dialogContext, false),
+          child: const Text('Cancel'),
+        ),
+        ElevatedButton.icon(
+          onPressed: duplicateCheck.newEmployees.isEmpty
+              ? null
+              : () => Navigator.pop(dialogContext, true),
+          icon: const Icon(Icons.upload),
+          label: Text(
+            duplicateCheck.newEmployees.isEmpty
+                ? 'No New Employees'
+                : 'Import ${duplicateCheck.newEmployees.length} Employee${duplicateCheck.newEmployees.length > 1 ? 's' : ''}',
+          ),
+        ),
+      ],
+    );
+  }
+
+}
+
+class DuplicateCheckResult {
+  final List<EmployeeModel> newEmployees;
+  final List<EmployeeModel> duplicates;
+  
+  DuplicateCheckResult({
+    required this.newEmployees,
+    required this.duplicates,
+  });
 }
