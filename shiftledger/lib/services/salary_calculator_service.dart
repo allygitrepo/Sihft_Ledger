@@ -1,39 +1,66 @@
-import '../models/settings_model.dart';
-import '../models/employee_model.dart';
-import '../models/attendance_model.dart';
-import 'overtime_service.dart';
-
 class SalaryCalculatorService {
-  // Calculate salary based on attendance type
+  /// Calculate work salary based on working hours and hourly rate
+  static double calculateWorkSalary({
+    required double workingHours,
+    required double hourlySalary,
+  }) {
+    if (workingHours <= 0 || hourlySalary <= 0) return 0.0;
+    return workingHours * hourlySalary;
+  }
+
+  /// Calculate total salary (work salary + overtime salary)
+  static double calculateTotalSalary({
+    required double workSalary,
+    required double overtimeSalary,
+  }) {
+    return workSalary + overtimeSalary;
+  }
+
+  /// Calculate hourly salary from monthly salary
+  static double calculateHourlySalary({
+    required double monthlySalary,
+    int workingDaysPerMonth = 26,
+    double hoursPerDay = 8.0,
+  }) {
+    if (monthlySalary <= 0) return 0.0;
+    final totalHoursPerMonth = workingDaysPerMonth * hoursPerDay;
+    return monthlySalary / totalHoursPerMonth;
+  }
+
+  /// Calculate working hours from check-in and check-out times
+  static double calculateWorkingHours({
+    required DateTime checkIn,
+    required DateTime checkOut,
+    int breakMinutes = 0,
+  }) {
+    if (checkOut.isBefore(checkIn)) return 0.0;
+
+    final duration = checkOut.difference(checkIn);
+    final totalMinutes = duration.inMinutes - breakMinutes;
+
+    if (totalMinutes <= 0) return 0.0;
+
+    return totalMinutes / 60.0; // Convert to hours
+  }
+
+  /// Calculate salary for an employee based on attendance records (for payroll system)
   static Map<String, double> calculateSalary({
-    required EmployeeModel employee,
-    required List<AttendanceModel> attendanceRecords,
-    required SettingsModel settings,
+    required dynamic employee,
+    required List attendanceRecords,
+    required dynamic settings,
   }) {
     double basePay = 0.0;
     double overtimePay = 0.0;
 
-    switch (settings.attendanceType) {
-      case AttendanceType.daily:
-        basePay = _calculateDailySalary(employee, attendanceRecords);
-        overtimePay = _calculateDailyOvertimePay(
-          employee,
-          attendanceRecords,
-          settings.overtimeMultiplier,
-        );
-        break;
-      case AttendanceType.hourly:
-        final result = _calculateHourlySalary(
-          employee,
-          attendanceRecords,
-          settings.overtimeMultiplier,
-        );
-        basePay = result['basePay']!;
-        overtimePay = result['overtimePay']!;
-        break;
-      case AttendanceType.unit:
-        basePay = _calculateUnitSalary(employee, attendanceRecords);
-        break;
+    // Handle new AttendanceModel
+    for (final record in attendanceRecords) {
+      // New attendance model - use workSalary and overtimeSalary directly
+      if (record.workSalary != null) {
+        basePay += record.workSalary as double;
+      }
+      if (record.overtimeSalary != null) {
+        overtimePay += record.overtimeSalary as double;
+      }
     }
 
     return {
@@ -43,112 +70,39 @@ class SalaryCalculatorService {
     };
   }
 
-  // Calculate daily-based salary
-  static double _calculateDailySalary(
-    EmployeeModel employee,
-    List<AttendanceModel> attendanceRecords,
-  ) {
-    final daysPresent = attendanceRecords.where((r) => r.present).length;
-    return daysPresent * (employee.baseSalary ?? 0.0);
-  }
-
-  // Calculate daily overtime pay (if overtime hours are provided)
-  static double _calculateDailyOvertimePay(
-    EmployeeModel employee,
-    List<AttendanceModel> attendanceRecords,
-    double overtimeMultiplier,
-  ) {
-    double totalOvertimeHours = 0.0;
-
-    for (final record in attendanceRecords) {
-      if (record.overtimeHours != null) {
-        totalOvertimeHours += record.overtimeHours!;
-      }
-    }
-
-    // Calculate hourly rate from daily salary (assuming 8 hours per day)
-    final dailySalary = employee.baseSalary ?? 0.0;
-    final hourlyRate = dailySalary / 8.0;
-
-    return OvertimeService.calculateOvertimePay(
-      overtimeHours: totalOvertimeHours,
-      hourlyRate: hourlyRate,
-      overtimeMultiplier: overtimeMultiplier,
-    );
-  }
-
-  // Calculate hourly-based salary
-  static Map<String, double> _calculateHourlySalary(
-    EmployeeModel employee,
-    List<AttendanceModel> attendanceRecords,
-    double overtimeMultiplier,
-  ) {
-    double totalHours = 0.0;
-    double totalOvertimeHours = 0.0;
-
-    for (final record in attendanceRecords) {
-      if (record.hoursWorked != null) {
-        totalHours += record.hoursWorked!;
-      }
-      if (record.overtimeHours != null) {
-        totalOvertimeHours += record.overtimeHours!;
-      }
-    }
-
-    final hourlyRate = employee.hourlyRate ?? 0.0;
-    final basePay = totalHours * hourlyRate;
-    final overtimePay = OvertimeService.calculateOvertimePay(
-      overtimeHours: totalOvertimeHours,
-      hourlyRate: hourlyRate,
-      overtimeMultiplier: overtimeMultiplier,
-    );
-
-    return {
-      'basePay': basePay,
-      'overtimePay': overtimePay,
-    };
-  }
-
-  // Calculate unit-based salary
-  static double _calculateUnitSalary(
-    EmployeeModel employee,
-    List<AttendanceModel> attendanceRecords,
-  ) {
-    int totalUnits = 0;
-
-    for (final record in attendanceRecords) {
-      if (record.unitProduced != null) {
-        totalUnits += record.unitProduced!;
-      }
-    }
-
-    return totalUnits * (employee.perUnitRate ?? 0.0);
-  }
-
-  // Get attendance statistics
+  /// Get attendance statistics (for payroll system)
   static Map<String, dynamic> getAttendanceStats(
-    List<AttendanceModel> attendanceRecords,
-    AttendanceType attendanceType,
+    List attendanceRecords,
+    dynamic attendanceType,
   ) {
     int daysPresent = 0;
     double totalHours = 0.0;
     int totalUnits = 0;
-    double totalOvertimeHours = 0.0;
 
+    // Handle new AttendanceModel
     for (final record in attendanceRecords) {
-      if (record.present) daysPresent++;
-      if (record.hoursWorked != null) totalHours += record.hoursWorked!;
-      if (record.unitProduced != null) totalUnits += record.unitProduced!;
+      // Count all records as present (they wouldn't exist if absent)
+      // Only count Full Day and Half Day as present
+      if (record.attendanceStatus.toString().contains('fullDay') ||
+          record.attendanceStatus.toString().contains('halfDay')) {
+        daysPresent++;
+      }
+      
+      // Sum up working hours
+      if (record.workingHours != null) {
+        totalHours += record.workingHours as double;
+      }
+      
+      // Add overtime hours to total hours
       if (record.overtimeHours != null) {
-        totalOvertimeHours += record.overtimeHours!;
+        totalHours += record.overtimeHours as double;
       }
     }
 
     return {
       'daysPresent': daysPresent,
       'totalHours': totalHours,
-      'totalUnits': totalUnits,
-      'totalOvertimeHours': totalOvertimeHours,
+      'totalUnits': totalUnits, // Not used in new model
     };
   }
 }

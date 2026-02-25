@@ -45,7 +45,7 @@ class SettingsScreen extends ConsumerWidget {
                 trailing: const Icon(Icons.arrow_forward_ios, size: 16),
                 onTap: () => _showOvertimeMultiplierDialog(context, settingsNotifier, payrollSettings),
               ),
-              if (payrollSettings.attendanceType == AttendanceType.hourly)
+              if (payrollSettings.attendanceType == PayrollAttendanceType.hourly)
                 ListTile(
                   leading: const Icon(Icons.schedule),
                   title: const Text('Minimum Hours per Day'),
@@ -183,13 +183,13 @@ class SettingsScreen extends ConsumerWidget {
     );
   }
 
-  String _getAttendanceTypeLabel(AttendanceType type) {
+  String _getAttendanceTypeLabel(PayrollAttendanceType type) {
     switch (type) {
-      case AttendanceType.daily:
+      case PayrollAttendanceType.daily:
         return 'Daily Based';
-      case AttendanceType.hourly:
+      case PayrollAttendanceType.hourly:
         return 'Hourly Based';
-      case AttendanceType.unit:
+      case PayrollAttendanceType.unit:
         return 'Unit Based';
     }
   }
@@ -217,10 +217,10 @@ class SettingsScreen extends ConsumerWidget {
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            RadioListTile<AttendanceType>(
+            RadioListTile<PayrollAttendanceType>(
               title: const Text('Daily Based'),
               subtitle: const Text('Track by days present'),
-              value: AttendanceType.daily,
+              value: PayrollAttendanceType.daily,
               groupValue: current.attendanceType,
               onChanged: (value) {
                 if (value != null) {
@@ -229,10 +229,10 @@ class SettingsScreen extends ConsumerWidget {
                 }
               },
             ),
-            RadioListTile<AttendanceType>(
+            RadioListTile<PayrollAttendanceType>(
               title: const Text('Hourly Based'),
               subtitle: const Text('Track by hours worked'),
-              value: AttendanceType.hourly,
+              value: PayrollAttendanceType.hourly,
               groupValue: current.attendanceType,
               onChanged: (value) {
                 if (value != null) {
@@ -241,10 +241,10 @@ class SettingsScreen extends ConsumerWidget {
                 }
               },
             ),
-            RadioListTile<AttendanceType>(
+            RadioListTile<PayrollAttendanceType>(
               title: const Text('Unit Based'),
               subtitle: const Text('Track by units produced'),
-              value: AttendanceType.unit,
+              value: PayrollAttendanceType.unit,
               groupValue: current.attendanceType,
               onChanged: (value) {
                 if (value != null) {
