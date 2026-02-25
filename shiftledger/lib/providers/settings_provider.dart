@@ -16,7 +16,7 @@ class SettingsNotifier extends Notifier<SettingsModel> {
     state = settings;
   }
 
-  Future<void> updateAttendanceType(AttendanceType type) async {
+  Future<void> updateAttendanceType(PayrollAttendanceType type) async {
     state = state.copyWith(attendanceType: type);
     await SettingsService.saveSettings(state);
     ToastHelper.success('Attendance type updated');
