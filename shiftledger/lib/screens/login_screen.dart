@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/auth_provider.dart';
 import '../routes/app_routes.dart';
 import '../utills/app_assets.dart';
+import '../utills/app_spacing.dart';
 import '../widgets/loader.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
@@ -43,142 +44,144 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           GestureDetector(
             onTap: () => FocusScope.of(context).unfocus(),
             child: SafeArea(
-              child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24.0),
-            child: ConstrainedBox(
-              constraints: BoxConstraints(
-                minHeight: screenHeight - padding.top - 48,
-              ),
-              child: Form(
-                key: formKey,
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    // Logo/Title
-                   Image.asset(
-                      AppAssets.appLogo,
-                      height: AppAssets.logoSizeAuth,
-                      width: AppAssets.logoSizeAuth,
+              child: Center(
+                child: SingleChildScrollView(
+                  padding: EdgeInsets.all(AppSpacing.getHorizontalPadding(context)),
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(
+                      maxWidth: AppSpacing.getMaxFormWidth(context),
+                      minHeight: screenHeight - padding.top - 48,
                     ),
-                    // SizedBox(height: screenHeight * 0.03),
-                    Text(
-                      'Welcome Back',
-                      style: Theme.of(context)
-                          .textTheme
-                          .headlineMedium
-                          ?.copyWith(
-                            fontWeight: FontWeight.bold,
+                    child: Form(
+                      key: formKey,
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          // Logo/Title
+                          Image.asset(
+                            AppAssets.appLogo,
+                            height: AppAssets.logoSizeAuth,
+                            width: AppAssets.logoSizeAuth,
                           ),
-                      textAlign: TextAlign.center,
-                    ),
-                    SizedBox(height: screenHeight * 0.01),
-                    Text(
-                      'Sign in to your account',
-                      style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                            color: Colors.grey[600],
+                          Text(
+                            'Welcome Back',
+                            style: Theme.of(context)
+                                .textTheme
+                                .headlineMedium
+                                ?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                ),
+                            textAlign: TextAlign.center,
                           ),
-                      textAlign: TextAlign.center,
-                    ),
-                    SizedBox(height: screenHeight * 0.06),
-
-                    // Email Field
-                    TextFormField(
-                      onChanged: (value) => authNotifier.setEmail(value),
-                      decoration: const InputDecoration(
-                        labelText: 'Email',
-                        prefixIcon: Icon(Icons.email),
-                        border: OutlineInputBorder(),
-                      ),
-                      keyboardType: TextInputType.emailAddress,
-                      textInputAction: TextInputAction.next,
-                      validator: (value) {
-                        if (value == null || value.isEmpty) {
-                          return 'Please enter your email';
-                        }
-                        if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(value)) {
-                          return 'Please enter a valid email';
-                        }
-                        return null;
-                      },
-                    ),
-                    SizedBox(height: screenHeight * 0.02),
-
-                    // Password Field
-                    TextFormField(
-                      onChanged: (value) => authNotifier.setPassword(value),
-                      decoration: InputDecoration(
-                        labelText: 'Password',
-                        prefixIcon: const Icon(Icons.lock),
-                        suffixIcon: IconButton(
-                          icon: Icon(
-                            isPasswordVisible
-                                ? Icons.visibility
-                                : Icons.visibility_off,
+                          SizedBox(height: screenHeight * 0.01),
+                          Text(
+                            'Sign in to your account',
+                            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                                  color: Colors.grey[600],
+                                ),
+                            textAlign: TextAlign.center,
                           ),
-                          onPressed: () => setState(() {
-                            isPasswordVisible = !isPasswordVisible;
-                          }),
-                        ),
-                        border: const OutlineInputBorder(),
-                      ),
-                      obscureText: !isPasswordVisible,
-                      textInputAction: TextInputAction.done,
-                      validator: (value) {
-                        if (value == null || value.isEmpty) {
-                          return 'Please enter your password';
-                        }
-                        if (value.length < 6) {
-                          return 'Password must be at least 6 characters';
-                        }
-                        return null;
-                      },
-                    ),
-                    SizedBox(height: screenHeight * 0.04),
+                          SizedBox(height: screenHeight * 0.06),
 
-                    // Login Button
-                    ElevatedButton(
-                      onPressed: authState.isLoading
-                          ? null
-                          : () {
-                              if (formKey.currentState!.validate()) {
-                                FocusScope.of(context).unfocus();
-                                authNotifier.login();
+                          // Email Field
+                          TextFormField(
+                            onChanged: (value) => authNotifier.setEmail(value),
+                            decoration: const InputDecoration(
+                              labelText: 'Email',
+                              prefixIcon: Icon(Icons.email),
+                              border: OutlineInputBorder(),
+                            ),
+                            keyboardType: TextInputType.emailAddress,
+                            textInputAction: TextInputAction.next,
+                            validator: (value) {
+                              if (value == null || value.isEmpty) {
+                                return 'Please enter your email';
                               }
+                              if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(value)) {
+                                return 'Please enter a valid email';
+                              }
+                              return null;
                             },
-                      child: const Padding(
-                        padding: EdgeInsets.symmetric(vertical: 12.0),
-                        child: Text('Login'),
-                      ),
-                    ),
-                    SizedBox(height: screenHeight * 0.02),
+                          ),
+                          SizedBox(height: screenHeight * 0.02),
 
-                    // Register Link
-                    TextButton(
-                      onPressed: () => Navigator.pushNamed(context, AppRoutes.register),
-                      child: RichText(
-                        text: TextSpan(
-                          text: "Don't have an account? ",
-                          style: Theme.of(context).textTheme.bodyMedium,
-                          children: [
-                            TextSpan(
-                              text: 'Sign up',
-                              style: TextStyle(
-                                color: Theme.of(context).primaryColor,
-                                fontWeight: FontWeight.bold,
+                          // Password Field
+                          TextFormField(
+                            onChanged: (value) => authNotifier.setPassword(value),
+                            decoration: InputDecoration(
+                              labelText: 'Password',
+                              prefixIcon: const Icon(Icons.lock),
+                              suffixIcon: IconButton(
+                                icon: Icon(
+                                  isPasswordVisible
+                                      ? Icons.visibility
+                                      : Icons.visibility_off,
+                                ),
+                                onPressed: () => setState(() {
+                                  isPasswordVisible = !isPasswordVisible;
+                                }),
+                              ),
+                              border: const OutlineInputBorder(),
+                            ),
+                            obscureText: !isPasswordVisible,
+                            textInputAction: TextInputAction.done,
+                            validator: (value) {
+                              if (value == null || value.isEmpty) {
+                                return 'Please enter your password';
+                              }
+                              if (value.length < 6) {
+                                return 'Password must be at least 6 characters';
+                              }
+                              return null;
+                            },
+                          ),
+                          SizedBox(height: screenHeight * 0.04),
+
+                          // Login Button
+                          ElevatedButton(
+                            onPressed: authState.isLoading
+                                ? null
+                                : () {
+                                    if (formKey.currentState!.validate()) {
+                                      FocusScope.of(context).unfocus();
+                                      authNotifier.login();
+                                    }
+                                  },
+                            child: const Padding(
+                              padding: EdgeInsets.symmetric(vertical: 12.0),
+                              child: Text('Login'),
+                            ),
+                          ),
+                          SizedBox(height: screenHeight * 0.02),
+
+                          // Register Link
+                          TextButton(
+                            onPressed: () => Navigator.pushNamed(context, AppRoutes.register),
+                            child: RichText(
+                              text: TextSpan(
+                                text: "Don't have an account? ",
+                                style: Theme.of(context).textTheme.bodyMedium,
+                                children: [
+                                  TextSpan(
+                                    text: 'Sign up',
+                                    style: TextStyle(
+                                      color: Theme.of(context).primaryColor,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
-                          ],
-                        ),
+                          ),
+                        ],
                       ),
                     ),
-                  ],
+                  ),
                 ),
               ),
             ),
           ),
-        ),
-      ),
           // Full screen loader
           if (authState.isLoading)
             Container(

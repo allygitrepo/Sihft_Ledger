@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/auth_provider.dart';
 import '../routes/app_routes.dart';
 import '../utills/app_assets.dart';
+import '../utills/app_spacing.dart';
 import '../widgets/loader.dart';
 
 class RegisterScreen extends ConsumerStatefulWidget {
@@ -44,20 +45,22 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
           GestureDetector(
             onTap: () => FocusScope.of(context).unfocus(),
             child: SafeArea(
-              child: SingleChildScrollView(
-            padding: const EdgeInsets.all(24.0),
-            child: ConstrainedBox(
-              constraints: BoxConstraints(
-                minHeight: screenHeight - padding.top - 48,
-              ),
-              child: Form(
-                key: formKey,
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    // Logo/Title
-                    Image.asset(
+              child: Center(
+                child: SingleChildScrollView(
+                  padding: EdgeInsets.all(AppSpacing.getHorizontalPadding(context)),
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(
+                      maxWidth: AppSpacing.getMaxFormWidth(context),
+                      minHeight: screenHeight - padding.top - 48,
+                    ),
+                    child: Form(
+                      key: formKey,
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          // Logo/Title
+                          Image.asset(
                       AppAssets.appLogo,
                       height: AppAssets.logoSizeAuth,
                       width: AppAssets.logoSizeAuth,
@@ -226,13 +229,14 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                         ),
                       ),
                     ),
-                  ],
+                        ],
+                      ),
+                    ),
+                  ),
                 ),
               ),
             ),
           ),
-        ),
-      ),
           // Full screen loader
           if (authState.isLoading)
             Container(

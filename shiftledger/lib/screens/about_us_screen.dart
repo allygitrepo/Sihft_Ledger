@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../utills/app_colors.dart';
-import '../navigations/app_drawer.dart';
+import '../utills/app_spacing.dart';
 
 class AboutUsScreen extends StatefulWidget {
   const AboutUsScreen({super.key});
@@ -189,6 +189,8 @@ class _AboutUsScreenState extends State<AboutUsScreen>
 
   @override
   Widget build(BuildContext context) {
+    final horizontalPadding = AppSpacing.getHorizontalPadding(context);
+    
     return Scaffold(
       appBar: AppBar(
         title: const Text("About Us"),
@@ -197,10 +199,9 @@ class _AboutUsScreenState extends State<AboutUsScreen>
           onPressed: () => Navigator.of(context).pop(),
         ),
       ),
-      // drawer: const AppDrawer(),
 
       body: Container(
-        padding: const EdgeInsets.all(24),
+        padding: EdgeInsets.all(horizontalPadding),
         decoration: BoxDecoration(
           gradient: LinearGradient(
             colors: [
@@ -212,9 +213,12 @@ class _AboutUsScreenState extends State<AboutUsScreen>
           ),
         ),
 
-        child: SingleChildScrollView(
-          child: Column(
-            children: [
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 800),
+            child: SingleChildScrollView(
+              child: Column(
+                children: [
               // ---------- LOGO ANIMATION ---------- //
               AnimatedBuilder(
                 animation: _animationController,
@@ -437,6 +441,8 @@ class _AboutUsScreenState extends State<AboutUsScreen>
             ],
           ),
         ),
+      ),
+    ),
       ),
     );
   }
