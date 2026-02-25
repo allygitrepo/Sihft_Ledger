@@ -9,6 +9,7 @@ import '../screens/about_us_screen.dart';
 import '../screens/employees_screen.dart';
 import '../screens/attendance_screen.dart';
 import '../screens/payroll_screen.dart';
+import '../layouts/main_layout.dart';
 
 class AppRoutes {
   static const String splash = '/splash';
@@ -27,13 +28,20 @@ class AppRoutes {
     login: (context) => const LoginScreen(),
     register: (context) => const RegisterScreen(),
     dashboard: (context) => const DashboardScreen(),
-    profile: (context) => const ProfileScreen(),
-    settings: (context) => const SettingsScreen(),
-    aboutUs: (context) => const AboutUsScreen(),
-    employees: (context) => const EmployeesScreen(),
-    attendance: (context) => const AttendanceScreen(),
-    payroll: (context) => const PayrollScreen(),
+    profile: (context) => _wrapWithLayout(const ProfileScreen(), profile),
+    settings: (context) => _wrapWithLayout(const SettingsScreen(), settings),
+    aboutUs: (context) => _wrapWithLayout(const AboutUsScreen(), aboutUs),
+    employees: (context) => _wrapWithLayout(const EmployeesScreen(), employees),
+    attendance: (context) => _wrapWithLayout(const AttendanceScreen(), attendance),
+    payroll: (context) => _wrapWithLayout(const PayrollScreen(), payroll),
   };
+
+  static Widget _wrapWithLayout(Widget child, String route) {
+    return MainLayout(
+      currentRoute: route,
+      child: child,
+    );
+  }
 
   static Route<dynamic>? onGenerateRoute(RouteSettings settings) {
     final builder = routes[settings.name];

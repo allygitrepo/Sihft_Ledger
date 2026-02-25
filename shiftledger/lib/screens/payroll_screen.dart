@@ -51,9 +51,6 @@ class _PayrollScreenState extends ConsumerState<PayrollScreen> {
     final horizontalPadding = AppSpacing.getHorizontalPadding(context);
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Generate Payroll'),
-      ),
       body: Column(
         children: [
           _buildDateRangeSelector(context),

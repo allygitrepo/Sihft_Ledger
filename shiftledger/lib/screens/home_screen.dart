@@ -25,10 +25,17 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 
   Future<void> _loadTodayAttendance() async {
-    final records = await ref.read(attendanceProvider.notifier).getTodayAttendance();
+    await ref.read(attendanceListProvider.notifier).loadAttendance();
     if (mounted) {
+      final today = DateTime.now();
+      final todayRecords = ref.read(attendanceListProvider).attendanceRecords.where((r) {
+        return r.date.year == today.year &&
+            r.date.month == today.month &&
+            r.date.day == today.day;
+      }).toList();
+      
       setState(() {
-        todayAttendanceCount = records.where((r) => r.present).length;
+        todayAttendanceCount = todayRecords.length;
       });
     }
   }

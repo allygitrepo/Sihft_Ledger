@@ -13,9 +13,7 @@ class ProfileScreen extends ConsumerWidget {
     final horizontalPadding = AppSpacing.getHorizontalPadding(context);
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Profile'),
-      ),
+      
       body: Center(
         child: ConstrainedBox(
           constraints: BoxConstraints(
