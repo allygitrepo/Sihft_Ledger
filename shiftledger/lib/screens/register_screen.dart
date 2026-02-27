@@ -38,9 +38,11 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
     final screenHeight = MediaQuery.of(context).size.height;
     final padding = MediaQuery.of(context).padding;
     final ownerState = ref.watch(ownerProvider);
+    final isDesktop = screenWidth > 900;
 
     return Scaffold(
       resizeToAvoidBottomInset: true,
@@ -48,194 +50,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
         children: [
           GestureDetector(
             onTap: () => FocusScope.of(context).unfocus(),
-            child: SafeArea(
-              child: Center(
-                child: SingleChildScrollView(
-                  padding: EdgeInsets.all(AppSpacing.getHorizontalPadding(context)),
-                  child: ConstrainedBox(
-                    constraints: BoxConstraints(
-                      maxWidth: AppSpacing.getMaxFormWidth(context),
-                      minHeight: screenHeight - padding.top - 48,
-                    ),
-                    child: Form(
-                      key: formKey,
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          // Logo/Title
-                          Image.asset(
-                      AppAssets.appLogo,
-                      height: AppAssets.logoSizeAuth,
-                      width: AppAssets.logoSizeAuth,
-                    ),
-                    SizedBox(height: screenHeight * 0.03),
-                    Text(
-                      'Owner Registration',
-                      style: Theme.of(context)
-                          .textTheme
-                          .headlineMedium
-                          ?.copyWith(
-                            fontWeight: FontWeight.bold,
-                          ),
-                      textAlign: TextAlign.center,
-                    ),
-                    SizedBox(height: screenHeight * 0.01),
-                    Text(
-                      'Step 1 of 2',
-                      style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                            color: Colors.grey[600],
-                          ),
-                      textAlign: TextAlign.center,
-                    ),
-                    SizedBox(height: screenHeight * 0.06),
-
-                    // Owner Name Field
-                    TextFormField(
-                      onChanged: (value) => ref.read(ownerProvider.notifier).setOwnerName(value),
-                      decoration: const InputDecoration(
-                        labelText: 'Owner Name *',
-                        prefixIcon: Icon(Icons.person),
-                        border: OutlineInputBorder(),
-                      ),
-                      textInputAction: TextInputAction.next,
-                      validator: (value) {
-                        if (value == null || value.isEmpty) {
-                          return 'Please enter owner name';
-                        }
-                        if (value.length < 2) {
-                          return 'Name must be at least 2 characters';
-                        }
-                        return null;
-                      },
-                    ),
-                    SizedBox(height: screenHeight * 0.02),
-
-                    // Mobile Number Field
-                    TextFormField(
-                      onChanged: (value) => ref.read(ownerProvider.notifier).setMobileNumber(value),
-                      decoration: const InputDecoration(
-                        labelText: 'Mobile Number *',
-                        prefixIcon: Icon(Icons.phone),
-                        border: OutlineInputBorder(),
-                      ),
-                      keyboardType: TextInputType.phone,
-                      textInputAction: TextInputAction.next,
-                      maxLength: 10,
-                      validator: (value) {
-                        if (value == null || value.isEmpty) {
-                          return 'Please enter mobile number';
-                        }
-                        if (value.length != 10) {
-                          return 'Mobile number must be 10 digits';
-                        }
-                        if (!RegExp(r'^[0-9]+$').hasMatch(value)) {
-                          return 'Please enter valid mobile number';
-                        }
-                        return null;
-                      },
-                    ),
-                    SizedBox(height: screenHeight * 0.02),
-
-                    // Email Field (Optional)
-                    TextFormField(
-                      onChanged: (value) => ref.read(ownerProvider.notifier).setEmail(value),
-                      decoration: const InputDecoration(
-                        labelText: 'Email (Optional)',
-                        prefixIcon: Icon(Icons.email),
-                        border: OutlineInputBorder(),
-                      ),
-                      keyboardType: TextInputType.emailAddress,
-                      textInputAction: TextInputAction.next,
-                      validator: (value) {
-                        if (value != null && value.isNotEmpty) {
-                          if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(value)) {
-                            return 'Please enter a valid email';
-                          }
-                        }
-                        return null;
-                      },
-                    ),
-                    SizedBox(height: screenHeight * 0.02),
-
-                    // Password Field
-                    TextFormField(
-                      onChanged: (value) => ref.read(ownerProvider.notifier).setPassword(value),
-                      decoration: InputDecoration(
-                        labelText: 'Password *',
-                        prefixIcon: const Icon(Icons.lock),
-                        suffixIcon: IconButton(
-                          icon: Icon(
-                            isPasswordVisible
-                                ? Icons.visibility
-                                : Icons.visibility_off,
-                          ),
-                          onPressed: () => setState(() {
-                            isPasswordVisible = !isPasswordVisible;
-                          }),
-                        ),
-                        border: const OutlineInputBorder(),
-                      ),
-                      obscureText: !isPasswordVisible,
-                      textInputAction: TextInputAction.done,
-                      validator: (value) {
-                        if (value == null || value.isEmpty) {
-                          return 'Please enter password';
-                        }
-                        if (value.length < 6) {
-                          return 'Password must be at least 6 characters';
-                        }
-                        return null;
-                      },
-                    ),
-                    SizedBox(height: screenHeight * 0.04),
-
-                    // Continue Button
-                    ElevatedButton(
-                      onPressed: ownerState.isLoading ? null : _handleRegister,
-                      child: const Padding(
-                        padding: EdgeInsets.symmetric(vertical: 12.0),
-                        child: Text('Continue to Company Details'),
-                      ),
-                    ),
-                    SizedBox(height: screenHeight * 0.02),
-
-                    // Required fields note
-                    Text(
-                      '* Required fields',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: Colors.grey[600],
-                          ),
-                      textAlign: TextAlign.center,
-                    ),
-                    SizedBox(height: screenHeight * 0.02),
-
-                    // Login Link
-                    TextButton(
-                      onPressed: () => Navigator.pushReplacementNamed(context, AppRoutes.login),
-                      child: RichText(
-                        text: TextSpan(
-                          text: "Already have an account? ",
-                          style: Theme.of(context).textTheme.bodyMedium,
-                          children: [
-                            TextSpan(
-                              text: 'Sign in',
-                              style: TextStyle(
-                                color: Theme.of(context).primaryColor,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
+            child: isDesktop ? _buildDesktopLayout(context, ownerState) : _buildMobileLayout(context, screenHeight, padding, ownerState),
           ),
           // Full screen loader
           if (ownerState.isLoading)
@@ -248,5 +63,290 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
         ],
       ),
     );
+  }
+
+  Widget _buildMobileLayout(BuildContext context, double screenHeight, EdgeInsets padding, dynamic ownerState) {
+    return SafeArea(
+      child: Center(
+        child: SingleChildScrollView(
+          padding: EdgeInsets.all(AppSpacing.getHorizontalPadding(context)),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxWidth: AppSpacing.getMaxFormWidth(context),
+              minHeight: screenHeight - padding.top - 48,
+            ),
+            child: Form(
+              key: formKey,
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // Logo/Title
+                  Image.asset(
+                    AppAssets.appLogo,
+                    height: AppAssets.logoSizeAuth,
+                    width: AppAssets.logoSizeAuth,
+                  ),
+                  SizedBox(height: screenHeight * 0.03),
+                  Text(
+                    'Owner Registration',
+                    style: Theme.of(context)
+                        .textTheme
+                        .headlineMedium
+                        ?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                    textAlign: TextAlign.center,
+                  ),
+                  SizedBox(height: screenHeight * 0.01),
+                  Text(
+                    'Step 1 of 2',
+                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                          color: Colors.grey[600],
+                        ),
+                    textAlign: TextAlign.center,
+                  ),
+                  SizedBox(height: screenHeight * 0.06),
+                  ..._buildFormFields(context, screenHeight),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDesktopLayout(BuildContext context, dynamic ownerState) {
+    return Row(
+      children: [
+        // Left side - White background with logo and app name
+        Expanded(
+          child: Container(
+            color: Colors.white,
+            child: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Image.asset(
+                    AppAssets.appLogo,
+                    height: 200,
+                    width: 200,
+                  ),
+                  const SizedBox(height: 24),
+                  Text(
+                    'ShiftLedger',
+                    style: Theme.of(context).textTheme.displaySmall?.copyWith(
+                          fontWeight: FontWeight.bold,
+                          color: Theme.of(context).primaryColor,
+                        ),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    'Manage your workforce efficiently',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          color: Colors.grey[600],
+                        ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        // Right side - Primary color background with register form
+        Expanded(
+          child: Container(
+            color: Theme.of(context).primaryColor,
+            child: Center(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(48.0),
+                child: Container(
+                  constraints: const BoxConstraints(maxWidth: 450),
+                  padding: const EdgeInsets.all(40.0),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.1),
+                        blurRadius: 20,
+                        offset: const Offset(0, 10),
+                      ),
+                    ],
+                  ),
+                  child: Form(
+                    key: formKey,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          'Owner Registration',
+                          style: Theme.of(context)
+                              .textTheme
+                              .headlineMedium
+                              ?.copyWith(
+                                fontWeight: FontWeight.bold,
+                              ),
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Step 1 of 2',
+                          style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                                color: Colors.grey[600],
+                              ),
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 40),
+                        ..._buildFormFields(context, MediaQuery.of(context).size.height),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  List<Widget> _buildFormFields(BuildContext context, double screenHeight) {
+    return [
+      // Owner Name Field
+      TextFormField(
+        onChanged: (value) => ref.read(ownerProvider.notifier).setOwnerName(value),
+        decoration: const InputDecoration(
+          labelText: 'Owner Name *',
+          prefixIcon: Icon(Icons.person),
+          border: OutlineInputBorder(),
+        ),
+        textInputAction: TextInputAction.next,
+        validator: (value) {
+          if (value == null || value.isEmpty) {
+            return 'Please enter owner name';
+          }
+          if (value.length < 2) {
+            return 'Name must be at least 2 characters';
+          }
+          return null;
+        },
+      ),
+      SizedBox(height: screenHeight * 0.02),
+
+      // Mobile Number Field
+      TextFormField(
+        onChanged: (value) => ref.read(ownerProvider.notifier).setMobileNumber(value),
+        decoration: const InputDecoration(
+          labelText: 'Mobile Number *',
+          prefixIcon: Icon(Icons.phone),
+          border: OutlineInputBorder(),
+          counterText: '',
+        ),
+        keyboardType: TextInputType.phone,
+        textInputAction: TextInputAction.next,
+        maxLength: 10,
+        validator: (value) {
+          if (value == null || value.isEmpty) {
+            return 'Please enter mobile number';
+          }
+          if (value.length != 10) {
+            return 'Mobile number must be 10 digits';
+          }
+          if (!RegExp(r'^[0-9]+$').hasMatch(value)) {
+            return 'Please enter valid mobile number';
+          }
+          return null;
+        },
+      ),
+      SizedBox(height: screenHeight * 0.02),
+
+      // Email Field (Optional)
+      TextFormField(
+        onChanged: (value) => ref.read(ownerProvider.notifier).setEmail(value),
+        decoration: const InputDecoration(
+          labelText: 'Email (Optional)',
+          prefixIcon: Icon(Icons.email),
+          border: OutlineInputBorder(),
+        ),
+        keyboardType: TextInputType.emailAddress,
+        textInputAction: TextInputAction.next,
+        validator: (value) {
+          if (value != null && value.isNotEmpty) {
+            if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(value)) {
+              return 'Please enter a valid email';
+            }
+          }
+          return null;
+        },
+      ),
+      SizedBox(height: screenHeight * 0.02),
+
+      // Password Field
+      TextFormField(
+        onChanged: (value) => ref.read(ownerProvider.notifier).setPassword(value),
+        decoration: InputDecoration(
+          labelText: 'Password *',
+          prefixIcon: const Icon(Icons.lock),
+          suffixIcon: IconButton(
+            icon: Icon(
+              isPasswordVisible
+                  ? Icons.visibility
+                  : Icons.visibility_off,
+            ),
+            onPressed: () => setState(() {
+              isPasswordVisible = !isPasswordVisible;
+            }),
+          ),
+          border: const OutlineInputBorder(),
+        ),
+        obscureText: !isPasswordVisible,
+        textInputAction: TextInputAction.done,
+        validator: (value) {
+          if (value == null || value.isEmpty) {
+            return 'Please enter password';
+          }
+          if (value.length < 6) {
+            return 'Password must be at least 6 characters';
+          }
+          return null;
+        },
+      ),
+      SizedBox(height: screenHeight * 0.04),
+
+      // Continue Button
+      ElevatedButton(
+        onPressed: ref.watch(ownerProvider).isLoading ? null : _handleRegister,
+        child: const Padding(
+          padding: EdgeInsets.symmetric(vertical: 12.0),
+          child: Text('Continue to Company Details'),
+        ),
+      ),
+     
+      SizedBox(height: screenHeight * 0.02),
+
+      // Login Link
+      Center(
+        child: TextButton(
+          onPressed: () => Navigator.pushReplacementNamed(context, AppRoutes.login),
+          child: RichText(
+            text: TextSpan(
+              text: "Already have an account? ",
+              style: Theme.of(context).textTheme.bodyMedium,
+              children: [
+                TextSpan(
+                  text: 'Sign in',
+                  style: TextStyle(
+                    color: Theme.of(context).primaryColor,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    ];
   }
 }
