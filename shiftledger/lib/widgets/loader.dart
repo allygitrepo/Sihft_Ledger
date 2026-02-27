@@ -9,7 +9,7 @@ class AppLoader extends StatelessWidget {
   Widget build(BuildContext context) {
     return Center(
       child: Image.asset(
-        'assets/loader.gif',
+        'assets/application_loader.gif',
         height: size,
         width: size,
       ),
