@@ -1,89 +1,48 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
+import '../models/payroll_model.dart';
 import '../providers/payroll_provider.dart';
-import '../providers/settings_provider.dart';
-import '../models/settings_model.dart';
 import '../utills/app_colors.dart';
-import '../utills/app_spacing.dart';
-import '../widgets/loader.dart';
 
-class PayrollScreen extends ConsumerStatefulWidget {
+class PayrollScreen extends ConsumerWidget {
   const PayrollScreen({super.key});
 
   @override
-  ConsumerState<PayrollScreen> createState() => _PayrollScreenState();
-}
-
-class _PayrollScreenState extends ConsumerState<PayrollScreen> {
-  DateTime? startDate;
-  DateTime? endDate;
-
-  @override
-  void initState() {
-    super.initState();
-    _setDefaultDates();
-  }
-
-  void _setDefaultDates() {
-    final now = DateTime.now();
-    final settings = ref.read(settingsProvider);
-
-    switch (settings.salaryCycle) {
-      case SalaryCycle.monthly:
-        startDate = DateTime(now.year, now.month, 1);
-        endDate = DateTime(now.year, now.month + 1, 0);
-        break;
-      case SalaryCycle.weekly:
-        final weekday = now.weekday;
-        startDate = now.subtract(Duration(days: weekday - 1));
-        endDate = startDate!.add(const Duration(days: 6));
-        break;
-      case SalaryCycle.custom:
-        startDate = settings.customStartDate ?? now;
-        endDate = settings.customEndDate ?? now;
-        break;
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final payrollState = ref.watch(payrollProvider);
-    final horizontalPadding = AppSpacing.getHorizontalPadding(context);
 
     return Scaffold(
       body: Column(
         children: [
-          _buildDateRangeSelector(context),
-          const SizedBox(height: 16),
-          Padding(
-            padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
-            child: ElevatedButton(
-              onPressed: payrollState.isGenerating
-                  ? null
-                  : () => _generatePayroll(context, ref),
-              child: payrollState.isGenerating
-                  ? const SizedBox(
-                      height: 20,
-                      width: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Text('Generate Payroll'),
-            ),
-          ),
-          const SizedBox(height: 16),
+          // Date Range Selector
+          _buildDateRangeSelector(context, ref, payrollState),
+          
+          // Generate Button
+          _buildGenerateButton(context, ref, payrollState),
+          
+          // Payroll Summary (if generated)
+          if (payrollState.isGenerated && payrollState.payrollRecords.isNotEmpty)
+            _buildPayrollSummary(payrollState),
+          
+          // Payroll List
           Expanded(
             child: payrollState.isLoading
-                ? const Center(child: AppLoader(size: 50))
+                ? const Center(child: CircularProgressIndicator())
                 : payrollState.payrollRecords.isEmpty
-                    ? _buildEmptyState(context)
-                    : _buildPayrollList(payrollState.payrollRecords, horizontalPadding),
+                    ? _buildEmptyState(context, payrollState.isGenerated)
+                    : _buildPayrollList(context, payrollState.payrollRecords),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildDateRangeSelector(BuildContext context) {
+  Widget _buildDateRangeSelector(
+    BuildContext context,
+    WidgetRef ref,
+    PayrollState state,
+  ) {
     return Container(
       padding: const EdgeInsets.all(16),
       color: AppColors.primary.withValues(alpha: 0.1),
@@ -91,30 +50,276 @@ class _PayrollScreenState extends ConsumerState<PayrollScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Text(
-            'Payroll Period',
+            'Select Payroll Period',
             style: TextStyle(
-              fontSize: 16,
+              fontSize: 18,
               fontWeight: FontWeight.bold,
+              color: AppColors.primary,
             ),
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              // Start Date
+              Expanded(
+                child: InkWell(
+                  onTap: () => _selectStartDate(context, ref, state),
+                  child: Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.grey.shade300),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Start Date',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey[600],
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Row(
+                          children: [
+                            const Icon(
+                              Icons.calendar_today,
+                              size: 16,
+                              color: AppColors.primary,
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              state.startDate != null
+                                  ? DateFormat('dd MMM yyyy').format(state.startDate!)
+                                  : 'Select Date',
+                              style: const TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              // End Date
+              Expanded(
+                child: InkWell(
+                  onTap: () => _selectEndDate(context, ref, state),
+                  child: Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.grey.shade300),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'End Date',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey[600],
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Row(
+                          children: [
+                            const Icon(
+                              Icons.calendar_today,
+                              size: 16,
+                              color: AppColors.primary,
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              state.endDate != null
+                                  ? DateFormat('dd MMM yyyy').format(state.endDate!)
+                                  : 'Select Date',
+                              style: const TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          // Quick Select Buttons
+          Row(
+            children: [
+              _buildQuickSelectButton(
+                context,
+                ref,
+                'This Month',
+                () => _selectThisMonth(ref),
+              ),
+              const SizedBox(width: 8),
+              _buildQuickSelectButton(
+                context,
+                ref,
+                'Last Month',
+                () => _selectLastMonth(ref),
+              ),
+              const SizedBox(width: 8),
+              _buildQuickSelectButton(
+                context,
+                ref,
+                'This Week',
+                () => _selectThisWeek(ref),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildQuickSelectButton(
+    BuildContext context,
+    WidgetRef ref,
+    String label,
+    VoidCallback onTap,
+  ) {
+    return Expanded(
+      child: OutlinedButton(
+        onPressed: onTap,
+        style: OutlinedButton.styleFrom(
+          foregroundColor: AppColors.primary,
+          side: const BorderSide(color: AppColors.primary),
+          padding: const EdgeInsets.symmetric(vertical: 8),
+        ),
+        child: Text(
+          label,
+          style: const TextStyle(fontSize: 12),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildGenerateButton(
+    BuildContext context,
+    WidgetRef ref,
+    PayrollState state,
+  ) {
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Row(
+        children: [
+          Expanded(
+            child: ElevatedButton.icon(
+              onPressed: state.isLoading
+                  ? null
+                  : () => _generatePayroll(context, ref),
+              icon: const Icon(Icons.calculate),
+              label: const Text('Generate Payroll'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+            ),
+          ),
+          if (state.isGenerated && state.payrollRecords.isNotEmpty) ...[
+            const SizedBox(width: 12),
+            ElevatedButton.icon(
+              onPressed: () => _savePayroll(context, ref),
+              icon: const Icon(Icons.save),
+              label: const Text('Save'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.green,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPayrollSummary(PayrollState state) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.primary.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.summarize, color: AppColors.primary),
+              const SizedBox(width: 8),
+              const Text(
+                'Payroll Summary',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.primary,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: _buildSummaryItem(
+                  'Total Employees',
+                  state.totalEmployees.toString(),
+                  Icons.people,
+                  Colors.blue,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _buildSummaryItem(
+                  'Total Salary',
+                  '₹${state.totalSalary.toStringAsFixed(0)}',
+                  Icons.currency_rupee,
+                  Colors.green,
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 12),
           Row(
             children: [
               Expanded(
-                child: _buildDateButton(
-                  context,
-                  'Start Date',
-                  startDate,
-                  (date) => setState(() => startDate = date),
+                child: _buildSummaryItem(
+                  'Base Salary',
+                  '₹${state.totalWorkSalary.toStringAsFixed(0)}',
+                  Icons.work,
+                  Colors.orange,
                 ),
               ),
               const SizedBox(width: 12),
               Expanded(
-                child: _buildDateButton(
-                  context,
-                  'End Date',
-                  endDate,
-                  (date) => setState(() => endDate = date),
+                child: _buildSummaryItem(
+                  'Overtime',
+                  '₹${state.totalOvertimeSalary.toStringAsFixed(0)}',
+                  Icons.access_time,
+                  Colors.purple,
                 ),
               ),
             ],
@@ -124,191 +329,340 @@ class _PayrollScreenState extends ConsumerState<PayrollScreen> {
     );
   }
 
-  Widget _buildDateButton(
-    BuildContext context,
+  Widget _buildSummaryItem(
     String label,
-    DateTime? date,
-    Function(DateTime) onDateSelected,
+    String value,
+    IconData icon,
+    Color color,
   ) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, size: 16, color: color),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: Colors.grey[600],
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: color,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEmptyState(BuildContext context, bool wasGenerated) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            wasGenerated ? Icons.inbox : Icons.calculate_outlined,
+            size: 64,
+            color: Colors.grey[400],
+          ),
+          const SizedBox(height: 16),
+          Text(
+            wasGenerated
+                ? 'No attendance records found'
+                : 'Select date range and generate payroll',
+            style: TextStyle(
+              fontSize: 16,
+              color: Colors.grey[600],
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            wasGenerated
+                ? 'No employees have attendance in this period'
+                : 'Click "Generate Payroll" to calculate salaries',
+            style: TextStyle(
+              fontSize: 14,
+              color: Colors.grey[500],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPayrollList(BuildContext context, List<PayrollModel> payrollRecords) {
+    return ListView.builder(
+      padding: const EdgeInsets.all(16),
+      itemCount: payrollRecords.length,
+      itemBuilder: (context, index) {
+        final payroll = payrollRecords[index];
+        return _buildPayrollCard(context, payroll);
+      },
+    );
+  }
+
+  Widget _buildPayrollCard(BuildContext context, PayrollModel payroll) {
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      elevation: 2,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Employee Name
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: AppColors.primary.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(
+                    Icons.person,
+                    color: AppColors.primary,
+                    size: 20,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        payroll.employeeName,
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      Text(
+                        'ID: ${payroll.employeeId}',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey[600],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: Colors.green.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: Colors.green.withValues(alpha: 0.3)),
+                  ),
+                  child: Text(
+                    '₹${payroll.totalSalary.toStringAsFixed(0)}',
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.green,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            // Attendance Details
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.grey.withValues(alpha: 0.05),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Column(
+                children: [
+                  _buildDetailRow(
+                    'Working Days',
+                    '${payroll.workingDays} days',
+                    Icons.calendar_today,
+                    Colors.blue,
+                  ),
+                  const Divider(height: 16),
+                  _buildDetailRow(
+                    'Working Hours',
+                    '${payroll.workingHours.toStringAsFixed(1)} hrs',
+                    Icons.access_time,
+                    Colors.orange,
+                  ),
+                  const Divider(height: 16),
+                  _buildDetailRow(
+                    'Base Salary',
+                    '₹${payroll.workSalary.toStringAsFixed(0)}',
+                    Icons.work,
+                    Colors.green,
+                  ),
+                  if (payroll.overtimeHours > 0) ...[
+                    const Divider(height: 16),
+                    _buildDetailRow(
+                      'Overtime (${payroll.overtimeHours.toStringAsFixed(1)} hrs)',
+                      '₹${payroll.overtimeSalary.toStringAsFixed(0)}',
+                      Icons.timer,
+                      Colors.purple,
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDetailRow(
+    String label,
+    String value,
+    IconData icon,
+    Color color,
+  ) {
+    return Row(
       children: [
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: 12,
-            color: Colors.grey[600],
+        Icon(icon, size: 18, color: color),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 14,
+              color: Colors.grey[700],
+            ),
           ),
         ),
-        const SizedBox(height: 4),
-        OutlinedButton(
-          onPressed: () async {
-            final picked = await showDatePicker(
-              context: context,
-              initialDate: date ?? DateTime.now(),
-              firstDate: DateTime(2020),
-              lastDate: DateTime.now(),
-            );
-            if (picked != null) {
-              onDateSelected(picked);
-            }
-          },
-          child: Text(
-            date != null
-                ? '${date.day}/${date.month}/${date.year}'
-                : 'Select',
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.bold,
+            color: color,
           ),
         ),
       ],
     );
   }
 
-  Widget _buildPayrollList(List payrollRecords, double horizontalPadding) {
-    return ListView.builder(
-      padding: EdgeInsets.all(horizontalPadding),
-      itemCount: payrollRecords.length,
-      itemBuilder: (context, index) {
-        final payroll = payrollRecords[index];
-        return Card(
-          margin: const EdgeInsets.only(bottom: 12),
-          child: ExpansionTile(
-            leading: CircleAvatar(
-              backgroundColor: AppColors.primary,
-              child: Text(
-                payroll.employeeName[0].toUpperCase(),
-                style: const TextStyle(color: Colors.white),
-              ),
-            ),
-            title: Text(
-              payroll.employeeName,
-              style: const TextStyle(fontWeight: FontWeight.bold),
-            ),
-            subtitle: Text(
-              'Total: ₹${payroll.totalPay.toStringAsFixed(2)}',
-              style: const TextStyle(
-                color: Colors.green,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            children: [
-              Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  children: [
-                    _buildPayrollRow('Base Pay', payroll.basePay),
-                    if (payroll.overtimePay > 0)
-                      _buildPayrollRow('Overtime Pay', payroll.overtimePay),
-                    if (payroll.daysPresent != null)
-                      _buildPayrollRow(
-                        'Days Present',
-                        payroll.daysPresent.toDouble(),
-                        isAmount: false,
-                      ),
-                    if (payroll.totalHoursWorked != null)
-                      _buildPayrollRow(
-                        'Hours Worked',
-                        payroll.totalHoursWorked,
-                        isAmount: false,
-                      ),
-                    if (payroll.totalUnitsProduced != null)
-                      _buildPayrollRow(
-                        'Units Produced',
-                        payroll.totalUnitsProduced.toDouble(),
-                        isAmount: false,
-                      ),
-                    const Divider(),
-                    _buildPayrollRow(
-                      'Total Pay',
-                      payroll.totalPay,
-                      isBold: true,
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        );
-      },
+  Future<void> _selectStartDate(
+    BuildContext context,
+    WidgetRef ref,
+    PayrollState state,
+  ) async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: state.startDate ?? DateTime.now(),
+      firstDate: DateTime(2020),
+      lastDate: DateTime.now(),
     );
+
+    if (picked != null) {
+      ref.read(payrollProvider.notifier).setStartDate(picked);
+    }
   }
 
-  Widget _buildPayrollRow(String label, double value,
-      {bool isAmount = true, bool isBold = false}) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(
-            label,
-            style: TextStyle(
-              fontWeight: isBold ? FontWeight.bold : FontWeight.normal,
-            ),
-          ),
-          Text(
-            isAmount ? '₹${value.toStringAsFixed(2)}' : value.toStringAsFixed(0),
-            style: TextStyle(
-              fontWeight: isBold ? FontWeight.bold : FontWeight.normal,
-            ),
-          ),
-        ],
-      ),
+  Future<void> _selectEndDate(
+    BuildContext context,
+    WidgetRef ref,
+    PayrollState state,
+  ) async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: state.endDate ?? DateTime.now(),
+      firstDate: state.startDate ?? DateTime(2020),
+      lastDate: DateTime.now(),
     );
+
+    if (picked != null) {
+      ref.read(payrollProvider.notifier).setEndDate(picked);
+    }
   }
 
-  Widget _buildEmptyState(BuildContext context) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            Icons.receipt_long_outlined,
-            size: 80,
-            color: Colors.grey[400],
-          ),
-          const SizedBox(height: 16),
-          Text(
-            'No payroll generated yet',
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  color: Colors.grey[600],
-                ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Select date range and generate payroll',
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: Colors.grey[500],
-                ),
-          ),
-        ],
-      ),
-    );
+  void _selectThisMonth(WidgetRef ref) {
+    final now = DateTime.now();
+    final startOfMonth = DateTime(now.year, now.month, 1);
+    final endOfMonth = DateTime(now.year, now.month + 1, 0);
+    ref.read(payrollProvider.notifier).setDateRange(startOfMonth, endOfMonth);
+  }
+
+  void _selectLastMonth(WidgetRef ref) {
+    final now = DateTime.now();
+    final lastMonth = DateTime(now.year, now.month - 1, 1);
+    final endOfLastMonth = DateTime(now.year, now.month, 0);
+    ref.read(payrollProvider.notifier).setDateRange(lastMonth, endOfLastMonth);
+  }
+
+  void _selectThisWeek(WidgetRef ref) {
+    final now = DateTime.now();
+    final weekday = now.weekday;
+    final startOfWeek = now.subtract(Duration(days: weekday - 1));
+    final endOfWeek = startOfWeek.add(const Duration(days: 6));
+    ref.read(payrollProvider.notifier).setDateRange(startOfWeek, endOfWeek);
   }
 
   Future<void> _generatePayroll(BuildContext context, WidgetRef ref) async {
-    if (startDate == null || endDate == null) {
+    final success = await ref.read(payrollProvider.notifier).generatePayroll();
+
+    if (!context.mounted) return;
+
+    if (success) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Please select both start and end dates'),
+          content: Text('Payroll generated successfully'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Failed to generate payroll. Please check date range.'),
           backgroundColor: Colors.red,
         ),
       );
-      return;
     }
+  }
 
-    if (endDate!.isBefore(startDate!)) {
+  Future<void> _savePayroll(BuildContext context, WidgetRef ref) async {
+    final success = await ref.read(payrollProvider.notifier).savePayroll();
+
+    if (!context.mounted) return;
+
+    if (success) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('End date must be after start date'),
+          content: Text('Payroll saved successfully'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Failed to save payroll'),
           backgroundColor: Colors.red,
         ),
       );
-      return;
     }
-
-    await ref.read(payrollProvider.notifier).generatePayroll(
-          startDate!,
-          endDate!,
-        );
   }
 }

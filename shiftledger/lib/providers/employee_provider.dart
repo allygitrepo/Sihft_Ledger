@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:riverpod/riverpod.dart';
 import '../models/employee_model.dart';
+import '../models/settings_model.dart';
 import '../services/employee_service.dart';
 import '../widgets/toast.dart';
 
@@ -79,6 +80,36 @@ class EmployeeNotifier extends Notifier<EmployeeState> {
     print('[EmployeeProvider] Employees reloaded, new count: ${state.employees.length}');
     
     ToastHelper.success('${employees.length} employees imported successfully');
+  }
+
+  // Recalculate all employee salaries when settings change
+  Future<void> recalculateEmployeeSalaries(SettingsModel settings) async {
+    state = state.copyWith(isLoading: true);
+    print('[EmployeeProvider] Recalculating salaries for ${state.employees.length} employees');
+    
+    final updatedEmployees = <EmployeeModel>[];
+    
+    for (final employee in state.employees) {
+      final conversion = EmployeeService.convertSalary(
+        employee.salaryOriginal,
+        settings,
+      );
+      
+      final updatedEmployee = employee.copyWith(
+        salaryType: conversion['salaryType'] as String,
+        hourlyRate: conversion['hourlyRate'] as double?,
+        dailyRate: conversion['dailyRate'] as double?,
+        salary: employee.salaryOriginal, // Keep original salary
+      );
+      
+      updatedEmployees.add(updatedEmployee);
+    }
+    
+    await EmployeeService.saveEmployees(updatedEmployees);
+    await loadEmployees();
+    
+    print('[EmployeeProvider] Salary recalculation completed');
+    ToastHelper.success('Employee salaries recalculated');
   }
 
   EmployeeModel? getEmployeeById(String employeeId) {

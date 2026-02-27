@@ -37,6 +37,10 @@ class MainLayout extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final screenWidth = MediaQuery.of(context).size.width;
     final isDesktop = screenWidth > 800;
+    final theme = Theme.of(context);
+    final cardColor = theme.cardColor;
+    final dividerColor = theme.dividerColor;
+    final textColor = theme.textTheme.bodyLarge?.color ?? Colors.black;
 
     if (!isDesktop) {
       // Mobile: Return child as-is (it has its own AppBar)
@@ -45,7 +49,7 @@ class MainLayout extends ConsumerWidget {
 
     // Desktop/Tablet: Show sidebar with AppBar
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: theme.scaffoldBackgroundColor,
       body: Row(
         children: [
           // Use existing SidebarNavigation widget
@@ -59,10 +63,10 @@ class MainLayout extends ConsumerWidget {
                 Container(
                   height: 60,
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    color: cardColor,
                     border: Border(
                       bottom: BorderSide(
-                        color: Colors.grey[300]!,
+                        color: dividerColor,
                         width: 1,
                       ),
                     ),
@@ -72,10 +76,10 @@ class MainLayout extends ConsumerWidget {
                     children: [
                       Text(
                         _getPageTitle(currentRoute),
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 20,
                           fontWeight: FontWeight.w600,
-                          color: Colors.black87,
+                          color: textColor,
                         ),
                       ),
                       const Spacer(),

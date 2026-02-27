@@ -1,19 +1,19 @@
-import '../models/settings_model.dart';
+import '../models/employee_model.dart';
 
 class OvertimeService {
-  /// Calculate overtime salary based on settings
+  /// Calculate overtime salary based on employee overtime configuration
   static double calculateOvertimeSalary({
     required double overtimeHours,
-    required SettingsModel settings,
+    required EmployeeModel employee,
   }) {
     if (overtimeHours <= 0) return 0.0;
 
-    if (settings.overtimeType == OvertimeType.hourwise) {
+    if (employee.overtimeType == OvertimeType.hourwise) {
       // Simple hourwise calculation
-      return overtimeHours * settings.overtimeRate;
+      return overtimeHours * employee.overtimeRate;
     } else {
       // Slotwise calculation
-      return _calculateSlotwiseSalary(overtimeHours, settings.overtimeSlots);
+      return _calculateSlotwiseSalary(overtimeHours, employee.overtimeSlots);
     }
   }
 
@@ -40,24 +40,24 @@ class OvertimeService {
   /// Get overtime rate for given hours (useful for display)
   static double getOvertimeRate({
     required double overtimeHours,
-    required SettingsModel settings,
+    required EmployeeModel employee,
   }) {
-    if (settings.overtimeType == OvertimeType.hourwise) {
-      return settings.overtimeRate;
+    if (employee.overtimeType == OvertimeType.hourwise) {
+      return employee.overtimeRate;
     } else {
       // Find the slot rate
-      for (final slot in settings.overtimeSlots) {
+      for (final slot in employee.overtimeSlots) {
         if (overtimeHours >= slot.startHour && overtimeHours <= slot.endHour) {
           return slot.rate;
         }
       }
 
       // Return last slot rate if no match
-      if (settings.overtimeSlots.isNotEmpty) {
-        return settings.overtimeSlots.last.rate;
+      if (employee.overtimeSlots.isNotEmpty) {
+        return employee.overtimeSlots.last.rate;
       }
 
-      return settings.overtimeRate;
+      return employee.overtimeRate;
     }
   }
 

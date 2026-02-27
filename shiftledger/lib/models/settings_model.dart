@@ -1,7 +1,4 @@
-enum OvertimeType {
-  hourwise,
-  slotwise,
-}
+import 'employee_model.dart';
 
 enum PayrollAttendanceType {
   daily,
@@ -15,45 +12,34 @@ enum SalaryCycle {
   custom,
 }
 
-class OvertimeSlot {
-  final int startHour;
-  final int endHour;
-  final double rate;
+enum SalaryInputType {
+  monthly,
+  daily,
+  hourly,
+}
 
-  const OvertimeSlot({
-    required this.startHour,
-    required this.endHour,
-    required this.rate,
-  });
-
-  Map<String, dynamic> toJson() {
-    return {
-      'startHour': startHour,
-      'endHour': endHour,
-      'rate': rate,
-    };
-  }
-
-  factory OvertimeSlot.fromJson(Map<String, dynamic> json) {
-    return OvertimeSlot(
-      startHour: json['startHour'] as int,
-      endHour: json['endHour'] as int,
-      rate: (json['rate'] as num).toDouble(),
-    );
-  }
+enum DefaultSalaryType {
+  hourwise,
+  daywise,
 }
 
 class SettingsModel {
-  // Working hours (for new attendance module)
+  // Salary Configuration
+  final DefaultSalaryType defaultSalaryType;
+  final double fixedHoursPerDay;
+  final int workingDaysPerMonth;
+  final SalaryInputType salaryInputType;
+  
+  // Working hours (for attendance module)
   final double fullDayHours;
   final double halfDayHours;
   final int breakMinutes;
   
-  // Overtime (for new attendance module)
+  // Overtime Configuration
   final bool overtimeEnabled;
-  final OvertimeType overtimeType;
-  final double overtimeRate; // Default rate for hourwise
-  final List<OvertimeSlot> overtimeSlots; // For slotwise
+  final OvertimeType defaultOvertimeType;
+  final double defaultOvertimeRate;
+  final List<OvertimeSlot> overtimeSlots;
 
   // Old fields (for backward compatibility with payroll)
   final PayrollAttendanceType attendanceType;
@@ -62,14 +48,22 @@ class SettingsModel {
   final DateTime? customStartDate;
   final DateTime? customEndDate;
   final double minimumHours;
+  
+  // Timestamps
+  final DateTime? createdAt;
+  final DateTime? updatedAt;
 
   const SettingsModel({
+    required this.defaultSalaryType,
+    required this.fixedHoursPerDay,
+    required this.workingDaysPerMonth,
+    required this.salaryInputType,
     required this.fullDayHours,
     required this.halfDayHours,
     required this.breakMinutes,
     required this.overtimeEnabled,
-    required this.overtimeType,
-    required this.overtimeRate,
+    required this.defaultOvertimeType,
+    required this.defaultOvertimeRate,
     required this.overtimeSlots,
     required this.attendanceType,
     required this.overtimeMultiplier,
@@ -77,17 +71,23 @@ class SettingsModel {
     this.customStartDate,
     this.customEndDate,
     this.minimumHours = 8.0,
+    this.createdAt,
+    this.updatedAt,
   });
 
   factory SettingsModel.defaultSettings() {
-    return const SettingsModel(
+    return SettingsModel(
+      defaultSalaryType: DefaultSalaryType.hourwise,
+      fixedHoursPerDay: 8.0,
+      workingDaysPerMonth: 26,
+      salaryInputType: SalaryInputType.monthly,
       fullDayHours: 8.0,
       halfDayHours: 4.0,
       breakMinutes: 60,
       overtimeEnabled: true,
-      overtimeType: OvertimeType.hourwise,
-      overtimeRate: 100.0,
-      overtimeSlots: [
+      defaultOvertimeType: OvertimeType.hourwise,
+      defaultOvertimeRate: 100.0,
+      overtimeSlots: const [
         OvertimeSlot(startHour: 0, endHour: 2, rate: 100),
         OvertimeSlot(startHour: 2, endHour: 5, rate: 150),
         OvertimeSlot(startHour: 5, endHour: 10, rate: 200),
@@ -96,17 +96,23 @@ class SettingsModel {
       overtimeMultiplier: 1.5,
       salaryCycle: SalaryCycle.monthly,
       minimumHours: 8.0,
+      createdAt: DateTime.now(),
+      updatedAt: DateTime.now(),
     );
   }
 
   Map<String, dynamic> toJson() {
     return {
+      'defaultSalaryType': defaultSalaryType.name,
+      'fixedHoursPerDay': fixedHoursPerDay,
+      'workingDaysPerMonth': workingDaysPerMonth,
+      'salaryInputType': salaryInputType.name,
       'fullDayHours': fullDayHours,
       'halfDayHours': halfDayHours,
       'breakMinutes': breakMinutes,
       'overtimeEnabled': overtimeEnabled,
-      'overtimeType': overtimeType.name,
-      'overtimeRate': overtimeRate,
+      'defaultOvertimeType': defaultOvertimeType.name,
+      'defaultOvertimeRate': defaultOvertimeRate,
       'overtimeSlots': overtimeSlots.map((s) => s.toJson()).toList(),
       'attendanceType': attendanceType.name,
       'overtimeMultiplier': overtimeMultiplier,
@@ -114,20 +120,33 @@ class SettingsModel {
       'customStartDate': customStartDate?.toIso8601String(),
       'customEndDate': customEndDate?.toIso8601String(),
       'minimumHours': minimumHours,
+      'createdAt': createdAt?.toIso8601String(),
+      'updatedAt': updatedAt?.toIso8601String(),
     };
   }
 
   factory SettingsModel.fromJson(Map<String, dynamic> json) {
     return SettingsModel(
+      defaultSalaryType: DefaultSalaryType.values.firstWhere(
+        (e) => e.name == json['defaultSalaryType'],
+        orElse: () => DefaultSalaryType.hourwise,
+      ),
+      fixedHoursPerDay: (json['fixedHoursPerDay'] as num?)?.toDouble() ?? 8.0,
+      workingDaysPerMonth: (json['workingDaysPerMonth'] as int?) ?? 26,
+      salaryInputType: SalaryInputType.values.firstWhere(
+        (e) => e.name == json['salaryInputType'],
+        orElse: () => SalaryInputType.monthly,
+      ),
       fullDayHours: (json['fullDayHours'] as num?)?.toDouble() ?? 8.0,
       halfDayHours: (json['halfDayHours'] as num?)?.toDouble() ?? 4.0,
       breakMinutes: (json['breakMinutes'] as int?) ?? 60,
       overtimeEnabled: (json['overtimeEnabled'] as bool?) ?? true,
-      overtimeType: OvertimeType.values.firstWhere(
-        (e) => e.name == json['overtimeType'],
+      defaultOvertimeType: OvertimeType.values.firstWhere(
+        (e) => e.name == json['defaultOvertimeType'] || e.name == json['overtimeType'],
         orElse: () => OvertimeType.hourwise,
       ),
-      overtimeRate: (json['overtimeRate'] as num?)?.toDouble() ?? 100.0,
+      defaultOvertimeRate: (json['defaultOvertimeRate'] as num?)?.toDouble() ?? 
+                          (json['overtimeRate'] as num?)?.toDouble() ?? 100.0,
       overtimeSlots: (json['overtimeSlots'] as List<dynamic>?)
               ?.map((s) => OvertimeSlot.fromJson(s as Map<String, dynamic>))
               .toList() ??
@@ -152,16 +171,26 @@ class SettingsModel {
           ? DateTime.parse(json['customEndDate'])
           : null,
       minimumHours: (json['minimumHours'] as num?)?.toDouble() ?? 8.0,
+      createdAt: json['createdAt'] != null
+          ? DateTime.parse(json['createdAt'])
+          : null,
+      updatedAt: json['updatedAt'] != null
+          ? DateTime.parse(json['updatedAt'])
+          : null,
     );
   }
 
   SettingsModel copyWith({
+    DefaultSalaryType? defaultSalaryType,
+    double? fixedHoursPerDay,
+    int? workingDaysPerMonth,
+    SalaryInputType? salaryInputType,
     double? fullDayHours,
     double? halfDayHours,
     int? breakMinutes,
     bool? overtimeEnabled,
-    OvertimeType? overtimeType,
-    double? overtimeRate,
+    OvertimeType? defaultOvertimeType,
+    double? defaultOvertimeRate,
     List<OvertimeSlot>? overtimeSlots,
     PayrollAttendanceType? attendanceType,
     double? overtimeMultiplier,
@@ -169,14 +198,20 @@ class SettingsModel {
     DateTime? customStartDate,
     DateTime? customEndDate,
     double? minimumHours,
+    DateTime? createdAt,
+    DateTime? updatedAt,
   }) {
     return SettingsModel(
+      defaultSalaryType: defaultSalaryType ?? this.defaultSalaryType,
+      fixedHoursPerDay: fixedHoursPerDay ?? this.fixedHoursPerDay,
+      workingDaysPerMonth: workingDaysPerMonth ?? this.workingDaysPerMonth,
+      salaryInputType: salaryInputType ?? this.salaryInputType,
       fullDayHours: fullDayHours ?? this.fullDayHours,
       halfDayHours: halfDayHours ?? this.halfDayHours,
       breakMinutes: breakMinutes ?? this.breakMinutes,
       overtimeEnabled: overtimeEnabled ?? this.overtimeEnabled,
-      overtimeType: overtimeType ?? this.overtimeType,
-      overtimeRate: overtimeRate ?? this.overtimeRate,
+      defaultOvertimeType: defaultOvertimeType ?? this.defaultOvertimeType,
+      defaultOvertimeRate: defaultOvertimeRate ?? this.defaultOvertimeRate,
       overtimeSlots: overtimeSlots ?? this.overtimeSlots,
       attendanceType: attendanceType ?? this.attendanceType,
       overtimeMultiplier: overtimeMultiplier ?? this.overtimeMultiplier,
@@ -184,6 +219,8 @@ class SettingsModel {
       customStartDate: customStartDate ?? this.customStartDate,
       customEndDate: customEndDate ?? this.customEndDate,
       minimumHours: minimumHours ?? this.minimumHours,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? DateTime.now(),
     );
   }
 }

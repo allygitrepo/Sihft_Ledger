@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../providers/auth_provider.dart';
+import '../services/owner_service.dart';
 import '../routes/app_routes.dart';
 import '../utills/app_assets.dart';
 import '../utills/app_spacing.dart';
 import '../widgets/loader.dart';
+import '../widgets/toast.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -16,6 +18,10 @@ class LoginScreen extends ConsumerStatefulWidget {
 class _LoginScreenState extends ConsumerState<LoginScreen> {
   late GlobalKey<FormState> formKey;
   bool isPasswordVisible = false;
+  bool isLoading = false;
+  
+  String mobileNumber = '';
+  String password = '';
 
   @override
   void initState() {
@@ -23,19 +29,46 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     formKey = GlobalKey<FormState>();
   }
 
+  Future<void> _handleLogin() async {
+    if (formKey.currentState!.validate()) {
+      FocusScope.of(context).unfocus();
+      
+      setState(() => isLoading = true);
+      
+      // Check if owner exists
+      final hasOwner = await OwnerService.hasOwner();
+      
+      if (!hasOwner) {
+        setState(() => isLoading = false);
+        ToastHelper.error('No account found. Please register first.');
+        return;
+      }
+      
+      // Validate credentials
+      final isValid = await OwnerService.validateLogin(mobileNumber, password);
+      
+      if (isValid) {
+        // Save login state
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setBool('is_logged_in', true);
+        
+        setState(() => isLoading = false);
+        
+        if (mounted) {
+          ToastHelper.success('Login successful');
+          Navigator.pushReplacementNamed(context, AppRoutes.dashboard);
+        }
+      } else {
+        setState(() => isLoading = false);
+        ToastHelper.error('Invalid mobile number or password');
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final screenHeight = MediaQuery.of(context).size.height;
     final padding = MediaQuery.of(context).padding;
-    final authState = ref.watch(authProvider);
-    final authNotifier = ref.read(authProvider.notifier);
-
-    // Auto navigate to dashboard if login is successful
-    ref.listen<AuthState>(authProvider, (previous, next) {
-      if (next.isLoggedIn && !next.isLoading) {
-        Navigator.pushReplacementNamed(context, AppRoutes.dashboard);
-      }
-    });
 
     return Scaffold(
       resizeToAvoidBottomInset: true,
@@ -84,22 +117,26 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           ),
                           SizedBox(height: screenHeight * 0.06),
 
-                          // Email Field
+                          // Mobile Number Field
                           TextFormField(
-                            onChanged: (value) => authNotifier.setEmail(value),
+                            onChanged: (value) => mobileNumber = value.trim(),
                             decoration: const InputDecoration(
-                              labelText: 'Email',
-                              prefixIcon: Icon(Icons.email),
+                              labelText: 'Mobile Number',
+                              prefixIcon: Icon(Icons.phone),
                               border: OutlineInputBorder(),
                             ),
-                            keyboardType: TextInputType.emailAddress,
+                            keyboardType: TextInputType.phone,
                             textInputAction: TextInputAction.next,
+                            maxLength: 10,
                             validator: (value) {
                               if (value == null || value.isEmpty) {
-                                return 'Please enter your email';
+                                return 'Please enter mobile number';
                               }
-                              if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(value)) {
-                                return 'Please enter a valid email';
+                              if (value.length != 10) {
+                                return 'Mobile number must be 10 digits';
+                              }
+                              if (!RegExp(r'^[0-9]+$').hasMatch(value)) {
+                                return 'Please enter valid mobile number';
                               }
                               return null;
                             },
@@ -108,7 +145,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
                           // Password Field
                           TextFormField(
-                            onChanged: (value) => authNotifier.setPassword(value),
+                            onChanged: (value) => password = value,
                             decoration: InputDecoration(
                               labelText: 'Password',
                               prefixIcon: const Icon(Icons.lock),
@@ -128,7 +165,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                             textInputAction: TextInputAction.done,
                             validator: (value) {
                               if (value == null || value.isEmpty) {
-                                return 'Please enter your password';
+                                return 'Please enter password';
                               }
                               if (value.length < 6) {
                                 return 'Password must be at least 6 characters';
@@ -140,14 +177,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
                           // Login Button
                           ElevatedButton(
-                            onPressed: authState.isLoading
-                                ? null
-                                : () {
-                                    if (formKey.currentState!.validate()) {
-                                      FocusScope.of(context).unfocus();
-                                      authNotifier.login();
-                                    }
-                                  },
+                            onPressed: isLoading ? null : _handleLogin,
                             child: const Padding(
                               padding: EdgeInsets.symmetric(vertical: 12.0),
                               child: Text('Login'),
@@ -157,7 +187,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
                           // Register Link
                           TextButton(
-                            onPressed: () => Navigator.pushNamed(context, AppRoutes.register),
+                            onPressed: () => Navigator.pushReplacementNamed(context, AppRoutes.register),
                             child: RichText(
                               text: TextSpan(
                                 text: "Don't have an account? ",
@@ -183,7 +213,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             ),
           ),
           // Full screen loader
-          if (authState.isLoading)
+          if (isLoading)
             Container(
               color: Colors.black.withValues(alpha: 0.5),
               child: const Center(

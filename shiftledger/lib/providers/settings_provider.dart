@@ -16,6 +16,11 @@ class SettingsNotifier extends Notifier<SettingsModel> {
     state = settings;
   }
 
+  Future<void> updateSettings(SettingsModel settings) async {
+    state = settings;
+    await SettingsService.saveSettings(state);
+  }
+
   Future<void> updateAttendanceType(PayrollAttendanceType type) async {
     state = state.copyWith(attendanceType: type);
     await SettingsService.saveSettings(state);

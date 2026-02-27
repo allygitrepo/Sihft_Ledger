@@ -50,7 +50,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     return RefreshIndicator(
       onRefresh: () async {
         await ref.read(employeeProvider.notifier).loadEmployees();
-        await ref.read(payrollProvider.notifier).loadPayroll();
+        await ref.read(payrollProvider.notifier).loadSavedPayroll();
         await _loadTodayAttendance();
       },
       child: ListView(
@@ -136,7 +136,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       ),
       _StatData(
         title: 'Total Payout',
-        value: '₹${_formatAmount(ref.read(payrollProvider.notifier).getTotalPayroll())}',
+        value: '₹${_formatAmount(payrollState.totalSalary)}',
         icon: Icons.account_balance_wallet,
         color: Colors.orange,
       ),
