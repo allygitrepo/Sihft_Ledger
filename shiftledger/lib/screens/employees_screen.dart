@@ -4,9 +4,11 @@ import 'package:file_picker/file_picker.dart';
 import 'dart:io';
 import 'dart:developer' as developer;
 import '../providers/employee_provider.dart';
+import '../providers/settings_provider.dart';
 import '../models/employee_model.dart';
 import '../models/csv_employee_preview.dart';
 import '../services/csv_import_service.dart';
+import '../services/employee_service.dart';
 import '../utills/app_colors.dart';
 import '../utills/app_spacing.dart';
 import '../widgets/loader.dart';
@@ -56,6 +58,12 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
   }
 
   void _saveEditing(EmployeeModel originalEmployee) {
+    final newSalary = double.tryParse(_editControllers['salary']!.text) ?? originalEmployee.salary;
+    
+    // Get settings and convert salary
+    final settings = ref.read(settingsProvider);
+    final conversion = EmployeeService.convertSalary(newSalary, settings);
+    
     final updatedEmployee = EmployeeModel(
       id: originalEmployee.id,
       name: _editControllers['name']!.text,
@@ -63,8 +71,16 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
       mobileNo: _editControllers['mobile']!.text,
       position: _editControllers['position']!.text,
       department: _editControllers['department']!.text,
-      salary: double.tryParse(_editControllers['salary']!.text) ?? originalEmployee.salary,
+      salary: newSalary,
+      salaryOriginal: newSalary,
+      salaryType: conversion['salaryType'] as String,
+      hourlyRate: conversion['hourlyRate'] as double?,
+      dailyRate: conversion['dailyRate'] as double?,
       createdAt: originalEmployee.createdAt,
+      employeeType: originalEmployee.employeeType,
+      overtimeType: originalEmployee.overtimeType,
+      overtimeRate: originalEmployee.overtimeRate,
+      overtimeSlots: originalEmployee.overtimeSlots,
     );
     
     ref.read(employeeProvider.notifier).updateEmployee(updatedEmployee);
@@ -976,9 +992,10 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
                   TextFormField(
                     controller: salaryController,
                     decoration: const InputDecoration(
-                      labelText: 'Salary',
+                      labelText: 'Monthly Salary',
                       prefixIcon: Icon(Icons.currency_rupee),
                       border: OutlineInputBorder(),
+                      helperText: 'Enter monthly salary amount',
                     ),
                     keyboardType: const TextInputType.numberWithOptions(decimal: true),
                     validator: (value) {
@@ -987,6 +1004,9 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
                       }
                       if (double.tryParse(value) == null) {
                         return 'Please enter valid number';
+                      }
+                      if (double.parse(value) <= 0) {
+                        return 'Salary must be greater than 0';
                       }
                       return null;
                     },
@@ -1134,7 +1154,8 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
 
       // Parse CSV
       developer.log('Parsing CSV...', name: 'EmployeesScreen');
-      final previews = await CsvImportService.parseCSV(content);
+      final settings = ref.read(settingsProvider);
+      final previews = await CsvImportService.parseCSV(content, settings);
       developer.log('Parsed ${previews.length} employees', name: 'EmployeesScreen');
 
       if (previews.isEmpty) {
@@ -1314,6 +1335,10 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
     final id = DateTime.now().millisecondsSinceEpoch.toString() +
         code.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '');
 
+    // Get settings and convert salary
+    final settings = ref.read(settingsProvider);
+    final conversion = EmployeeService.convertSalary(salary, settings);
+
     final employee = EmployeeModel(
       id: id,
       name: name,
@@ -1322,6 +1347,10 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
       position: position,
       department: department,
       salary: salary,
+      salaryOriginal: salary,
+      salaryType: conversion['salaryType'] as String,
+      hourlyRate: conversion['hourlyRate'] as double?,
+      dailyRate: conversion['dailyRate'] as double?,
       createdAt: DateTime.now(),
     );
 
@@ -1342,7 +1371,7 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
     final mobileController = TextEditingController(text: employee.mobileNo);
     final positionController = TextEditingController(text: employee.position);
     final departmentController = TextEditingController(text: employee.department);
-    final salaryController = TextEditingController(text: employee.salary.toString());
+    final salaryController = TextEditingController(text: employee.salaryOriginal.toString());
     final formKey = GlobalKey<FormState>();
 
     showDialog(
@@ -1404,13 +1433,15 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
                 TextFormField(
                   controller: salaryController,
                   decoration: const InputDecoration(
-                    labelText: 'Salary',
+                    labelText: 'Monthly Salary',
                     border: OutlineInputBorder(),
+                    helperText: 'Enter monthly salary amount',
                   ),
                   keyboardType: TextInputType.number,
                   validator: (value) {
                     if (value?.isEmpty ?? true) return 'Required';
                     if (double.tryParse(value!) == null) return 'Invalid number';
+                    if (double.parse(value) <= 0) return 'Must be greater than 0';
                     return null;
                   },
                 ),
@@ -1426,6 +1457,12 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
           ElevatedButton(
             onPressed: () {
               if (formKey.currentState!.validate()) {
+                final newSalary = double.parse(salaryController.text);
+                
+                // Get settings and convert salary
+                final settings = ref.read(settingsProvider);
+                final conversion = EmployeeService.convertSalary(newSalary, settings);
+                
                 final updatedEmployee = EmployeeModel(
                   id: employee.id,
                   name: nameController.text,
@@ -1433,8 +1470,16 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
                   mobileNo: mobileController.text,
                   position: positionController.text,
                   department: departmentController.text,
-                  salary: double.parse(salaryController.text),
+                  salary: newSalary,
+                  salaryOriginal: newSalary,
+                  salaryType: conversion['salaryType'] as String,
+                  hourlyRate: conversion['hourlyRate'] as double?,
+                  dailyRate: conversion['dailyRate'] as double?,
                   createdAt: employee.createdAt,
+                  employeeType: employee.employeeType,
+                  overtimeType: employee.overtimeType,
+                  overtimeRate: employee.overtimeRate,
+                  overtimeSlots: employee.overtimeSlots,
                 );
                 
                 ref.read(employeeProvider.notifier).updateEmployee(updatedEmployee);

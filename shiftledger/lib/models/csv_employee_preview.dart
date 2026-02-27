@@ -42,6 +42,8 @@ class CsvEmployeePreview {
       position: position,
       department: department,
       salary: salary,
+      salaryOriginal: salary, // Store original monthly salary
+      salaryType: employeeType == EmployeeType.hourly ? 'hourwise' : 'daywise',
       createdAt: DateTime.now(),
       employeeType: employeeType,
       hourlyRate: hourlyRate,

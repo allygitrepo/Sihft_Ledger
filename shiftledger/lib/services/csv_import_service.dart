@@ -2,9 +2,14 @@ import 'dart:convert';
 import 'dart:developer' as developer;
 import '../models/csv_employee_preview.dart';
 import '../models/employee_model.dart';
+import '../models/settings_model.dart';
+import '../services/employee_service.dart';
 
 class CsvImportService {
-  static Future<List<CsvEmployeePreview>> parseCSV(String csvContent) async {
+  static Future<List<CsvEmployeePreview>> parseCSV(
+    String csvContent,
+    SettingsModel settings,
+  ) async {
     developer.log('CSV IMPORT START', name: 'CsvImportService');
     
     final List<CsvEmployeePreview> previews = [];
@@ -35,7 +40,7 @@ class CsvImportService {
       }
 
       try {
-        final preview = _parsePreviewLine(line, i + 1);
+        final preview = _parsePreviewLine(line, i + 1, settings);
         previews.add(preview);
       } catch (e) {
         throw Exception('Error at line ${i + 1}: ${e.toString()}');
@@ -49,7 +54,11 @@ class CsvImportService {
     return previews;
   }
 
-  static CsvEmployeePreview _parsePreviewLine(String line, int lineNumber) {
+  static CsvEmployeePreview _parsePreviewLine(
+    String line,
+    int lineNumber,
+    SettingsModel settings,
+  ) {
     final parts = line.split(',').map((e) => e.trim()).toList();
 
     // Support both 5 columns (no mobile) and 6 columns (with mobile)
@@ -96,6 +105,9 @@ class CsvImportService {
       throw Exception('Salary must be greater than 0');
     }
 
+    // Convert salary based on company settings
+    final conversion = EmployeeService.convertSalary(salary, settings);
+
     return CsvEmployeePreview(
       employeeCode: employeeCode,
       name: name,
@@ -103,10 +115,11 @@ class CsvImportService {
       position: position,
       department: department,
       salary: salary,
-      // Initialize with default hourly type and calculate hourly rate from salary
-      employeeType: EmployeeType.hourly,
-      hourlyRate: salary / 208, // Assuming 26 days * 8 hours = 208 hours per month
-      dailyRate: salary / 26, // Assuming 26 working days per month
+      employeeType: settings.defaultSalaryType == DefaultSalaryType.hourwise 
+          ? EmployeeType.hourly 
+          : EmployeeType.daily,
+      hourlyRate: conversion['hourlyRate'] as double?,
+      dailyRate: conversion['dailyRate'] as double?,
     );
   }
 

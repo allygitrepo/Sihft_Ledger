@@ -1,9 +1,37 @@
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/employee_model.dart';
+import '../models/settings_model.dart';
 
 class EmployeeService {
   static const String _employeesKey = 'employees_data';
+
+  // Convert salary based on company settings
+  static Map<String, dynamic> convertSalary(
+    double monthlySalary,
+    SettingsModel settings,
+  ) {
+    final salaryType = settings.defaultSalaryType.name;
+    double? hourlyRate;
+    double? dailyRate;
+
+    if (settings.defaultSalaryType == DefaultSalaryType.hourwise) {
+      // Hour-wise calculation
+      final totalHoursPerMonth = settings.workingDaysPerMonth * settings.fixedHoursPerDay;
+      hourlyRate = monthlySalary / totalHoursPerMonth;
+      dailyRate = null;
+    } else {
+      // Day-wise calculation
+      dailyRate = monthlySalary / settings.workingDaysPerMonth;
+      hourlyRate = null;
+    }
+
+    return {
+      'salaryType': salaryType,
+      'hourlyRate': hourlyRate,
+      'dailyRate': dailyRate,
+    };
+  }
 
   // Save employees to SharedPreferences
   static Future<void> saveEmployees(List<EmployeeModel> employees) async {

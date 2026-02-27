@@ -5,8 +5,8 @@ import '../models/attendance_model.dart';
 import '../models/employee_model.dart';
 import '../providers/attendance_provider.dart';
 import '../providers/employee_provider.dart';
+import '../providers/settings_provider.dart';
 import '../services/attendance_service.dart';
-import '../services/overtime_service.dart';
 import '../services/salary_calculator_service.dart';
 import '../utills/app_colors.dart';
 
@@ -896,34 +896,28 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
       return false;
     }
 
-    // Calculate work salary based on employee type
-    final workSalary = SalaryCalculatorService.calculateWorkSalary(
+    // Get settings for calculation
+    final settings = ref.read(settingsProvider);
+
+    // Calculate all salary components using the new service
+    final calculation = SalaryCalculatorService.calculateAttendanceSalary(
       employee: employee,
       workingHours: workingHours,
-      status: status,
+      settings: settings,
     );
 
-    // Calculate overtime salary
-    final overtimeSalary = otHours > 0
-        ? OvertimeService.calculateOvertimeSalary(
-            overtimeHours: otHours,
-            employee: employee,
-          )
-        : 0.0;
+    final workSalary = calculation['workSalary']!;
+    final overtimeHours = calculation['overtimeHours']!;
+    final overtimeSalary = calculation['overtimeSalary']!;
+    final totalSalary = calculation['totalSalary']!;
 
-    // Calculate total salary
-    final totalSalary = SalaryCalculatorService.calculateTotalSalary(
-      workSalary: workSalary,
-      overtimeSalary: overtimeSalary,
-    );
-
-    // Determine final status
+    // Determine final status based on working hours
     AttendanceStatus finalStatus = status;
-    if (employee.employeeType == EmployeeType.hourly) {
+    if (employee.salaryType == 'hourwise') {
       // For hourly employees, auto-determine status from hours
-      if (workingHours >= 8.0) {
+      if (workingHours >= settings.fixedHoursPerDay) {
         finalStatus = AttendanceStatus.fullDay;
-      } else if (workingHours >= 4.0) {
+      } else if (workingHours >= settings.fixedHoursPerDay / 2) {
         finalStatus = AttendanceStatus.halfDay;
       } else {
         finalStatus = AttendanceStatus.absent;
@@ -941,7 +935,7 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
       workingHours: workingHours,
       attendanceStatus: finalStatus,
       workSalary: workSalary,
-      overtimeHours: otHours,
+      overtimeHours: overtimeHours,
       overtimeSalary: overtimeSalary,
       totalSalary: totalSalary,
     );
@@ -1088,99 +1082,6 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
                     ),
         ),
       ],
-    );
-  }
-
-  Widget _buildSummaryCards(AttendanceListState listState, EmployeeState employeeState) {
-    final totalRecords = listState.attendanceRecords.length;
-    final fullDayCount = listState.attendanceRecords
-        .where((r) => r.attendanceStatus == AttendanceStatus.fullDay)
-        .length;
-    final halfDayCount = listState.attendanceRecords
-        .where((r) => r.attendanceStatus == AttendanceStatus.halfDay)
-        .length;
-    final totalSalary = listState.attendanceRecords
-        .fold<double>(0, (sum, record) => sum + record.totalSalary);
-
-    return Row(
-      children: [
-        Expanded(
-          child: _buildSummaryCard(
-            'Total Records',
-            totalRecords.toString(),
-            Icons.assignment,
-            Colors.blue,
-          ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: _buildSummaryCard(
-            'Full Days',
-            fullDayCount.toString(),
-            Icons.check_circle,
-            Colors.green,
-          ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: _buildSummaryCard(
-            'Half Days',
-            halfDayCount.toString(),
-            Icons.timelapse,
-            Colors.orange,
-          ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: _buildSummaryCard(
-            'Total Salary',
-            '₹${totalSalary.toStringAsFixed(0)}',
-            Icons.currency_rupee,
-            AppColors.primary,
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildSummaryCard(String title, String value, IconData icon, Color color) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.1),
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: color.withValues(alpha: 0.3)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(icon, color: color, size: 20),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  title,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.grey[700],
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-              color: color,
-            ),
-          ),
-        ],
-      ),
     );
   }
 
@@ -1908,33 +1809,27 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
       checkOut: checkOut,
     );
 
-    // Calculate work salary
-    final workSalary = SalaryCalculatorService.calculateWorkSalary(
+    // Get settings for calculation
+    final settings = ref.read(settingsProvider);
+
+    // Calculate all salary components using the new service
+    final calculation = SalaryCalculatorService.calculateAttendanceSalary(
       employee: employee,
       workingHours: workingHours,
-      status: status,
+      settings: settings,
     );
 
-    // Calculate overtime salary
-    final overtimeSalary = otHours > 0
-        ? OvertimeService.calculateOvertimeSalary(
-            overtimeHours: otHours,
-            employee: employee,
-          )
-        : 0.0;
+    final workSalary = calculation['workSalary']!;
+    final overtimeHours = calculation['overtimeHours']!;
+    final overtimeSalary = calculation['overtimeSalary']!;
+    final totalSalary = calculation['totalSalary']!;
 
-    // Calculate total salary
-    final totalSalary = SalaryCalculatorService.calculateTotalSalary(
-      workSalary: workSalary,
-      overtimeSalary: overtimeSalary,
-    );
-
-    // Determine final status
+    // Determine final status based on working hours
     AttendanceStatus finalStatus = status;
-    if (employee.employeeType == EmployeeType.hourly) {
-      if (workingHours >= 8.0) {
+    if (employee.salaryType == 'hourwise') {
+      if (workingHours >= settings.fixedHoursPerDay) {
         finalStatus = AttendanceStatus.fullDay;
-      } else if (workingHours >= 4.0) {
+      } else if (workingHours >= settings.fixedHoursPerDay / 2) {
         finalStatus = AttendanceStatus.halfDay;
       } else {
         finalStatus = AttendanceStatus.absent;
@@ -1948,7 +1843,7 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
       workingHours: workingHours,
       attendanceStatus: finalStatus,
       workSalary: workSalary,
-      overtimeHours: otHours,
+      overtimeHours: overtimeHours,
       overtimeSalary: overtimeSalary,
       totalSalary: totalSalary,
     );

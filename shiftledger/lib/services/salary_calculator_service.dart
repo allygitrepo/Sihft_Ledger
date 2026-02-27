@@ -1,5 +1,5 @@
 import '../models/employee_model.dart';
-import '../models/attendance_model.dart';
+import '../models/settings_model.dart';
 
 class SalaryCalculatorService {
   /// Calculate working hours from check-in and check-out times
@@ -18,6 +18,7 @@ class SalaryCalculatorService {
   }
 
   /// Calculate work salary for hourly employee
+  /// Formula: workSalary = workingHours × hourlyRate
   static double calculateHourlyWorkSalary({
     required double workingHours,
     required double hourlyRate,
@@ -27,35 +28,103 @@ class SalaryCalculatorService {
   }
 
   /// Calculate work salary for daily employee
+  /// If workingHours <= fixedHours: workSalary = (workingHours / fixedHours) × dailyRate
+  /// If workingHours > fixedHours: workSalary = dailyRate
   static double calculateDailyWorkSalary({
-    required AttendanceStatus status,
+    required double workingHours,
     required double dailyRate,
+    required double fixedHoursPerDay,
   }) {
-    switch (status) {
-      case AttendanceStatus.fullDay:
-        return dailyRate;
-      case AttendanceStatus.halfDay:
-        return dailyRate / 2;
-      case AttendanceStatus.absent:
-        return 0.0;
+    if (workingHours <= 0 || dailyRate <= 0) return 0.0;
+    
+    if (workingHours <= fixedHoursPerDay) {
+      // Proportional calculation for partial day
+      return (workingHours / fixedHoursPerDay) * dailyRate;
+    } else {
+      // Full day rate if working hours exceed fixed hours
+      return dailyRate;
     }
   }
 
-  /// Calculate work salary based on employee type
+  /// Calculate overtime hours
+  /// overtimeHours = workingHours - fixedHours (minimum 0)
+  static double calculateOvertimeHours({
+    required double workingHours,
+    required double fixedHoursPerDay,
+  }) {
+    final overtime = workingHours - fixedHoursPerDay;
+    return overtime > 0 ? overtime : 0.0;
+  }
+
+  /// Calculate overtime salary for hourwise overtime
+  /// overtimeSalary = overtimeHours × overtimeRate
+  static double calculateHourwiseOvertimeSalary({
+    required double overtimeHours,
+    required double overtimeRate,
+  }) {
+    if (overtimeHours <= 0 || overtimeRate <= 0) return 0.0;
+    return overtimeHours * overtimeRate;
+  }
+
+  /// Calculate overtime salary for slotwise overtime
+  /// Find matching slot and return its rate
+  static double calculateSlotwiseOvertimeSalary({
+    required double overtimeHours,
+    required List<OvertimeSlot> overtimeSlots,
+  }) {
+    if (overtimeHours <= 0 || overtimeSlots.isEmpty) return 0.0;
+    
+    // Find the slot that matches the overtime hours
+    for (final slot in overtimeSlots) {
+      if (overtimeHours >= slot.startHour && overtimeHours < slot.endHour) {
+        return slot.rate;
+      }
+    }
+    
+    // If no slot matches, use the last slot's rate
+    return overtimeSlots.last.rate;
+  }
+
+  /// Calculate work salary based on employee type and settings
   static double calculateWorkSalary({
     required EmployeeModel employee,
     required double workingHours,
-    required AttendanceStatus status,
+    required SettingsModel settings,
   }) {
-    if (employee.employeeType == EmployeeType.hourly) {
+    if (employee.salaryType == 'hourwise') {
+      // Hour-wise calculation
       return calculateHourlyWorkSalary(
         workingHours: workingHours,
         hourlyRate: employee.hourlyRate ?? 0.0,
       );
     } else {
+      // Day-wise calculation
       return calculateDailyWorkSalary(
-        status: status,
+        workingHours: workingHours,
         dailyRate: employee.dailyRate ?? 0.0,
+        fixedHoursPerDay: settings.fixedHoursPerDay,
+      );
+    }
+  }
+
+  /// Calculate overtime salary based on employee overtime type
+  static double calculateOvertimeSalary({
+    required EmployeeModel employee,
+    required double overtimeHours,
+  }) {
+    if (overtimeHours <= 0) return 0.0;
+    
+    if (employee.overtimeType == OvertimeType.hourwise) {
+      // Hour-wise overtime
+      return calculateHourwiseOvertimeSalary(
+        overtimeHours: overtimeHours,
+        overtimeRate: employee.overtimeRate,
+      );
+    } else {
+      // Slot-wise overtime
+      return calculateSlotwiseOvertimeSalary(
+        overtimeHours: overtimeHours,
+        overtimeSlots: employee.overtimeSlots,
       );
     }
   }
@@ -66,6 +135,46 @@ class SalaryCalculatorService {
     required double overtimeSalary,
   }) {
     return workSalary + overtimeSalary;
+  }
+
+  /// Calculate complete attendance with all salary components
+  static Map<String, double> calculateAttendanceSalary({
+    required EmployeeModel employee,
+    required double workingHours,
+    required SettingsModel settings,
+  }) {
+    // Calculate work salary
+    final workSalary = calculateWorkSalary(
+      employee: employee,
+      workingHours: workingHours,
+      settings: settings,
+    );
+    
+    // Calculate overtime hours
+    final overtimeHours = calculateOvertimeHours(
+      workingHours: workingHours,
+      fixedHoursPerDay: settings.fixedHoursPerDay,
+    );
+    
+    // Calculate overtime salary
+    final overtimeSalary = calculateOvertimeSalary(
+      employee: employee,
+      overtimeHours: overtimeHours,
+    );
+    
+    // Calculate total salary
+    final totalSalary = calculateTotalSalary(
+      workSalary: workSalary,
+      overtimeSalary: overtimeSalary,
+    );
+    
+    return {
+      'workingHours': workingHours,
+      'workSalary': workSalary,
+      'overtimeHours': overtimeHours,
+      'overtimeSalary': overtimeSalary,
+      'totalSalary': totalSalary,
+    };
   }
 
   /// Calculate salary for an employee based on attendance records (for payroll system)

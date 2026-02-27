@@ -55,8 +55,12 @@ class EmployeeModel {
   final String mobileNo;
   final String position;
   final String department;
-  final double salary;
+  final double salary; // Kept for backward compatibility
   final DateTime createdAt;
+  
+  // Salary conversion fields
+  final double salaryOriginal; // Original monthly salary from CSV or manual entry
+  final String salaryType; // 'hourwise' or 'daywise' - matches company configuration
   
   // New fields for attendance system
   final EmployeeType employeeType;
@@ -75,6 +79,8 @@ class EmployeeModel {
     required this.department,
     required this.salary,
     required this.createdAt,
+    required this.salaryOriginal,
+    required this.salaryType,
     this.employeeType = EmployeeType.hourly,
     this.hourlyRate,
     this.dailyRate,
@@ -93,6 +99,8 @@ class EmployeeModel {
       'department': department,
       'salary': salary,
       'createdAt': createdAt.toIso8601String(),
+      'salaryOriginal': salaryOriginal,
+      'salaryType': salaryType,
       'employeeType': employeeType.name,
       'hourlyRate': hourlyRate,
       'dailyRate': dailyRate,
@@ -112,6 +120,8 @@ class EmployeeModel {
       department: json['department'] as String,
       salary: (json['salary'] as num).toDouble(),
       createdAt: DateTime.parse(json['createdAt'] as String),
+      salaryOriginal: (json['salaryOriginal'] as num?)?.toDouble() ?? (json['salary'] as num).toDouble(),
+      salaryType: (json['salaryType'] as String?) ?? 'hourwise',
       employeeType: json['employeeType'] != null
           ? EmployeeType.values.firstWhere(
               (e) => e.name == json['employeeType'],
@@ -143,6 +153,8 @@ class EmployeeModel {
     String? department,
     double? salary,
     DateTime? createdAt,
+    double? salaryOriginal,
+    String? salaryType,
     EmployeeType? employeeType,
     double? hourlyRate,
     double? dailyRate,
@@ -159,6 +171,8 @@ class EmployeeModel {
       department: department ?? this.department,
       salary: salary ?? this.salary,
       createdAt: createdAt ?? this.createdAt,
+      salaryOriginal: salaryOriginal ?? this.salaryOriginal,
+      salaryType: salaryType ?? this.salaryType,
       employeeType: employeeType ?? this.employeeType,
       hourlyRate: hourlyRate ?? this.hourlyRate,
       dailyRate: dailyRate ?? this.dailyRate,

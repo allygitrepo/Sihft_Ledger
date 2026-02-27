@@ -4,12 +4,18 @@ class PayrollModel {
   final String employeeName;
   final DateTime startDate;
   final DateTime endDate;
-  final double basePay;
-  final double overtimePay;
-  final double totalPay;
-  final int? daysPresent;
-  final double? totalHoursWorked;
-  final int? totalUnitsProduced;
+  
+  // Attendance summary
+  final int workingDays;
+  final double workingHours;
+  
+  // Salary breakdown
+  final double workSalary;
+  final double overtimeHours;
+  final double overtimeSalary;
+  final double totalSalary;
+  
+  // Metadata
   final DateTime generatedAt;
 
   const PayrollModel({
@@ -18,12 +24,12 @@ class PayrollModel {
     required this.employeeName,
     required this.startDate,
     required this.endDate,
-    required this.basePay,
-    required this.overtimePay,
-    required this.totalPay,
-    this.daysPresent,
-    this.totalHoursWorked,
-    this.totalUnitsProduced,
+    required this.workingDays,
+    required this.workingHours,
+    required this.workSalary,
+    required this.overtimeHours,
+    required this.overtimeSalary,
+    required this.totalSalary,
     required this.generatedAt,
   });
 
@@ -34,12 +40,12 @@ class PayrollModel {
       'employeeName': employeeName,
       'startDate': startDate.toIso8601String(),
       'endDate': endDate.toIso8601String(),
-      'basePay': basePay,
-      'overtimePay': overtimePay,
-      'totalPay': totalPay,
-      'daysPresent': daysPresent,
-      'totalHoursWorked': totalHoursWorked,
-      'totalUnitsProduced': totalUnitsProduced,
+      'workingDays': workingDays,
+      'workingHours': workingHours,
+      'workSalary': workSalary,
+      'overtimeHours': overtimeHours,
+      'overtimeSalary': overtimeSalary,
+      'totalSalary': totalSalary,
       'generatedAt': generatedAt.toIso8601String(),
     };
   }
@@ -51,13 +57,43 @@ class PayrollModel {
       employeeName: json['employeeName'] as String,
       startDate: DateTime.parse(json['startDate'] as String),
       endDate: DateTime.parse(json['endDate'] as String),
-      basePay: (json['basePay'] as num).toDouble(),
-      overtimePay: (json['overtimePay'] as num).toDouble(),
-      totalPay: (json['totalPay'] as num).toDouble(),
-      daysPresent: json['daysPresent'] as int?,
-      totalHoursWorked: (json['totalHoursWorked'] as num?)?.toDouble(),
-      totalUnitsProduced: json['totalUnitsProduced'] as int?,
+      workingDays: json['workingDays'] as int,
+      workingHours: (json['workingHours'] as num).toDouble(),
+      workSalary: (json['workSalary'] as num).toDouble(),
+      overtimeHours: (json['overtimeHours'] as num).toDouble(),
+      overtimeSalary: (json['overtimeSalary'] as num).toDouble(),
+      totalSalary: (json['totalSalary'] as num).toDouble(),
       generatedAt: DateTime.parse(json['generatedAt'] as String),
+    );
+  }
+
+  PayrollModel copyWith({
+    String? id,
+    String? employeeId,
+    String? employeeName,
+    DateTime? startDate,
+    DateTime? endDate,
+    int? workingDays,
+    double? workingHours,
+    double? workSalary,
+    double? overtimeHours,
+    double? overtimeSalary,
+    double? totalSalary,
+    DateTime? generatedAt,
+  }) {
+    return PayrollModel(
+      id: id ?? this.id,
+      employeeId: employeeId ?? this.employeeId,
+      employeeName: employeeName ?? this.employeeName,
+      startDate: startDate ?? this.startDate,
+      endDate: endDate ?? this.endDate,
+      workingDays: workingDays ?? this.workingDays,
+      workingHours: workingHours ?? this.workingHours,
+      workSalary: workSalary ?? this.workSalary,
+      overtimeHours: overtimeHours ?? this.overtimeHours,
+      overtimeSalary: overtimeSalary ?? this.overtimeSalary,
+      totalSalary: totalSalary ?? this.totalSalary,
+      generatedAt: generatedAt ?? this.generatedAt,
     );
   }
 }

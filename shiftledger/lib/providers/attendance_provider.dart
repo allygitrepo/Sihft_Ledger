@@ -2,8 +2,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/attendance_model.dart';
 import '../models/employee_model.dart';
 import '../services/attendance_service.dart';
-import '../services/overtime_service.dart';
 import '../services/salary_calculator_service.dart';
+import '../providers/settings_provider.dart';
 
 // Attendance Form State
 class AttendanceFormState {
@@ -14,12 +14,10 @@ class AttendanceFormState {
   final DateTime? checkInTime;
   final DateTime? checkOutTime;
   
-  // Overtime
-  final double overtimeHours;
-  
   // Calculated values
   final double calculatedWorkingHours;
   final double workSalary;
+  final double overtimeHours;
   final double overtimeSalary;
   final double totalSalary;
   final AttendanceStatus attendanceStatus;
@@ -32,9 +30,9 @@ class AttendanceFormState {
     required this.selectedDate,
     this.checkInTime,
     this.checkOutTime,
-    this.overtimeHours = 0.0,
     this.calculatedWorkingHours = 0.0,
     this.workSalary = 0.0,
+    this.overtimeHours = 0.0,
     this.overtimeSalary = 0.0,
     this.totalSalary = 0.0,
     this.attendanceStatus = AttendanceStatus.absent,
@@ -46,9 +44,9 @@ class AttendanceFormState {
     DateTime? selectedDate,
     DateTime? checkInTime,
     DateTime? checkOutTime,
-    double? overtimeHours,
     double? calculatedWorkingHours,
     double? workSalary,
+    double? overtimeHours,
     double? overtimeSalary,
     double? totalSalary,
     AttendanceStatus? attendanceStatus,
@@ -59,9 +57,9 @@ class AttendanceFormState {
       selectedDate: selectedDate ?? this.selectedDate,
       checkInTime: checkInTime ?? this.checkInTime,
       checkOutTime: checkOutTime ?? this.checkOutTime,
-      overtimeHours: overtimeHours ?? this.overtimeHours,
       calculatedWorkingHours: calculatedWorkingHours ?? this.calculatedWorkingHours,
       workSalary: workSalary ?? this.workSalary,
+      overtimeHours: overtimeHours ?? this.overtimeHours,
       overtimeSalary: overtimeSalary ?? this.overtimeSalary,
       totalSalary: totalSalary ?? this.totalSalary,
       attendanceStatus: attendanceStatus ?? this.attendanceStatus,
@@ -98,16 +96,6 @@ class AttendanceFormNotifier extends Notifier<AttendanceFormState> {
     _calculateWorkingHours();
   }
 
-  void setOvertimeHours(double hours) {
-    state = state.copyWith(overtimeHours: hours);
-    _recalculate();
-  }
-
-  void setAttendanceStatus(AttendanceStatus status) {
-    state = state.copyWith(attendanceStatus: status);
-    _recalculate();
-  }
-
   void _calculateWorkingHours() {
     if (state.checkInTime == null || state.checkOutTime == null) {
       return;
@@ -123,53 +111,39 @@ class AttendanceFormNotifier extends Notifier<AttendanceFormState> {
   }
 
   void _recalculate() {
-    if (state.selectedEmployee == null) return;
-
-    final employee = state.selectedEmployee!;
-
-    // Calculate work salary based on employee type
-    final workSalary = SalaryCalculatorService.calculateWorkSalary(
-      employee: employee,
-      workingHours: state.calculatedWorkingHours,
-      status: state.attendanceStatus,
-    );
-
-    // Calculate overtime
-    final overtimeSalary = state.overtimeHours > 0
-        ? OvertimeService.calculateOvertimeSalary(
-            overtimeHours: state.overtimeHours,
-            employee: employee,
-          )
-        : 0.0;
-
-    // Calculate total
-    final totalSalary = SalaryCalculatorService.calculateTotalSalary(
-      workSalary: workSalary,
-      overtimeSalary: overtimeSalary,
-    );
-
-    // Determine status for daily employees
-    AttendanceStatus status = state.attendanceStatus;
-    if (employee.employeeType == EmployeeType.daily) {
-      // For daily employees, status is manually set
-      // Keep the current status
-    } else {
-      // For hourly employees, determine status based on hours
-      status = _determineStatusFromHours(state.calculatedWorkingHours);
+    if (state.selectedEmployee == null || state.calculatedWorkingHours <= 0) {
+      return;
     }
 
+    final employee = state.selectedEmployee!;
+    final settings = ref.read(settingsProvider);
+
+    // Calculate all salary components using the new service
+    final calculation = SalaryCalculatorService.calculateAttendanceSalary(
+      employee: employee,
+      workingHours: state.calculatedWorkingHours,
+      settings: settings,
+    );
+
+    // Determine attendance status based on working hours
+    final status = _determineStatusFromHours(
+      state.calculatedWorkingHours,
+      settings.fixedHoursPerDay,
+    );
+
     state = state.copyWith(
-      workSalary: workSalary,
-      overtimeSalary: overtimeSalary,
-      totalSalary: totalSalary,
+      workSalary: calculation['workSalary']!,
+      overtimeHours: calculation['overtimeHours']!,
+      overtimeSalary: calculation['overtimeSalary']!,
+      totalSalary: calculation['totalSalary']!,
       attendanceStatus: status,
     );
   }
 
-  AttendanceStatus _determineStatusFromHours(double hours) {
-    if (hours >= 8.0) {
+  AttendanceStatus _determineStatusFromHours(double hours, double fixedHours) {
+    if (hours >= fixedHours) {
       return AttendanceStatus.fullDay;
-    } else if (hours >= 4.0) {
+    } else if (hours >= fixedHours / 2) {
       return AttendanceStatus.halfDay;
     } else {
       return AttendanceStatus.absent;
@@ -188,6 +162,18 @@ class AttendanceFormNotifier extends Notifier<AttendanceFormState> {
     }
     if (state.calculatedWorkingHours <= 0) {
       return false;
+    }
+    if (state.calculatedWorkingHours > 24) {
+      return false;
+    }
+
+    // Check for duplicate attendance
+    final exists = await AttendanceService.attendanceExists(
+      state.selectedEmployee!.id,
+      state.selectedDate,
+    );
+    if (exists) {
+      return false; // Duplicate attendance
     }
 
     state = state.copyWith(isLoading: true);
@@ -209,6 +195,9 @@ class AttendanceFormNotifier extends Notifier<AttendanceFormState> {
       );
 
       await AttendanceService.addAttendance(attendance);
+      
+      // Refresh attendance list
+      ref.read(attendanceListProvider.notifier).loadAttendance();
       
       // Reset form
       state = AttendanceFormState(
@@ -300,4 +289,189 @@ final attendanceFormProvider =
 final attendanceListProvider =
     NotifierProvider<AttendanceListNotifier, AttendanceListState>(() {
   return AttendanceListNotifier();
+});
+
+
+// Attendance Edit State
+class AttendanceEditState {
+  final AttendanceModel? originalAttendance;
+  final EmployeeModel? employee;
+  final DateTime? checkInTime;
+  final DateTime? checkOutTime;
+  
+  // Calculated values
+  final double calculatedWorkingHours;
+  final double workSalary;
+  final double overtimeHours;
+  final double overtimeSalary;
+  final double totalSalary;
+  
+  final bool isLoading;
+
+  const AttendanceEditState({
+    this.originalAttendance,
+    this.employee,
+    this.checkInTime,
+    this.checkOutTime,
+    this.calculatedWorkingHours = 0.0,
+    this.workSalary = 0.0,
+    this.overtimeHours = 0.0,
+    this.overtimeSalary = 0.0,
+    this.totalSalary = 0.0,
+    this.isLoading = false,
+  });
+
+  AttendanceEditState copyWith({
+    AttendanceModel? originalAttendance,
+    EmployeeModel? employee,
+    DateTime? checkInTime,
+    DateTime? checkOutTime,
+    double? calculatedWorkingHours,
+    double? workSalary,
+    double? overtimeHours,
+    double? overtimeSalary,
+    double? totalSalary,
+    bool? isLoading,
+  }) {
+    return AttendanceEditState(
+      originalAttendance: originalAttendance ?? this.originalAttendance,
+      employee: employee ?? this.employee,
+      checkInTime: checkInTime ?? this.checkInTime,
+      checkOutTime: checkOutTime ?? this.checkOutTime,
+      calculatedWorkingHours: calculatedWorkingHours ?? this.calculatedWorkingHours,
+      workSalary: workSalary ?? this.workSalary,
+      overtimeHours: overtimeHours ?? this.overtimeHours,
+      overtimeSalary: overtimeSalary ?? this.overtimeSalary,
+      totalSalary: totalSalary ?? this.totalSalary,
+      isLoading: isLoading ?? this.isLoading,
+    );
+  }
+}
+
+// Attendance Edit Notifier
+class AttendanceEditNotifier extends Notifier<AttendanceEditState> {
+  @override
+  AttendanceEditState build() {
+    return const AttendanceEditState();
+  }
+
+  void initialize(AttendanceModel attendance, EmployeeModel employee) {
+    state = AttendanceEditState(
+      originalAttendance: attendance,
+      employee: employee,
+      checkInTime: attendance.checkIn,
+      checkOutTime: attendance.checkOut,
+      calculatedWorkingHours: attendance.workingHours,
+      workSalary: attendance.workSalary,
+      overtimeHours: attendance.overtimeHours,
+      overtimeSalary: attendance.overtimeSalary,
+      totalSalary: attendance.totalSalary,
+    );
+  }
+
+  void setCheckIn(DateTime time) {
+    state = state.copyWith(checkInTime: time);
+    _recalculate();
+  }
+
+  void setCheckOut(DateTime time) {
+    state = state.copyWith(checkOutTime: time);
+    _recalculate();
+  }
+
+  void _recalculate() {
+    if (state.employee == null || state.checkInTime == null || state.checkOutTime == null) {
+      return;
+    }
+
+    // Calculate working hours
+    final workingHours = SalaryCalculatorService.calculateWorkingHours(
+      checkIn: state.checkInTime!,
+      checkOut: state.checkOutTime!,
+    );
+
+    if (workingHours <= 0) {
+      return;
+    }
+
+    // Get settings and calculate salary
+    final settings = ref.read(settingsProvider);
+    final calculation = SalaryCalculatorService.calculateAttendanceSalary(
+      employee: state.employee!,
+      workingHours: workingHours,
+      settings: settings,
+    );
+
+    state = state.copyWith(
+      calculatedWorkingHours: calculation['workingHours']!,
+      workSalary: calculation['workSalary']!,
+      overtimeHours: calculation['overtimeHours']!,
+      overtimeSalary: calculation['overtimeSalary']!,
+      totalSalary: calculation['totalSalary']!,
+    );
+  }
+
+  Future<bool> saveChanges() async {
+    if (state.originalAttendance == null || state.employee == null) {
+      return false;
+    }
+
+    // Validation
+    if (state.checkInTime == null || state.checkOutTime == null) {
+      return false;
+    }
+    if (state.checkOutTime!.isBefore(state.checkInTime!)) {
+      return false;
+    }
+    if (state.calculatedWorkingHours <= 0) {
+      return false;
+    }
+    if (state.calculatedWorkingHours > 24) {
+      return false;
+    }
+
+    state = state.copyWith(isLoading: true);
+
+    try {
+      // Determine attendance status
+      final settings = ref.read(settingsProvider);
+      final status = state.calculatedWorkingHours >= settings.fixedHoursPerDay
+          ? AttendanceStatus.fullDay
+          : state.calculatedWorkingHours >= settings.fixedHoursPerDay / 2
+              ? AttendanceStatus.halfDay
+              : AttendanceStatus.absent;
+
+      final updatedAttendance = state.originalAttendance!.copyWith(
+        checkIn: state.checkInTime,
+        checkOut: state.checkOutTime,
+        workingHours: state.calculatedWorkingHours,
+        workSalary: state.workSalary,
+        overtimeHours: state.overtimeHours,
+        overtimeSalary: state.overtimeSalary,
+        totalSalary: state.totalSalary,
+        attendanceStatus: status,
+      );
+
+      await AttendanceService.updateAttendance(updatedAttendance);
+      
+      // Refresh attendance list
+      ref.read(attendanceListProvider.notifier).loadAttendance();
+      
+      state = const AttendanceEditState();
+      return true;
+    } catch (e) {
+      state = state.copyWith(isLoading: false);
+      return false;
+    }
+  }
+
+  void reset() {
+    state = const AttendanceEditState();
+  }
+}
+
+// Providers
+final attendanceEditProvider =
+    NotifierProvider<AttendanceEditNotifier, AttendanceEditState>(() {
+  return AttendanceEditNotifier();
 });
