@@ -80,6 +80,17 @@ class SidebarNavigation extends ConsumerWidget {
                   },
                 ),
                 const Divider(height: 24),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  child: Text(
+                    'MANAGEMENT',
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                          color: Colors.grey[600],
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 1.2,
+                        ),
+                  ),
+                ),
                 _buildMenuTile(
                   context: context,
                   icon: Icons.people,
@@ -105,6 +116,33 @@ class SidebarNavigation extends ConsumerWidget {
                   },
                 ),
                 const Divider(height: 24),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  child: Text(
+                    'CONFIGURATION',
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                          color: Colors.grey[600],
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 1.2,
+                        ),
+                  ),
+                ),
+                _buildMenuTile(
+                  context: context,
+                  icon: Icons.account_balance_wallet,
+                  label: 'Salary Configuration',
+                  onTap: () {
+                    Navigator.pushNamed(context, '/salary-configuration');
+                  },
+                ),
+                _buildMenuTile(
+                  context: context,
+                  icon: Icons.timer,
+                  label: 'Overtime Configuration',
+                  onTap: () {
+                    Navigator.pushNamed(context, '/overtime-configuration');
+                  },
+                ),
                 _buildMenuTile(
                   context: context,
                   icon: Icons.settings,
@@ -114,6 +152,18 @@ class SidebarNavigation extends ConsumerWidget {
                     ref.read(navigationProvider.notifier).setIndex(2);
                     Navigator.pushReplacementNamed(context, AppRoutes.dashboard);
                   },
+                ),
+                const Divider(height: 24),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  child: Text(
+                    'ACCOUNT',
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                          color: Colors.grey[600],
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 1.2,
+                        ),
+                  ),
                 ),
                 _buildMenuTile(
                   context: context,
