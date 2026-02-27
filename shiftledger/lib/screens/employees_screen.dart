@@ -25,6 +25,8 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   String? _editingEmployeeId;
   final Map<String, TextEditingController> _editControllers = {};
+  final TextEditingController _searchController = TextEditingController();
+  String _searchQuery = '';
 
   @override
   void dispose() {
@@ -32,6 +34,7 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
     for (var controller in _editControllers.values) {
       controller.dispose();
     }
+    _searchController.dispose();
     super.dispose();
   }
 
@@ -108,6 +111,17 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
     final textColor = theme.textTheme.bodyLarge?.color ?? Colors.black;
     final subtitleColor = theme.textTheme.bodySmall?.color ?? Colors.grey;
 
+    // Filter employees based on search query
+    final filteredEmployees = employeeState.employees.where((employee) {
+      if (_searchQuery.isEmpty) return true;
+      final query = _searchQuery.toLowerCase();
+      return employee.name.toLowerCase().contains(query) ||
+          employee.employeeCode.toLowerCase().contains(query) ||
+          employee.mobileNo.contains(query) ||
+          employee.position.toLowerCase().contains(query) ||
+          employee.department.toLowerCase().contains(query);
+    }).toList();
+
     // Desktop: Table View
     if (isDesktop) {
       return Scaffold(
@@ -118,86 +132,118 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
                 ? _buildEmptyState(context)
                 : Column(
                     children: [
-                      // Header with title and add button
+                      // Header with search and buttons
                       Container(
                         padding: const EdgeInsets.all(20),
                         color: cardColor,
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        child: Column(
                           children: [
                             Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
-                                Icon(Icons.people, color: AppColors.primary, size: 28),
-                                const SizedBox(width: 12),
-                                Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      'Employees',
-                                      style: TextStyle(
-                                        fontSize: 24,
-                                        fontWeight: FontWeight.bold,
-                                        color: textColor,
+                                // Search Bar
+                                Expanded(
+                                  flex: 2,
+                                  child: TextField(
+                                    controller: _searchController,
+                                    decoration: InputDecoration(
+                                      hintText: 'Search employees by name, code, mobile, position, or department...',
+                                      prefixIcon: const Icon(Icons.search),
+                                      suffixIcon: _searchQuery.isNotEmpty
+                                          ? IconButton(
+                                              icon: const Icon(Icons.clear),
+                                              onPressed: () {
+                                                setState(() {
+                                                  _searchController.clear();
+                                                  _searchQuery = '';
+                                                });
+                                              },
+                                            )
+                                          : null,
+                                      border: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      contentPadding: const EdgeInsets.symmetric(
+                                        horizontal: 16,
+                                        vertical: 12,
                                       ),
                                     ),
-                                    Text(
-                                      '${employeeState.employees.length} total employees',
-                                      style: TextStyle(
-                                        fontSize: 14,
-                                        color: subtitleColor,
+                                    onChanged: (value) {
+                                      setState(() {
+                                        _searchQuery = value;
+                                      });
+                                    },
+                                  ),
+                                ),
+                                const SizedBox(width: 16),
+                                // Action Buttons
+                                Row(
+                                  children: [
+                                    ElevatedButton.icon(
+                                      onPressed: () => _showAddEmployeeForm(context),
+                                      icon: const Icon(Icons.add, size: 20),
+                                      label: const Text('Add Employee'),
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: AppColors.primary,
+                                        foregroundColor: Colors.white,
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 24,
+                                          vertical: 16,
+                                        ),
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(8),
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    OutlinedButton.icon(
+                                      onPressed: () => _pickAndImportCSV(context),
+                                      icon: const Icon(Icons.upload_file, size: 20),
+                                      label: const Text('Import CSV'),
+                                      style: OutlinedButton.styleFrom(
+                                        foregroundColor: Colors.green,
+                                        side: const BorderSide(color: Colors.green),
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 24,
+                                          vertical: 16,
+                                        ),
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(8),
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    IconButton(
+                                      onPressed: () => _downloadCSVTemplate(context),
+                                      icon: const Icon(Icons.download),
+                                      tooltip: 'Download CSV Template',
+                                      style: IconButton.styleFrom(
+                                        foregroundColor: Colors.orange,
+                                        side: const BorderSide(color: Colors.orange),
+                                        padding: const EdgeInsets.all(16),
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius: BorderRadius.circular(8),
+                                        ),
                                       ),
                                     ),
                                   ],
                                 ),
                               ],
                             ),
+                            const SizedBox(height: 12),
+                            // Results count
                             Row(
                               children: [
-                                ElevatedButton.icon(
-                                  onPressed: () => _showAddEmployeeForm(context),
-                                  icon: const Icon(Icons.add, size: 20),
-                                  label: const Text('Add Employee'),
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: AppColors.primary,
-                                    foregroundColor: Colors.white,
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 24,
-                                      vertical: 16,
-                                    ),
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                OutlinedButton.icon(
-                                  onPressed: () => _pickAndImportCSV(context),
-                                  icon: const Icon(Icons.upload_file, size: 20),
-                                  label: const Text('Import CSV'),
-                                  style: OutlinedButton.styleFrom(
-                                    foregroundColor: Colors.green,
-                                    side: const BorderSide(color: Colors.green),
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 24,
-                                      vertical: 16,
-                                    ),
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                IconButton(
-                                  onPressed: () => _downloadCSVTemplate(context),
-                                  icon: const Icon(Icons.download),
-                                  tooltip: 'Download CSV Template',
-                                  style: IconButton.styleFrom(
-                                    foregroundColor: Colors.orange,
-                                    side: const BorderSide(color: Colors.orange),
-                                    padding: const EdgeInsets.all(16),
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
+                                Icon(Icons.people, color: AppColors.primary, size: 20),
+                                const SizedBox(width: 8),
+                                Text(
+                                  _searchQuery.isEmpty
+                                      ? '${employeeState.employees.length} total employees'
+                                      : 'Found ${filteredEmployees.length} of ${employeeState.employees.length} employees',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    color: subtitleColor,
+                                    fontWeight: FontWeight.w500,
                                   ),
                                 ),
                               ],
@@ -207,9 +253,39 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
                       ),
                       // Table
                       Expanded(
-                        child: SingleChildScrollView(
-                          child: _buildDesktopTable(employeeState.employees),
-                        ),
+                        child: filteredEmployees.isEmpty
+                            ? Center(
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(
+                                      Icons.search_off,
+                                      size: 64,
+                                      color: Colors.grey[400],
+                                    ),
+                                    const SizedBox(height: 16),
+                                    Text(
+                                      'No employees found',
+                                      style: TextStyle(
+                                        fontSize: 18,
+                                        color: Colors.grey[600],
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 8),
+                                    Text(
+                                      'Try adjusting your search',
+                                      style: TextStyle(
+                                        fontSize: 14,
+                                        color: Colors.grey[500],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              )
+                            : SingleChildScrollView(
+                                child: _buildDesktopTable(filteredEmployees),
+                              ),
                       ),
                     ],
                   ),
@@ -222,9 +298,53 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
       appBar: AppBar(
         title: const Text('Employees'),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.add),
-            onPressed: () => _showAddEmployeeForm(context),
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.more_vert),
+            onSelected: (value) {
+              switch (value) {
+                case 'add':
+                  _showAddEmployeeForm(context);
+                  break;
+                case 'import':
+                  _pickAndImportCSV(context);
+                  break;
+                case 'template':
+                  _downloadCSVTemplate(context);
+                  break;
+              }
+            },
+            itemBuilder: (context) => [
+              const PopupMenuItem(
+                value: 'add',
+                child: Row(
+                  children: [
+                    Icon(Icons.person_add, size: 20, color: AppColors.primary),
+                    SizedBox(width: 12),
+                    Text('Add Employee'),
+                  ],
+                ),
+              ),
+              const PopupMenuItem(
+                value: 'import',
+                child: Row(
+                  children: [
+                    Icon(Icons.upload_file, size: 20, color: Colors.green),
+                    SizedBox(width: 12),
+                    Text('Import CSV'),
+                  ],
+                ),
+              ),
+              const PopupMenuItem(
+                value: 'template',
+                child: Row(
+                  children: [
+                    Icon(Icons.download, size: 20, color: Colors.orange),
+                    SizedBox(width: 12),
+                    Text('Download Template'),
+                  ],
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -232,13 +352,95 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
           ? const Center(child: AppLoader(size: 50))
           : employeeState.employees.isEmpty
               ? _buildEmptyState(context)
-              : ListView.builder(
-                  padding: EdgeInsets.all(horizontalPadding),
-                  itemCount: employeeState.employees.length,
-                  itemBuilder: (context, index) {
-                    final employee = employeeState.employees[index];
-                    return _buildMobileCard(employee);
-                  },
+              : Column(
+                  children: [
+                    // Search Bar
+                    Padding(
+                      padding: EdgeInsets.all(horizontalPadding),
+                      child: TextField(
+                        controller: _searchController,
+                        decoration: InputDecoration(
+                          hintText: 'Search employees...',
+                          prefixIcon: const Icon(Icons.search),
+                          suffixIcon: _searchQuery.isNotEmpty
+                              ? IconButton(
+                                  icon: const Icon(Icons.clear),
+                                  onPressed: () {
+                                    setState(() {
+                                      _searchController.clear();
+                                      _searchQuery = '';
+                                    });
+                                  },
+                                )
+                              : null,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 12,
+                          ),
+                        ),
+                        onChanged: (value) {
+                          setState(() {
+                            _searchQuery = value;
+                          });
+                        },
+                      ),
+                    ),
+                    // Results count
+                    if (_searchQuery.isNotEmpty)
+                      Padding(
+                        padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
+                        child: Row(
+                          children: [
+                            Icon(Icons.people, color: AppColors.primary, size: 18),
+                            const SizedBox(width: 8),
+                            Text(
+                              'Found ${filteredEmployees.length} of ${employeeState.employees.length} employees',
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: subtitleColor,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    const SizedBox(height: 8),
+                    // Cards for mobile view
+                    Expanded(
+                      child: filteredEmployees.isEmpty
+                          ? Center(
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(
+                                    Icons.search_off,
+                                    size: 64,
+                                    color: Colors.grey[400],
+                                  ),
+                                  const SizedBox(height: 16),
+                                  Text(
+                                    'No employees found',
+                                    style: TextStyle(
+                                      fontSize: 18,
+                                      color: Colors.grey[600],
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            )
+                          : ListView.builder(
+                              padding: EdgeInsets.all(horizontalPadding),
+                              itemCount: filteredEmployees.length,
+                              itemBuilder: (context, index) {
+                                return _buildMobileCard(filteredEmployees[index]);
+                              },
+                            ),
+                    ),
+                  ],
                 ),
     );
   }
@@ -399,13 +601,12 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
                                 border: OutlineInputBorder(),
                               ),
                             )
-                          : Text(
+                          : SelectableText(
                               employee.name,
                               style: const TextStyle(
                                 fontWeight: FontWeight.w600,
                                 fontSize: 14,
                               ),
-                              overflow: TextOverflow.ellipsis,
                             ),
                     ),
                   ],
@@ -431,7 +632,7 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
                         children: [
                           Icon(Icons.phone, size: 16, color: Colors.grey[600]),
                           const SizedBox(width: 6),
-                          Text(
+                          SelectableText(
                             employee.mobileNo,
                             style: const TextStyle(fontSize: 13),
                           ),
@@ -523,7 +724,7 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
                           ),
                         ),
                       )
-                    : Text(
+                    : SelectableText(
                         '₹${employee.salary.toStringAsFixed(0)}',
                         style: const TextStyle(
                           fontWeight: FontWeight.bold,
@@ -638,7 +839,7 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
+                        SelectableText(
                           employee.name,
                           style: const TextStyle(
                             fontWeight: FontWeight.bold,
@@ -741,7 +942,7 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
                         ),
                       ],
                     ),
-                    Text(
+                    SelectableText(
                       '₹${employee.salary.toStringAsFixed(0)}',
                       style: const TextStyle(
                         fontWeight: FontWeight.bold,
@@ -773,7 +974,7 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
           ),
         ),
         Expanded(
-          child: Text(
+          child: SelectableText(
             value,
             style: const TextStyle(
               fontSize: 13,
@@ -786,80 +987,130 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
   }
 
   Widget _buildEmptyState(BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isDesktop = screenWidth > 800;
+    final horizontalPadding = AppSpacing.getHorizontalPadding(context);
+    
     return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            Icons.people_outline,
-            size: 80,
-            color: Colors.grey[400],
-          ),
-          const SizedBox(height: 16),
-          Text(
-            'No employees yet',
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  color: Colors.grey[600],
-                ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Add employees manually or import from CSV',
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: Colors.grey[500],
-                ),
-          ),
-          const SizedBox(height: 32),
-          // Action Buttons
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              ElevatedButton.icon(
-                onPressed: () => _showAddEmployeeForm(context),
-                icon: const Icon(Icons.person_add, size: 20),
-                label: const Text('Add Employee'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primary,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 32,
-                    vertical: 16,
-                  ),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 16),
-              OutlinedButton.icon(
-                onPressed: () => _pickAndImportCSV(context),
-                icon: const Icon(Icons.upload_file, size: 20),
-                label: const Text('Import CSV'),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: Colors.green,
-                  side: const BorderSide(color: Colors.green, width: 2),
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 32,
-                    vertical: 16,
-                  ),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          // Download Template Link
-          TextButton.icon(
-            onPressed: () => _downloadCSVTemplate(context),
-            icon: const Icon(Icons.download, size: 18),
-            label: const Text('Download CSV Template'),
-            style: TextButton.styleFrom(
-              foregroundColor: Colors.orange,
+      child: SingleChildScrollView(
+        padding: EdgeInsets.symmetric(horizontal: horizontalPadding, vertical: 24),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.people_outline,
+              size: 80,
+              color: Colors.grey[400],
             ),
-          ),
-        ],
+            const SizedBox(height: 16),
+            Text(
+              'No employees yet',
+              style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                    color: Colors.grey[600],
+                  ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Add employees manually or import from CSV',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: Colors.grey[500],
+                  ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 32),
+            // Action Buttons - Responsive layout
+            if (isDesktop)
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  ElevatedButton.icon(
+                    onPressed: () => _showAddEmployeeForm(context),
+                    icon: const Icon(Icons.person_add, size: 20),
+                    label: const Text('Add Employee'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 32,
+                        vertical: 16,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  OutlinedButton.icon(
+                    onPressed: () => _pickAndImportCSV(context),
+                    icon: const Icon(Icons.upload_file, size: 20),
+                    label: const Text('Import CSV'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.green,
+                      side: const BorderSide(color: Colors.green, width: 2),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 32,
+                        vertical: 16,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                  ),
+                ],
+              )
+            else
+              // Mobile: Stack buttons vertically
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  ElevatedButton.icon(
+                    onPressed: () => _showAddEmployeeForm(context),
+                    icon: const Icon(Icons.person_add, size: 20),
+                    label: const Text('Add Employee'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.primary,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 24,
+                        vertical: 16,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  OutlinedButton.icon(
+                    onPressed: () => _pickAndImportCSV(context),
+                    icon: const Icon(Icons.upload_file, size: 20),
+                    label: const Text('Import CSV'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.green,
+                      side: const BorderSide(color: Colors.green, width: 2),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 24,
+                        vertical: 16,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            const SizedBox(height: 16),
+            // Download Template Link
+            TextButton.icon(
+              onPressed: () => _downloadCSVTemplate(context),
+              icon: const Icon(Icons.download, size: 18),
+              label: const Text('Download CSV Template'),
+              style: TextButton.styleFrom(
+                foregroundColor: Colors.orange,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
