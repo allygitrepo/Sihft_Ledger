@@ -1,7 +1,4 @@
-enum OvertimeType {
-  hourwise,
-  slotwise,
-}
+import 'employee_model.dart';
 
 enum PayrollAttendanceType {
   daily,
@@ -13,34 +10,6 @@ enum SalaryCycle {
   monthly,
   weekly,
   custom,
-}
-
-class OvertimeSlot {
-  final int startHour;
-  final int endHour;
-  final double rate;
-
-  const OvertimeSlot({
-    required this.startHour,
-    required this.endHour,
-    required this.rate,
-  });
-
-  Map<String, dynamic> toJson() {
-    return {
-      'startHour': startHour,
-      'endHour': endHour,
-      'rate': rate,
-    };
-  }
-
-  factory OvertimeSlot.fromJson(Map<String, dynamic> json) {
-    return OvertimeSlot(
-      startHour: json['startHour'] as int,
-      endHour: json['endHour'] as int,
-      rate: (json['rate'] as num).toDouble(),
-    );
-  }
 }
 
 class SettingsModel {

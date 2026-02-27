@@ -58,7 +58,7 @@ class SidebarNavigation extends ConsumerWidget {
                   Text(
                     authState.userData?['name'] ?? 'User',
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: Colors.grey[600],
+                          color: Theme.of(context).textTheme.bodySmall?.color,
                         ),
                   ),
                 ],
@@ -159,8 +159,11 @@ class SidebarNavigation extends ConsumerWidget {
     required String label,
     required VoidCallback onTap,
   }) {
+    final theme = Theme.of(context);
+    final iconColor = theme.iconTheme.color ?? Colors.grey[600];
+    
     return ListTile(
-      leading: Icon(icon, color: Colors.grey[600]),
+      leading: Icon(icon, color: iconColor),
       title: Text(label),
       onTap: onTap,
     );

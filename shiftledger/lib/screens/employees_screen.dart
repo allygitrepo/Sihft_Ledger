@@ -5,10 +5,12 @@ import 'dart:io';
 import 'dart:developer' as developer;
 import '../providers/employee_provider.dart';
 import '../models/employee_model.dart';
+import '../models/csv_employee_preview.dart';
 import '../services/csv_import_service.dart';
 import '../utills/app_colors.dart';
 import '../utills/app_spacing.dart';
 import '../widgets/loader.dart';
+import '../widgets/csv_preview_dialog.dart';
 
 class EmployeesScreen extends ConsumerStatefulWidget {
   const EmployeesScreen({super.key});
@@ -19,6 +21,62 @@ class EmployeesScreen extends ConsumerStatefulWidget {
 
 class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
+  String? _editingEmployeeId;
+  final Map<String, TextEditingController> _editControllers = {};
+
+  @override
+  void dispose() {
+    // Dispose all controllers
+    for (var controller in _editControllers.values) {
+      controller.dispose();
+    }
+    super.dispose();
+  }
+
+  void _startEditing(EmployeeModel employee) {
+    setState(() {
+      _editingEmployeeId = employee.id;
+      _editControllers['name'] = TextEditingController(text: employee.name);
+      _editControllers['code'] = TextEditingController(text: employee.employeeCode);
+      _editControllers['mobile'] = TextEditingController(text: employee.mobileNo);
+      _editControllers['position'] = TextEditingController(text: employee.position);
+      _editControllers['department'] = TextEditingController(text: employee.department);
+      _editControllers['salary'] = TextEditingController(text: employee.salary.toString());
+    });
+  }
+
+  void _cancelEditing() {
+    setState(() {
+      _editingEmployeeId = null;
+      for (var controller in _editControllers.values) {
+        controller.dispose();
+      }
+      _editControllers.clear();
+    });
+  }
+
+  void _saveEditing(EmployeeModel originalEmployee) {
+    final updatedEmployee = EmployeeModel(
+      id: originalEmployee.id,
+      name: _editControllers['name']!.text,
+      employeeCode: _editControllers['code']!.text,
+      mobileNo: _editControllers['mobile']!.text,
+      position: _editControllers['position']!.text,
+      department: _editControllers['department']!.text,
+      salary: double.tryParse(_editControllers['salary']!.text) ?? originalEmployee.salary,
+      createdAt: originalEmployee.createdAt,
+    );
+    
+    ref.read(employeeProvider.notifier).updateEmployee(updatedEmployee);
+    _cancelEditing();
+    
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Employee updated successfully'),
+        backgroundColor: Colors.green,
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -26,90 +84,133 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
     final horizontalPadding = AppSpacing.getHorizontalPadding(context);
     final screenWidth = MediaQuery.of(context).size.width;
     final isDesktop = screenWidth > 800;
+    
+    // Theme-adaptive colors
+    final theme = Theme.of(context);
+    final backgroundColor = theme.scaffoldBackgroundColor;
+    final cardColor = theme.cardColor;
+    final textColor = theme.textTheme.bodyLarge?.color ?? Colors.black;
+    final subtitleColor = theme.textTheme.bodySmall?.color ?? Colors.grey;
 
-    // Desktop: No AppBar, MainLayout provides it
+    // Desktop: Table View
     if (isDesktop) {
       return Scaffold(
-        backgroundColor: Colors.white,
+        backgroundColor: backgroundColor,
         body: employeeState.isLoading
             ? const Center(child: AppLoader(size: 50))
             : employeeState.employees.isEmpty
                 ? _buildEmptyState(context)
-                : ListView.builder(
-                    padding: EdgeInsets.all(horizontalPadding),
-                    itemCount: employeeState.employees.length,
-                    itemBuilder: (context, index) {
-                      final employee = employeeState.employees[index];
-                      return Card(
-                        margin: const EdgeInsets.only(bottom: 12),
-                        child: ListTile(
-                          leading: CircleAvatar(
-                            backgroundColor: AppColors.primary,
-                            child: Text(
-                              employee.name[0].toUpperCase(),
-                              style: const TextStyle(color: Colors.white),
+                : Column(
+                    children: [
+                      // Header with title and add button
+                      Container(
+                        padding: const EdgeInsets.all(20),
+                        color: cardColor,
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Row(
+                              children: [
+                                Icon(Icons.people, color: AppColors.primary, size: 28),
+                                const SizedBox(width: 12),
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'Employees',
+                                      style: TextStyle(
+                                        fontSize: 24,
+                                        fontWeight: FontWeight.bold,
+                                        color: textColor,
+                                      ),
+                                    ),
+                                    Text(
+                                      '${employeeState.employees.length} total employees',
+                                      style: TextStyle(
+                                        fontSize: 14,
+                                        color: subtitleColor,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
                             ),
-                          ),
-                          title: Text(employee.name),
-                          subtitle: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text('ID: ${employee.employeeCode}'),
-                              Text('${employee.position} • ${employee.department}'),
-                              Text('Mobile: ${employee.mobileNo}', 
-                                style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-                              ),
-                            ],
-                          ),
-                          trailing: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                crossAxisAlignment: CrossAxisAlignment.end,
-                                children: [
-                                  Text(
-                                    '₹${employee.salary.toStringAsFixed(0)}',
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 16,
+                            Row(
+                              children: [
+                                ElevatedButton.icon(
+                                  onPressed: () => _showAddEmployeeForm(context),
+                                  icon: const Icon(Icons.add, size: 20),
+                                  label: const Text('Add Employee'),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: AppColors.primary,
+                                    foregroundColor: Colors.white,
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 24,
+                                      vertical: 16,
+                                    ),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(8),
                                     ),
                                   ),
-                                ],
-                              ),
-                              const SizedBox(width: 8),
-                              IconButton(
-                                icon: const Icon(Icons.edit, size: 20),
-                                color: Colors.blue,
-                                onPressed: () => _showEditEmployeeDialog(context, employee),
-                                tooltip: 'Edit',
-                              ),
-                              IconButton(
-                                icon: const Icon(Icons.delete, size: 20),
-                                color: Colors.red,
-                                onPressed: () => _confirmDelete(context, employee),
-                                tooltip: 'Delete',
-                              ),
-                            ],
-                          ),
-                          isThreeLine: true,
+                                ),
+                                const SizedBox(width: 12),
+                                OutlinedButton.icon(
+                                  onPressed: () => _pickAndImportCSV(context),
+                                  icon: const Icon(Icons.upload_file, size: 20),
+                                  label: const Text('Import CSV'),
+                                  style: OutlinedButton.styleFrom(
+                                    foregroundColor: Colors.green,
+                                    side: const BorderSide(color: Colors.green),
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 24,
+                                      vertical: 16,
+                                    ),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                IconButton(
+                                  onPressed: () => _downloadCSVTemplate(context),
+                                  icon: const Icon(Icons.download),
+                                  tooltip: 'Download CSV Template',
+                                  style: IconButton.styleFrom(
+                                    foregroundColor: Colors.orange,
+                                    side: const BorderSide(color: Colors.orange),
+                                    padding: const EdgeInsets.all(16),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
                         ),
-                      );
-                    },
+                      ),
+                      // Table
+                      Expanded(
+                        child: SingleChildScrollView(
+                          child: _buildDesktopTable(employeeState.employees),
+                        ),
+                      ),
+                    ],
                   ),
-        floatingActionButton: FloatingActionButton(
-          onPressed: () => _showAddEmployeeOptions(context),
-          backgroundColor: AppColors.primary,
-          child: const Icon(Icons.add, color: Colors.white),
-        ),
       );
     }
 
-    // Mobile: Keep existing Scaffold with AppBar
+    // Mobile: Card View
     return Scaffold(
       key: _scaffoldKey,
       appBar: AppBar(
         title: const Text('Employees'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.add),
+            onPressed: () => _showAddEmployeeForm(context),
+          ),
+        ],
       ),
       body: employeeState.isLoading
           ? const Center(child: AppLoader(size: 50))
@@ -120,88 +221,551 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
                   itemCount: employeeState.employees.length,
                   itemBuilder: (context, index) {
                     final employee = employeeState.employees[index];
-                    return Card(
-                      margin: const EdgeInsets.only(bottom: 12),
-                      child: ListTile(
-                        leading: CircleAvatar(
-                          backgroundColor: AppColors.primary,
-                          child: Text(
-                            employee.name[0].toUpperCase(),
-                            style: const TextStyle(color: Colors.white),
-                          ),
-                        ),
-                        title: Text(employee.name),
-                        subtitle: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text('ID: ${employee.employeeCode}'),
-                            Text('${employee.position} • ${employee.department}'),
-                            Text('Mobile: ${employee.mobileNo}', 
-                              style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-                            ),
-                          ],
-                        ),
-                        trailing: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              crossAxisAlignment: CrossAxisAlignment.end,
-                              children: [
-                                Text(
-                                  '₹${employee.salary.toStringAsFixed(0)}',
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 16,
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(width: 8),
-                            PopupMenuButton(
-                              icon: const Icon(Icons.more_vert),
-                              itemBuilder: (context) => [
-                                const PopupMenuItem(
-                                  value: 'edit',
-                                  child: Row(
-                                    children: [
-                                      Icon(Icons.edit, size: 20, color: Colors.blue),
-                                      SizedBox(width: 8),
-                                      Text('Edit'),
-                                    ],
-                                  ),
-                                ),
-                                const PopupMenuItem(
-                                  value: 'delete',
-                                  child: Row(
-                                    children: [
-                                      Icon(Icons.delete, size: 20, color: Colors.red),
-                                      SizedBox(width: 8),
-                                      Text('Delete'),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                              onSelected: (value) {
-                                if (value == 'edit') {
-                                  _showEditEmployeeDialog(context, employee);
-                                } else if (value == 'delete') {
-                                  _confirmDelete(context, employee);
-                                }
-                              },
-                            ),
-                          ],
-                        ),
-                        isThreeLine: true,
-                      ),
-                    );
+                    return _buildMobileCard(employee);
                   },
                 ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => _showAddEmployeeOptions(context),
-        backgroundColor: AppColors.primary,
-        child: const Icon(Icons.add, color: Colors.white),
+    );
+  }
+
+  Widget _buildDesktopTable(List<EmployeeModel> employees) {
+    final theme = Theme.of(context);
+    final cardColor = theme.cardColor;
+    final dividerColor = theme.dividerColor;
+    
+    return Container(
+      width: double.infinity,
+      color: cardColor,
+      child: DataTable(
+        headingRowColor: WidgetStateProperty.all(
+          theme.brightness == Brightness.dark
+              ? Colors.grey.withValues(alpha: 0.15)
+              : Colors.grey.withValues(alpha: 0.08),
+        ),
+        headingRowHeight: 56,
+        dataRowMinHeight: 72,
+        dataRowMaxHeight: 72,
+        columnSpacing: 32,
+        horizontalMargin: 32,
+        dividerThickness: 1,
+        border: TableBorder(
+          horizontalInside: BorderSide(
+            color: dividerColor.withValues(alpha: 0.3),
+            width: 1,
+          ),
+        ),
+        columns: const [
+          DataColumn(
+            label: Text(
+              'Employee ID',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 14,
+              ),
+            ),
+          ),
+          DataColumn(
+            label: Text(
+              'Name',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 14,
+              ),
+            ),
+          ),
+          DataColumn(
+            label: Text(
+              'Mobile',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 14,
+              ),
+            ),
+          ),
+          DataColumn(
+            label: Text(
+              'Position',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 14,
+              ),
+            ),
+          ),
+          DataColumn(
+            label: Text(
+              'Department',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 14,
+              ),
+            ),
+          ),
+          DataColumn(
+            label: Text(
+              'Salary',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 14,
+              ),
+            ),
+            numeric: true,
+          ),
+          DataColumn(
+            label: Text(
+              'Actions',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 14,
+              ),
+            ),
+          ),
+        ],
+        rows: employees.map((employee) {
+          final isEditing = _editingEmployeeId == employee.id;
+          
+          return DataRow(
+            cells: [
+              // Employee ID
+              DataCell(
+                isEditing
+                    ? SizedBox(
+                        width: 100,
+                        child: TextFormField(
+                          controller: _editControllers['code'],
+                          style: const TextStyle(fontSize: 13),
+                          decoration: const InputDecoration(
+                            isDense: true,
+                            contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                            border: OutlineInputBorder(),
+                          ),
+                        ),
+                      )
+                    : Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: AppColors.primary.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          employee.employeeCode,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.primary,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ),
+              ),
+              // Name with Avatar
+              DataCell(
+                Row(
+                  children: [
+                    CircleAvatar(
+                      backgroundColor: AppColors.primary,
+                      radius: 18,
+                      child: Text(
+                        employee.name[0].toUpperCase(),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: isEditing
+                          ? TextFormField(
+                              controller: _editControllers['name'],
+                              style: const TextStyle(fontSize: 14),
+                              decoration: const InputDecoration(
+                                isDense: true,
+                                contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                                border: OutlineInputBorder(),
+                              ),
+                            )
+                          : Text(
+                              employee.name,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w600,
+                                fontSize: 14,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                    ),
+                  ],
+                ),
+              ),
+              // Mobile
+              DataCell(
+                isEditing
+                    ? SizedBox(
+                        width: 120,
+                        child: TextFormField(
+                          controller: _editControllers['mobile'],
+                          style: const TextStyle(fontSize: 13),
+                          keyboardType: TextInputType.phone,
+                          decoration: const InputDecoration(
+                            isDense: true,
+                            contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                            border: OutlineInputBorder(),
+                          ),
+                        ),
+                      )
+                    : Row(
+                        children: [
+                          Icon(Icons.phone, size: 16, color: Colors.grey[600]),
+                          const SizedBox(width: 6),
+                          Text(
+                            employee.mobileNo,
+                            style: const TextStyle(fontSize: 13),
+                          ),
+                        ],
+                      ),
+              ),
+              // Position
+              DataCell(
+                isEditing
+                    ? SizedBox(
+                        width: 140,
+                        child: TextFormField(
+                          controller: _editControllers['position'],
+                          style: const TextStyle(fontSize: 13),
+                          decoration: const InputDecoration(
+                            isDense: true,
+                            contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                            border: OutlineInputBorder(),
+                          ),
+                        ),
+                      )
+                    : Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: Colors.blue.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(
+                            color: Colors.blue.withValues(alpha: 0.3),
+                          ),
+                        ),
+                        child: Text(
+                          employee.position,
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.blue[700],
+                          ),
+                        ),
+                      ),
+              ),
+              // Department
+              DataCell(
+                isEditing
+                    ? SizedBox(
+                        width: 140,
+                        child: TextFormField(
+                          controller: _editControllers['department'],
+                          style: const TextStyle(fontSize: 13),
+                          decoration: const InputDecoration(
+                            isDense: true,
+                            contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                            border: OutlineInputBorder(),
+                          ),
+                        ),
+                      )
+                    : Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: Colors.green.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(
+                            color: Colors.green.withValues(alpha: 0.3),
+                          ),
+                        ),
+                        child: Text(
+                          employee.department,
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.green[700],
+                          ),
+                        ),
+                      ),
+              ),
+              // Salary
+              DataCell(
+                isEditing
+                    ? SizedBox(
+                        width: 100,
+                        child: TextFormField(
+                          controller: _editControllers['salary'],
+                          style: const TextStyle(fontSize: 14),
+                          keyboardType: TextInputType.number,
+                          decoration: const InputDecoration(
+                            isDense: true,
+                            contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                            border: OutlineInputBorder(),
+                            prefixText: '₹',
+                          ),
+                        ),
+                      )
+                    : Text(
+                        '₹${employee.salary.toStringAsFixed(0)}',
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 15,
+                          color: AppColors.primary,
+                        ),
+                      ),
+              ),
+              // Actions
+              DataCell(
+                isEditing
+                    ? Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(
+                            icon: const Icon(Icons.check, size: 20),
+                            color: Colors.green,
+                            onPressed: () => _saveEditing(employee),
+                            tooltip: 'Save',
+                            style: IconButton.styleFrom(
+                              backgroundColor: Colors.green.withValues(alpha: 0.1),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          IconButton(
+                            icon: const Icon(Icons.close, size: 20),
+                            color: Colors.grey,
+                            onPressed: _cancelEditing,
+                            tooltip: 'Cancel',
+                            style: IconButton.styleFrom(
+                              backgroundColor: Colors.grey.withValues(alpha: 0.1),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                            ),
+                          ),
+                        ],
+                      )
+                    : Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(
+                            icon: const Icon(Icons.edit, size: 20),
+                            color: Colors.blue,
+                            onPressed: () => _startEditing(employee),
+                            tooltip: 'Edit',
+                            style: IconButton.styleFrom(
+                              backgroundColor: Colors.blue.withValues(alpha: 0.1),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          IconButton(
+                            icon: const Icon(Icons.delete, size: 20),
+                            color: Colors.red,
+                            onPressed: () => _confirmDelete(context, employee),
+                            tooltip: 'Delete',
+                            style: IconButton.styleFrom(
+                              backgroundColor: Colors.red.withValues(alpha: 0.1),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+              ),
+            ],
+          );
+        }).toList(),
       ),
+    );
+  }
+
+  Widget _buildMobileCard(EmployeeModel employee) {
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      elevation: 2,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: InkWell(
+        onTap: () => _showEditEmployeeDialog(context, employee),
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Header Row
+              Row(
+                children: [
+                  CircleAvatar(
+                    backgroundColor: AppColors.primary,
+                    radius: 24,
+                    child: Text(
+                      employee.name[0].toUpperCase(),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 18,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          employee.name,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: AppColors.primary.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            employee.employeeCode,
+                            style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.primary,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  PopupMenuButton(
+                    icon: const Icon(Icons.more_vert),
+                    itemBuilder: (context) => [
+                      const PopupMenuItem(
+                        value: 'edit',
+                        child: Row(
+                          children: [
+                            Icon(Icons.edit, size: 20, color: Colors.blue),
+                            SizedBox(width: 8),
+                            Text('Edit'),
+                          ],
+                        ),
+                      ),
+                      const PopupMenuItem(
+                        value: 'delete',
+                        child: Row(
+                          children: [
+                            Icon(Icons.delete, size: 20, color: Colors.red),
+                            SizedBox(width: 8),
+                            Text('Delete'),
+                          ],
+                        ),
+                      ),
+                    ],
+                    onSelected: (value) {
+                      if (value == 'edit') {
+                        _showEditEmployeeDialog(context, employee);
+                      } else if (value == 'delete') {
+                        _confirmDelete(context, employee);
+                      }
+                    },
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              const Divider(),
+              const SizedBox(height: 12),
+              // Details
+              _buildInfoRow(Icons.phone, 'Mobile', employee.mobileNo),
+              const SizedBox(height: 8),
+              _buildInfoRow(Icons.work, 'Position', employee.position),
+              const SizedBox(height: 8),
+              _buildInfoRow(Icons.business, 'Department', employee.department),
+              const SizedBox(height: 12),
+              // Salary
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: AppColors.primary.withValues(alpha: 0.3),
+                  ),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.currency_rupee,
+                          size: 18,
+                          color: AppColors.primary,
+                        ),
+                        const SizedBox(width: 6),
+                        const Text(
+                          'Salary',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            fontSize: 14,
+                          ),
+                        ),
+                      ],
+                    ),
+                    Text(
+                      '₹${employee.salary.toStringAsFixed(0)}',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 18,
+                        color: AppColors.primary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildInfoRow(IconData icon, String label, String value) {
+    return Row(
+      children: [
+        Icon(icon, size: 18, color: Colors.grey[600]),
+        const SizedBox(width: 8),
+        Text(
+          '$label: ',
+          style: TextStyle(
+            fontSize: 13,
+            color: Colors.grey[600],
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+        Expanded(
+          child: Text(
+            value,
+            style: const TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -229,94 +793,57 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
                   color: Colors.grey[500],
                 ),
           ),
-        ],
-      ),
-    );
-  }
-
-  void _showAddEmployeeOptions(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (context) => Container(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: Colors.grey[300],
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-            const SizedBox(height: 20),
-            Text(
-              'Add Employee',
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.bold,
+          const SizedBox(height: 32),
+          // Action Buttons
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              ElevatedButton.icon(
+                onPressed: () => _showAddEmployeeForm(context),
+                icon: const Icon(Icons.person_add, size: 20),
+                label: const Text('Add Employee'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 32,
+                    vertical: 16,
                   ),
-            ),
-            const SizedBox(height: 24),
-            ListTile(
-              leading: Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: AppColors.primary.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(10),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
                 ),
-                child: const Icon(Icons.person_add, color: AppColors.primary),
               ),
-              title: const Text('Add Manually'),
-              subtitle: const Text('Fill form to add single employee'),
-              trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-              onTap: () {
-                Navigator.pop(context);
-                _showAddEmployeeForm(context);
-              },
-            ),
-            const SizedBox(height: 12),
-            ListTile(
-              leading: Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: Colors.green.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(10),
+              const SizedBox(width: 16),
+              OutlinedButton.icon(
+                onPressed: () => _pickAndImportCSV(context),
+                icon: const Icon(Icons.upload_file, size: 20),
+                label: const Text('Import CSV'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.green,
+                  side: const BorderSide(color: Colors.green, width: 2),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 32,
+                    vertical: 16,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
                 ),
-                child: const Icon(Icons.upload_file, color: Colors.green),
               ),
-              title: const Text('Import from CSV'),
-              subtitle: const Text('Upload CSV file with multiple employees'),
-              trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-              onTap: () {
-                Navigator.pop(context);
-                _showImportDialog(context);
-              },
+            ],
+          ),
+          const SizedBox(height: 16),
+          // Download Template Link
+          TextButton.icon(
+            onPressed: () => _downloadCSVTemplate(context),
+            icon: const Icon(Icons.download, size: 18),
+            label: const Text('Download CSV Template'),
+            style: TextButton.styleFrom(
+              foregroundColor: Colors.orange,
             ),
-            const SizedBox(height: 12),
-            ListTile(
-              leading: Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: Colors.orange.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: const Icon(Icons.download, color: Colors.orange),
-              ),
-              title: const Text('Download CSV Template'),
-              subtitle: const Text('Get sample CSV format'),
-              trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-              onTap: () {
-                Navigator.pop(context);
-                _downloadCSVTemplate(context);
-              },
-            ),
-            const SizedBox(height: 20),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -494,144 +1021,6 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
     );
   }
 
-  void _showImportDialog(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Row(
-          children: const [
-            Icon(Icons.upload_file, color: Colors.blue),
-            SizedBox(width: 12),
-            Text('Import Employees from CSV'),
-          ],
-        ),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Import multiple employees at once using a CSV file.',
-                style: TextStyle(fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 16),
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.blue.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.blue.withValues(alpha: 0.3)),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      '📋 Required CSV Format:',
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 14,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: Colors.grey[100],
-                        borderRadius: BorderRadius.circular(4),
-                      ),
-                      child: const Text(
-                        'Employee ID, Employee Name, Employee Mobile No, Employee Position, Employee Department, Employee Salary',
-                        style: TextStyle(
-                          fontFamily: 'monospace',
-                          fontSize: 11,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 16),
-              const Text(
-                '⚠️ Important Notes:',
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  color: Colors.orange,
-                ),
-              ),
-              const SizedBox(height: 8),
-              _buildBulletPoint('File must be in CSV format (.csv)'),
-              _buildBulletPoint('First row must be headers'),
-              _buildBulletPoint('Each row = one employee'),
-              _buildBulletPoint('All fields are required'),
-              _buildBulletPoint('Salary must be a number'),
-              _buildBulletPoint('Mobile number should be 10 digits'),
-              const SizedBox(height: 16),
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.green.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.green.withValues(alpha: 0.3)),
-                ),
-                child: Row(
-                  children: const [
-                    Icon(Icons.lightbulb, color: Colors.green, size: 20),
-                    SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        'Tip: Download the template first to see the correct format!',
-                        style: TextStyle(fontSize: 12),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-              _downloadCSVTemplate(context);
-            },
-            child: const Text('Download Template'),
-          ),
-          ElevatedButton.icon(
-            onPressed: () {
-              Navigator.pop(context);
-              _pickAndImportCSV(context);
-            },
-            icon: const Icon(Icons.file_upload),
-            label: const Text('Select CSV File'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildBulletPoint(String text) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 4),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text('• ', style: TextStyle(fontSize: 16)),
-          Expanded(
-            child: Text(
-              text,
-              style: const TextStyle(fontSize: 13),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   Future<void> _pickAndImportCSV(BuildContext context) async {
     developer.log('=== CSV IMPORT STARTED ===', name: 'EmployeesScreen');
     
@@ -745,10 +1134,10 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
 
       // Parse CSV
       developer.log('Parsing CSV...', name: 'EmployeesScreen');
-      final employees = await CsvImportService.parseCSV(content);
-      developer.log('Parsed ${employees.length} employees', name: 'EmployeesScreen');
+      final previews = await CsvImportService.parseCSV(content);
+      developer.log('Parsed ${previews.length} employees', name: 'EmployeesScreen');
 
-      if (employees.isEmpty) {
+      if (previews.isEmpty) {
         developer.log('No employees found in CSV', name: 'EmployeesScreen');
         if (!mounted) return;
         
@@ -762,23 +1151,40 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
         return;
       }
 
+      // Convert previews to employees with default values
+      final previewList = previews;
+
       // Check for duplicates
       final existingEmployees = ref.read(employeeProvider).employees;
-      final duplicateCheck = _checkForDuplicates(employees, existingEmployees);
       
-      developer.log('Found ${duplicateCheck.newEmployees.length} new, ${duplicateCheck.duplicates.length} duplicates', name: 'EmployeesScreen');
+      // Separate new and duplicate previews
+      final newPreviews = <CsvEmployeePreview>[];
+      final duplicatePreviews = <CsvEmployeePreview>[];
+      
+      for (final preview in previewList) {
+        final isDuplicate = existingEmployees.any(
+          (e) => e.employeeCode.toLowerCase() == preview.employeeCode.toLowerCase(),
+        );
+        if (isDuplicate) {
+          duplicatePreviews.add(preview);
+        } else {
+          newPreviews.add(preview);
+        }
+      }
+      
+      developer.log('Found ${newPreviews.length} new, ${duplicatePreviews.length} duplicates', name: 'EmployeesScreen');
 
       // Hide loading snackbar
       scaffoldMessenger.hideCurrentSnackBar();
 
       // Check if there are new employees to import
-      if (duplicateCheck.newEmployees.isEmpty) {
+      if (newPreviews.isEmpty) {
         developer.log('No new employees to import', name: 'EmployeesScreen');
         if (!mounted) return;
         
         scaffoldMessenger.showSnackBar(
           SnackBar(
-            content: Text('All ${employees.length} employees already exist in the system.'),
+            content: Text('All ${previewList.length} employees already exist in the system.'),
             backgroundColor: Colors.orange,
           ),
         );
@@ -790,13 +1196,19 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
       final shouldImport = await showDialog<bool>(
         context: navigator.context,
         barrierDismissible: false,
-        builder: (dialogContext) => _buildPreviewDialog(dialogContext, employees, duplicateCheck),
+        builder: (dialogContext) => CsvPreviewDialog(
+          previews: newPreviews,
+          duplicates: duplicatePreviews,
+        ),
       );
 
       if (shouldImport != true) {
         developer.log('Import cancelled by user', name: 'EmployeesScreen');
         return;
       }
+
+      // Convert previews to employees
+      final employees = newPreviews.map((preview) => preview.toEmployeeModel()).toList();
 
       // Show importing snackbar
       if (!mounted) return;
@@ -813,7 +1225,7 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
                 ),
               ),
               const SizedBox(width: 16),
-              Text('Importing ${duplicateCheck.newEmployees.length} employees...'),
+              Text('Importing ${employees.length} employees...'),
             ],
           ),
           duration: const Duration(minutes: 1),
@@ -821,8 +1233,8 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
       );
 
       // Import employees
-      developer.log('Importing ${duplicateCheck.newEmployees.length} employees...', name: 'EmployeesScreen');
-      await ref.read(employeeProvider.notifier).importEmployees(duplicateCheck.newEmployees);
+      developer.log('Importing ${employees.length} employees...', name: 'EmployeesScreen');
+      await ref.read(employeeProvider.notifier).importEmployees(employees);
       developer.log('Import completed successfully', name: 'EmployeesScreen');
 
       // Hide importing snackbar
@@ -845,17 +1257,17 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                '✅ ${duplicateCheck.newEmployees.length} employees imported successfully!',
+                '✅ ${employees.length} employees imported successfully!',
                 style: const TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.bold,
                   color: Colors.green,
                 ),
               ),
-              if (duplicateCheck.duplicates.isNotEmpty) ...[
+              if (duplicatePreviews.isNotEmpty) ...[
                 const SizedBox(height: 8),
                 Text(
-                  '⏭️  ${duplicateCheck.duplicates.length} duplicates were skipped',
+                  '⏭️  ${duplicatePreviews.length} duplicates were skipped',
                   style: const TextStyle(
                     fontSize: 14,
                     color: Colors.orange,
@@ -1077,21 +1489,86 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
     );
   }
 
-  void _downloadCSVTemplate(BuildContext context) {
+  Future<void> _downloadCSVTemplate(BuildContext context) async {
+    final scaffoldMessenger = ScaffoldMessenger.of(context);
+    final navigator = Navigator.of(context);
+    
+    try {
+      final template = CsvImportService.generateSampleCSV();
+      
+      // Use FilePicker to let user choose save location
+      final result = await FilePicker.platform.saveFile(
+        dialogTitle: 'Save CSV Template',
+        fileName: 'employee_template.csv',
+        type: FileType.custom,
+        allowedExtensions: ['csv'],
+      );
+
+      if (result != null) {
+        // Write the file
+        final file = File(result);
+        await file.writeAsString(template);
+        
+        scaffoldMessenger.showSnackBar(
+          SnackBar(
+            content: Row(
+              children: const [
+                Icon(Icons.check_circle, color: Colors.white),
+                SizedBox(width: 12),
+                Expanded(
+                  child: Text('CSV template saved successfully!'),
+                ),
+              ],
+            ),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      } else {
+        // User cancelled the save dialog
+        developer.log('User cancelled template download', name: 'EmployeesScreen');
+      }
+    } catch (e) {
+      developer.log('Error downloading template: $e', name: 'EmployeesScreen');
+      
+      // Fallback: Show the template in a dialog for manual copy
+      if (!mounted) return;
+      _showTemplateDialog(navigator.context);
+    }
+  }
+
+  void _showTemplateDialog(BuildContext context) {
     final template = CsvImportService.generateSampleCSV();
     
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('CSV Template'),
+        title: Row(
+          children: const [
+            Icon(Icons.description, color: AppColors.primary),
+            SizedBox(width: 12),
+            Text('CSV Template'),
+          ],
+        ),
         content: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
-                'Copy this template and save as .csv file:',
-                style: TextStyle(fontWeight: FontWeight.bold),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.blue.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.blue.withValues(alpha: 0.3)),
+                ),
+                child: const Text(
+                  '📋 Copy this template and save as .csv file',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                  ),
+                ),
               ),
               const SizedBox(height: 16),
               Container(
@@ -1110,24 +1587,43 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
                 ),
               ),
               const SizedBox(height: 16),
-              Text(
-                'Instructions:',
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  color: Colors.grey[700],
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.orange.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.orange.withValues(alpha: 0.3)),
                 ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                '1. Copy the above text\n'
-                '2. Open Excel or Google Sheets\n'
-                '3. Paste the content\n'
-                '4. Add your employee data\n'
-                '5. Save as CSV file\n'
-                '6. Import using "Import from CSV" option',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Colors.grey[600],
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: const [
+                        Icon(Icons.info_outline, color: Colors.orange, size: 20),
+                        SizedBox(width: 8),
+                        Text(
+                          'Instructions:',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      '1. Copy the above text\n'
+                      '2. Open Excel or Google Sheets\n'
+                      '3. Paste the content\n'
+                      '4. Add your employee data\n'
+                      '5. Save as CSV file (.csv)\n'
+                      '6. Import using "Import CSV" button',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey[700],
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],
@@ -1138,239 +1634,17 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
             onPressed: () => Navigator.pop(context),
             child: const Text('Close'),
           ),
-        ],
-      ),
-    );
-  }
-
-  DuplicateCheckResult _checkForDuplicates(
-    List<EmployeeModel> newEmployees,
-    List<EmployeeModel> existingEmployees,
-  ) {
-    developer.log('=== DUPLICATE CHECK START ===', name: 'EmployeesScreen');
-    developer.log('New employees to check: ${newEmployees.length}', name: 'EmployeesScreen');
-    developer.log('Existing employees: ${existingEmployees.length}', name: 'EmployeesScreen');
-    
-    final duplicates = <EmployeeModel>[];
-    final newOnes = <EmployeeModel>[];
-    
-    // Create a map of existing employees by employee code (case-insensitive)
-    final existingMap = <String, EmployeeModel>{};
-    for (final emp in existingEmployees) {
-      existingMap[emp.employeeCode.toLowerCase()] = emp;
-      developer.log('Existing employee code: ${emp.employeeCode}', name: 'EmployeesScreen');
-    }
-    
-    // Check each new employee
-    for (final newEmp in newEmployees) {
-      final code = newEmp.employeeCode.toLowerCase();
-      developer.log('Checking new employee: ${newEmp.name} (${newEmp.employeeCode})', name: 'EmployeesScreen');
-      
-      if (existingMap.containsKey(code)) {
-        developer.log('  → DUPLICATE found!', name: 'EmployeesScreen');
-        duplicates.add(newEmp);
-      } else {
-        developer.log('  → NEW employee', name: 'EmployeesScreen');
-        newOnes.add(newEmp);
-      }
-    }
-    
-    developer.log('=== DUPLICATE CHECK RESULT ===', name: 'EmployeesScreen');
-    developer.log('New: ${newOnes.length}, Duplicates: ${duplicates.length}', name: 'EmployeesScreen');
-    
-    return DuplicateCheckResult(
-      newEmployees: newOnes,
-      duplicates: duplicates,
-    );
-  }
-
-  Widget _buildPreviewDialog(
-    BuildContext dialogContext,
-    List<EmployeeModel> allEmployees,
-    DuplicateCheckResult duplicateCheck,
-  ) {
-    return AlertDialog(
-      title: Row(
-        children: const [
-          Icon(Icons.preview, color: AppColors.primary),
-          SizedBox(width: 12),
-          Text('Preview Import Data'),
-        ],
-      ),
-      content: SizedBox(
-        width: double.maxFinite,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Summary
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.blue.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: Colors.blue.withValues(alpha: 0.3)),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: const [
-                      Icon(Icons.info_outline, size: 20, color: Colors.blue),
-                      SizedBox(width: 8),
-                      Text(
-                        'Import Summary',
-                        style: TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Text('Total in CSV: ${allEmployees.length}'),
-                  Text(
-                    '✅ New employees: ${duplicateCheck.newEmployees.length}',
-                    style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold),
-                  ),
-                  if (duplicateCheck.duplicates.isNotEmpty)
-                    Text(
-                      '⚠️  Duplicates (will be skipped): ${duplicateCheck.duplicates.length}',
-                      style: const TextStyle(color: Colors.orange, fontWeight: FontWeight.bold),
-                    ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
-            
-            // Preview list
-            const Text(
-              'Preview of employees to be imported:',
-              style: TextStyle(fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 8),
-            
-            Flexible(
-              child: Container(
-                constraints: const BoxConstraints(maxHeight: 300),
-                decoration: BoxDecoration(
-                  border: Border.all(color: Colors.grey[300]!),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: ListView.builder(
-                  shrinkWrap: true,
-                  itemCount: allEmployees.length,
-                  itemBuilder: (context, index) {
-                    final emp = allEmployees[index];
-                    final isDuplicate = duplicateCheck.duplicates.any(
-                      (d) => d.employeeCode.toLowerCase() == emp.employeeCode.toLowerCase(),
-                    );
-                    
-                    return Container(
-                      decoration: BoxDecoration(
-                        color: isDuplicate 
-                          ? Colors.orange.withValues(alpha: 0.1)
-                          : Colors.green.withValues(alpha: 0.05),
-                        border: Border(
-                          bottom: BorderSide(color: Colors.grey[200]!),
-                        ),
-                      ),
-                      child: ListTile(
-                        dense: true,
-                        leading: Icon(
-                          isDuplicate ? Icons.warning : Icons.check_circle,
-                          color: isDuplicate ? Colors.orange : Colors.green,
-                          size: 20,
-                        ),
-                        title: Text(
-                          emp.name,
-                          style: TextStyle(
-                            fontSize: 14,
-                            decoration: isDuplicate ? TextDecoration.lineThrough : null,
-                          ),
-                        ),
-                        subtitle: Text(
-                          '${emp.employeeCode} • ${emp.position} • ${emp.department}',
-                          style: const TextStyle(fontSize: 12),
-                        ),
-                        trailing: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          children: [
-                            Text(
-                              '₹${emp.salary.toStringAsFixed(0)}',
-                              style: const TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 13,
-                              ),
-                            ),
-                            Text(
-                              emp.mobileNo,
-                              style: TextStyle(
-                                fontSize: 11,
-                                color: Colors.grey[600],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    );
-                  },
-                ),
-              ),
-            ),
-            
-            if (duplicateCheck.duplicates.isNotEmpty) ...[
-              const SizedBox(height: 12),
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: Colors.orange.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.orange.withValues(alpha: 0.3)),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(Icons.info, size: 16, color: Colors.orange),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        'Duplicate employees (marked with ⚠️) will be skipped to prevent duplicates.',
-                        style: TextStyle(fontSize: 12, color: Colors.grey[700]),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ],
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(dialogContext, false),
-          child: const Text('Cancel'),
-        ),
-        ElevatedButton.icon(
-          onPressed: duplicateCheck.newEmployees.isEmpty
-              ? null
-              : () => Navigator.pop(dialogContext, true),
-          icon: const Icon(Icons.upload),
-          label: Text(
-            duplicateCheck.newEmployees.isEmpty
-                ? 'No New Employees'
-                : 'Import ${duplicateCheck.newEmployees.length} Employee${duplicateCheck.newEmployees.length > 1 ? 's' : ''}',
+          ElevatedButton.icon(
+            onPressed: () {
+              Navigator.pop(context);
+              _downloadCSVTemplate(context);
+            },
+            icon: const Icon(Icons.download, size: 18),
+            label: const Text('Try Download Again'),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
-}
-
-class DuplicateCheckResult {
-  final List<EmployeeModel> newEmployees;
-  final List<EmployeeModel> duplicates;
-  
-  DuplicateCheckResult({
-    required this.newEmployees,
-    required this.duplicates,
-  });
 }
