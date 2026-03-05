@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shiftledger/routes/app_routes.dart';
 import '../providers/theme_provider.dart';
 import '../utills/app_spacing.dart';
+import '../widgets/toast.dart';
 
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
@@ -18,10 +19,7 @@ class SettingsScreen extends ConsumerWidget {
       children: [
         const Text(
           'Appearance',
-          style: TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-          ),
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 10),
         Card(
@@ -66,10 +64,7 @@ class SettingsScreen extends ConsumerWidget {
         const SizedBox(height: 20),
         const Text(
           'About',
-          style: TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-          ),
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 10),
         Card(
@@ -107,18 +102,14 @@ class SettingsScreen extends ConsumerWidget {
                 leading: const Icon(Icons.privacy_tip),
                 title: const Text('Privacy Policy'),
                 onTap: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Privacy Policy coming soon!')),
-                  );
+                  ToastHelper.show('Privacy Policy coming soon!');
                 },
               ),
               ListTile(
                 leading: const Icon(Icons.description),
                 title: const Text('Terms of Service'),
                 onTap: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Terms of Service coming soon!')),
-                  );
+                  ToastHelper.show('Terms of Service coming soon!');
                 },
               ),
               ListTile(
