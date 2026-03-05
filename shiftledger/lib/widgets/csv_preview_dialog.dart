@@ -1,33 +1,99 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/csv_employee_preview.dart';
 import '../models/employee_model.dart';
 import '../utills/app_colors.dart';
+import '../services/csv_import_service.dart';
+import '../providers/employee_provider.dart';
+import '../providers/settings_provider.dart';
 
-class CsvPreviewDialog extends StatefulWidget {
-  final List<CsvEmployeePreview> previews;
-  final List<CsvEmployeePreview> duplicates;
+class CsvPreviewDialog extends ConsumerStatefulWidget {
+  final PlatformFile file;
 
-  const CsvPreviewDialog({
-    super.key,
-    required this.previews,
-    required this.duplicates,
-  });
+  const CsvPreviewDialog({super.key, required this.file});
 
   @override
-  State<CsvPreviewDialog> createState() => _CsvPreviewDialogState();
+  ConsumerState<CsvPreviewDialog> createState() => _CsvPreviewDialogState();
 }
 
-class _CsvPreviewDialogState extends State<CsvPreviewDialog> {
+class _CsvPreviewDialogState extends ConsumerState<CsvPreviewDialog> {
+  List<CsvEmployeePreview> _previews = [];
+  List<CsvEmployeePreview> _duplicates = [];
+  bool _isParsing = true;
+  String? _errorMessage;
+
   @override
   void initState() {
     super.initState();
-    // Ensure rates are calculated if not set
-    for (var preview in widget.previews) {
-      if (preview.hourlyRate == null) {
-        preview.hourlyRate = preview.salary / 208; // 26 days * 8 hours
+    _parseCSV();
+  }
+
+  Future<void> _parseCSV() async {
+    try {
+      // Read file content
+      String content;
+      if (widget.file.bytes != null) {
+        content = String.fromCharCodes(widget.file.bytes!);
+      } else if (widget.file.path != null) {
+        final file = File(widget.file.path!);
+        content = await file.readAsString();
+      } else {
+        throw Exception('Unable to read file content');
       }
-      if (preview.dailyRate == null) {
-        preview.dailyRate = preview.salary / 26; // 26 working days
+
+      final settings = ref.read(settingsProvider);
+      final parsedPreviews = await CsvImportService.parseCSV(content, settings);
+
+      if (parsedPreviews.isEmpty) {
+        if (mounted) {
+          setState(() {
+            _isParsing = false;
+            _errorMessage = 'No employee data found in CSV file.';
+          });
+        }
+        return;
+      }
+
+      // Check for duplicates
+      final existingEmployees = ref.read(employeeProvider).employees;
+      final newPreviews = <CsvEmployeePreview>[];
+      final duplicatePreviews = <CsvEmployeePreview>[];
+
+      for (final preview in parsedPreviews) {
+        final isDuplicate = existingEmployees.any(
+          (e) =>
+              e.employeeCode.toLowerCase() ==
+              preview.employeeCode.toLowerCase(),
+        );
+        if (isDuplicate) {
+          duplicatePreviews.add(preview);
+        } else {
+          // Initialize rates
+          if (preview.hourlyRate == null) {
+            preview.hourlyRate = preview.salary / 208;
+          }
+          if (preview.dailyRate == null) {
+            preview.dailyRate = preview.salary / 26;
+          }
+          newPreviews.add(preview);
+        }
+      }
+
+      if (mounted) {
+        setState(() {
+          _previews = newPreviews;
+          _duplicates = duplicatePreviews;
+          _isParsing = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isParsing = false;
+          _errorMessage = 'Error parsing CSV: ${e.toString()}';
+        });
       }
     }
   }
@@ -51,9 +117,7 @@ class _CsvPreviewDialogState extends State<CsvPreviewDialog> {
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
                 color: AppColors.primary.withValues(alpha: 0.1),
-                border: Border(
-                  bottom: BorderSide(color: theme.dividerColor),
-                ),
+                border: Border(bottom: BorderSide(color: theme.dividerColor)),
               ),
               child: Row(
                 children: [
@@ -78,48 +142,58 @@ class _CsvPreviewDialogState extends State<CsvPreviewDialog> {
 
             // Content
             Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Summary
-                    _buildSummary(theme),
-                    const SizedBox(height: 20),
+              child: _isParsing
+                  ? _buildLoadingState()
+                  : _errorMessage != null
+                  ? _buildErrorState()
+                  : SingleChildScrollView(
+                      padding: const EdgeInsets.all(20),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Summary
+                          _buildSummary(theme),
+                          const SizedBox(height: 20),
 
-                    // Employee List
-                    _buildEmployeeList(theme),
-                  ],
-                ),
-              ),
+                          // Employee List
+                          _buildEmployeeList(theme),
+                        ],
+                      ),
+                    ),
             ),
 
             // Footer
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: isDark 
+                color: isDark
                     ? theme.cardColor.withValues(alpha: 0.5)
                     : Colors.grey.shade50,
-                border: Border(
-                  top: BorderSide(color: theme.dividerColor),
-                ),
+                border: Border(top: BorderSide(color: theme.dividerColor)),
               ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.end,
                 children: [
                   TextButton(
-                    onPressed: () => Navigator.pop(context, false),
+                    onPressed: () => Navigator.pop(context, null),
                     child: const Text('Cancel'),
                   ),
                   const SizedBox(width: 12),
                   ElevatedButton.icon(
-                    onPressed: widget.previews.isEmpty
+                    onPressed:
+                        _isParsing || _previews.isEmpty || _errorMessage != null
                         ? null
-                        : () => Navigator.pop(context, true),
+                        : () {
+                            final employees = _previews
+                                .map((p) => p.toEmployeeModel())
+                                .toList();
+                            Navigator.pop(context, employees);
+                          },
                     icon: const Icon(Icons.upload),
                     label: Text(
-                      'Import ${widget.previews.length} Employee${widget.previews.length > 1 ? 's' : ''}',
+                      _isParsing
+                          ? 'Processing...'
+                          : 'Import ${_previews.length} Employee${_previews.length > 1 ? 's' : ''}',
                     ),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.primary,
@@ -166,17 +240,23 @@ class _CsvPreviewDialogState extends State<CsvPreviewDialog> {
           ),
           const SizedBox(height: 12),
           Text(
-            'Total in CSV: ${widget.previews.length + widget.duplicates.length}',
+            'Total in CSV: ${_previews.length + _duplicates.length}',
             style: TextStyle(color: theme.textTheme.bodyMedium?.color),
           ),
           Text(
-            '✅ New employees: ${widget.previews.length}',
-            style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold),
+            '✅ New employees: ${_previews.length}',
+            style: const TextStyle(
+              color: Colors.green,
+              fontWeight: FontWeight.bold,
+            ),
           ),
-          if (widget.duplicates.isNotEmpty)
+          if (_duplicates.length > 0)
             Text(
-              '⚠️  Duplicates (will be skipped): ${widget.duplicates.length}',
-              style: const TextStyle(color: Colors.orange, fontWeight: FontWeight.bold),
+              '⚠️  Duplicates (will be skipped): ${_duplicates.length}',
+              style: const TextStyle(
+                color: Colors.orange,
+                fontWeight: FontWeight.bold,
+              ),
             ),
         ],
       ),
@@ -206,10 +286,10 @@ class _CsvPreviewDialogState extends State<CsvPreviewDialog> {
         const SizedBox(height: 12),
 
         // Employee cards
-        ...widget.previews.map((preview) => _buildEmployeeCard(preview, theme)),
+        ..._previews.map((preview) => _buildEmployeeCard(preview, theme)),
 
         // Duplicates
-        if (widget.duplicates.isNotEmpty) ...[
+        if (_duplicates.length > 0) ...[
           const SizedBox(height: 16),
           const Text(
             'Duplicates (Will be skipped)',
@@ -220,9 +300,60 @@ class _CsvPreviewDialogState extends State<CsvPreviewDialog> {
             ),
           ),
           const SizedBox(height: 8),
-          ...widget.duplicates.map((preview) => _buildDuplicateCard(preview, theme)),
+          ..._duplicates.map((preview) => _buildDuplicateCard(preview, theme)),
         ],
       ],
+    );
+  }
+
+  Widget _buildLoadingState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const CircularProgressIndicator(),
+          const SizedBox(height: 20),
+          Text(
+            'Parsing CSV file...',
+            style: TextStyle(color: Colors.grey[600]),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            widget.file.name,
+            style: const TextStyle(fontWeight: FontWeight.bold),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildErrorState() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.error_outline, color: Colors.red, size: 48),
+            const SizedBox(height: 16),
+            Text(
+              'Parsing Failed',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              _errorMessage ?? 'Unknown error occurred',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.grey[600]),
+            ),
+            const SizedBox(height: 24),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context, null),
+              child: const Text('Go Back'),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -231,12 +362,12 @@ class _CsvPreviewDialogState extends State<CsvPreviewDialog> {
       margin: const EdgeInsets.only(bottom: 12),
       child: ExpansionTile(
         leading: CircleAvatar(
-          backgroundColor: preview.employeeType == EmployeeType.hourly 
-              ? Colors.blue 
+          backgroundColor: preview.employeeType == EmployeeType.hourly
+              ? Colors.blue
               : Colors.green,
           child: Icon(
-            preview.employeeType == EmployeeType.hourly 
-                ? Icons.access_time 
+            preview.employeeType == EmployeeType.hourly
+                ? Icons.access_time
                 : Icons.calendar_today,
             color: Colors.white,
             size: 20,
@@ -265,7 +396,9 @@ class _CsvPreviewDialogState extends State<CsvPreviewDialog> {
                 ),
               ),
               child: Text(
-                preview.employeeType == EmployeeType.hourly ? 'Hour-wise' : 'Day-wise',
+                preview.employeeType == EmployeeType.hourly
+                    ? 'Hour-wise'
+                    : 'Day-wise',
                 style: TextStyle(
                   fontSize: 11,
                   fontWeight: FontWeight.bold,
@@ -299,7 +432,9 @@ class _CsvPreviewDialogState extends State<CsvPreviewDialog> {
                   decoration: BoxDecoration(
                     color: Colors.blue.withValues(alpha: 0.05),
                     borderRadius: BorderRadius.circular(8),
-                    border: Border.all(color: Colors.blue.withValues(alpha: 0.2)),
+                    border: Border.all(
+                      color: Colors.blue.withValues(alpha: 0.2),
+                    ),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -323,7 +458,7 @@ class _CsvPreviewDialogState extends State<CsvPreviewDialog> {
                       LayoutBuilder(
                         builder: (context, constraints) {
                           final isMobile = constraints.maxWidth < 600;
-                          
+
                           if (isMobile) {
                             // Stack vertically on mobile
                             return Column(
@@ -334,7 +469,10 @@ class _CsvPreviewDialogState extends State<CsvPreviewDialog> {
                                   children: [
                                     const Text(
                                       'Employee Type',
-                                      style: TextStyle(fontWeight: FontWeight.w500, fontSize: 13),
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.w500,
+                                        fontSize: 13,
+                                      ),
                                     ),
                                     const SizedBox(height: 4),
                                     Text(
@@ -347,20 +485,30 @@ class _CsvPreviewDialogState extends State<CsvPreviewDialog> {
                                     const SizedBox(height: 8),
                                     StatefulBuilder(
                                       builder: (context, setDropdownState) {
-                                        return DropdownButtonFormField<EmployeeType>(
+                                        return DropdownButtonFormField<
+                                          EmployeeType
+                                        >(
                                           value: preview.employeeType,
                                           decoration: const InputDecoration(
                                             border: OutlineInputBorder(),
-                                            contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                            contentPadding:
+                                                EdgeInsets.symmetric(
+                                                  horizontal: 12,
+                                                  vertical: 8,
+                                                ),
                                           ),
                                           items: const [
                                             DropdownMenuItem(
                                               value: EmployeeType.hourly,
-                                              child: Text('Hourly (Hours × Rate)'),
+                                              child: Text(
+                                                'Hourly (Hours × Rate)',
+                                              ),
                                             ),
                                             DropdownMenuItem(
                                               value: EmployeeType.daily,
-                                              child: Text('Daily (Days × Rate)'),
+                                              child: Text(
+                                                'Daily (Days × Rate)',
+                                              ),
                                             ),
                                           ],
                                           onChanged: (value) {
@@ -381,10 +529,14 @@ class _CsvPreviewDialogState extends State<CsvPreviewDialog> {
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(
-                                      preview.employeeType == EmployeeType.hourly
+                                      preview.employeeType ==
+                                              EmployeeType.hourly
                                           ? 'Hourly Rate (₹/hour)'
                                           : 'Daily Rate (₹/day)',
-                                      style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 13),
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.w500,
+                                        fontSize: 13,
+                                      ),
                                     ),
                                     const SizedBox(height: 4),
                                     Text(
@@ -396,20 +548,38 @@ class _CsvPreviewDialogState extends State<CsvPreviewDialog> {
                                     ),
                                     const SizedBox(height: 8),
                                     TextFormField(
-                                      key: ValueKey('${preview.employeeCode}_${preview.employeeType}'),
-                                      initialValue: preview.employeeType == EmployeeType.hourly
-                                          ? (preview.hourlyRate?.toStringAsFixed(2) ?? '')
-                                          : (preview.dailyRate?.toStringAsFixed(2) ?? ''),
+                                      key: ValueKey(
+                                        '${preview.employeeCode}_${preview.employeeType}',
+                                      ),
+                                      initialValue:
+                                          preview.employeeType ==
+                                              EmployeeType.hourly
+                                          ? (preview.hourlyRate
+                                                    ?.toStringAsFixed(2) ??
+                                                '')
+                                          : (preview.dailyRate?.toStringAsFixed(
+                                                  2,
+                                                ) ??
+                                                ''),
                                       decoration: InputDecoration(
                                         border: const OutlineInputBorder(),
-                                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                        suffixText: preview.employeeType == EmployeeType.hourly ? '₹/hr' : '₹/day',
+                                        contentPadding:
+                                            const EdgeInsets.symmetric(
+                                              horizontal: 12,
+                                              vertical: 8,
+                                            ),
+                                        suffixText:
+                                            preview.employeeType ==
+                                                EmployeeType.hourly
+                                            ? '₹/hr'
+                                            : '₹/day',
                                       ),
                                       keyboardType: TextInputType.number,
                                       onChanged: (value) {
                                         final rate = double.tryParse(value);
                                         setState(() {
-                                          if (preview.employeeType == EmployeeType.hourly) {
+                                          if (preview.employeeType ==
+                                              EmployeeType.hourly) {
                                             preview.hourlyRate = rate;
                                           } else {
                                             preview.dailyRate = rate;
@@ -427,37 +597,52 @@ class _CsvPreviewDialogState extends State<CsvPreviewDialog> {
                               children: [
                                 Expanded(
                                   child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
                                       const Text(
                                         'Employee Type',
-                                        style: TextStyle(fontWeight: FontWeight.w500, fontSize: 13),
+                                        style: TextStyle(
+                                          fontWeight: FontWeight.w500,
+                                          fontSize: 13,
+                                        ),
                                       ),
                                       const SizedBox(height: 4),
                                       Text(
                                         'How to calculate work salary',
                                         style: TextStyle(
                                           fontSize: 11,
-                                          color: theme.textTheme.bodySmall?.color,
+                                          color:
+                                              theme.textTheme.bodySmall?.color,
                                         ),
                                       ),
                                       const SizedBox(height: 8),
                                       StatefulBuilder(
                                         builder: (context, setDropdownState) {
-                                          return DropdownButtonFormField<EmployeeType>(
+                                          return DropdownButtonFormField<
+                                            EmployeeType
+                                          >(
                                             value: preview.employeeType,
                                             decoration: const InputDecoration(
                                               border: OutlineInputBorder(),
-                                              contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                              contentPadding:
+                                                  EdgeInsets.symmetric(
+                                                    horizontal: 12,
+                                                    vertical: 8,
+                                                  ),
                                             ),
                                             items: const [
                                               DropdownMenuItem(
                                                 value: EmployeeType.hourly,
-                                                child: Text('Hourly (Hours × Rate)'),
+                                                child: Text(
+                                                  'Hourly (Hours × Rate)',
+                                                ),
                                               ),
                                               DropdownMenuItem(
                                                 value: EmployeeType.daily,
-                                                child: Text('Daily (Days × Rate)'),
+                                                child: Text(
+                                                  'Daily (Days × Rate)',
+                                                ),
                                               ),
                                             ],
                                             onChanged: (value) {
@@ -477,38 +662,61 @@ class _CsvPreviewDialogState extends State<CsvPreviewDialog> {
                                 const SizedBox(width: 16),
                                 Expanded(
                                   child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
                                       Text(
-                                        preview.employeeType == EmployeeType.hourly
+                                        preview.employeeType ==
+                                                EmployeeType.hourly
                                             ? 'Hourly Rate (₹/hour)'
                                             : 'Daily Rate (₹/day)',
-                                        style: const TextStyle(fontWeight: FontWeight.w500, fontSize: 13),
+                                        style: const TextStyle(
+                                          fontWeight: FontWeight.w500,
+                                          fontSize: 13,
+                                        ),
                                       ),
                                       const SizedBox(height: 4),
                                       Text(
                                         'Calculated from monthly salary',
                                         style: TextStyle(
                                           fontSize: 11,
-                                          color: theme.textTheme.bodySmall?.color,
+                                          color:
+                                              theme.textTheme.bodySmall?.color,
                                         ),
                                       ),
                                       const SizedBox(height: 8),
                                       TextFormField(
-                                        key: ValueKey('${preview.employeeCode}_${preview.employeeType}'),
-                                        initialValue: preview.employeeType == EmployeeType.hourly
-                                            ? (preview.hourlyRate?.toStringAsFixed(2) ?? '')
-                                            : (preview.dailyRate?.toStringAsFixed(2) ?? ''),
+                                        key: ValueKey(
+                                          '${preview.employeeCode}_${preview.employeeType}',
+                                        ),
+                                        initialValue:
+                                            preview.employeeType ==
+                                                EmployeeType.hourly
+                                            ? (preview.hourlyRate
+                                                      ?.toStringAsFixed(2) ??
+                                                  '')
+                                            : (preview.dailyRate
+                                                      ?.toStringAsFixed(2) ??
+                                                  ''),
                                         decoration: InputDecoration(
                                           border: const OutlineInputBorder(),
-                                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                          suffixText: preview.employeeType == EmployeeType.hourly ? '₹/hr' : '₹/day',
+                                          contentPadding:
+                                              const EdgeInsets.symmetric(
+                                                horizontal: 12,
+                                                vertical: 8,
+                                              ),
+                                          suffixText:
+                                              preview.employeeType ==
+                                                  EmployeeType.hourly
+                                              ? '₹/hr'
+                                              : '₹/day',
                                         ),
                                         keyboardType: TextInputType.number,
                                         onChanged: (value) {
                                           final rate = double.tryParse(value);
                                           setState(() {
-                                            if (preview.employeeType == EmployeeType.hourly) {
+                                            if (preview.employeeType ==
+                                                EmployeeType.hourly) {
                                               preview.hourlyRate = rate;
                                             } else {
                                               preview.dailyRate = rate;
