@@ -13,12 +13,16 @@ class PayrollConfigurationScreen extends ConsumerWidget {
     final payrollSettings = ref.watch(settingsProvider);
     final settingsNotifier = ref.read(settingsProvider.notifier);
     final horizontalPadding = AppSpacing.getHorizontalPadding(context);
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isDesktop = screenWidth > 900;
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Payroll Configuration'),
-        centerTitle: true,
-      ),
+      appBar: isDesktop
+          ? null
+          : AppBar(
+              title: const Text('Payroll Configuration'),
+              centerTitle: true,
+            ),
       body: ListView(
         padding: EdgeInsets.all(horizontalPadding),
         children: [

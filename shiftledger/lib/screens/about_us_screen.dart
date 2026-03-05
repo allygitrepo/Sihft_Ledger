@@ -190,9 +190,11 @@ class _AboutUsScreenState extends State<AboutUsScreen>
   @override
   Widget build(BuildContext context) {
     final horizontalPadding = AppSpacing.getHorizontalPadding(context);
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isDesktop = screenWidth > 900;
     
     return Scaffold(
-      appBar: AppBar(
+      appBar: isDesktop ? null : AppBar(
         title: const Text("About Us"),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),

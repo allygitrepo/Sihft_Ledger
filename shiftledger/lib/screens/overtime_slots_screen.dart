@@ -19,7 +19,19 @@ class _OvertimeSlotsScreenState extends ConsumerState<OvertimeSlotsScreen> {
   void initState() {
     super.initState();
     final settings = ref.read(settingsProvider);
-    slots = List.from(settings.overtimeSlots);
+    
+    // Always start with saved slots, or create one default slot if empty
+    if (settings.overtimeSlots.isEmpty) {
+      slots = [
+        OvertimeSlot(
+          startHour: 0,
+          endHour: 2,
+          rate: 100.0,
+        ),
+      ];
+    } else {
+      slots = List.from(settings.overtimeSlots);
+    }
   }
 
   void _addSlot() {
@@ -76,101 +88,296 @@ class _OvertimeSlotsScreenState extends ConsumerState<OvertimeSlotsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isDesktop = screenWidth > 900;
+
     return Scaffold(
-      appBar: AppBar(
+      appBar: isDesktop ? null : AppBar(
         title: const Text('Overtime Slots'),
         centerTitle: true,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.save),
-            onPressed: _saveSlots,
-          ),
-        ],
       ),
-      body: Column(
-        children: [
-          Padding(
-            padding: EdgeInsets.all(AppSpacing.getHorizontalPadding(context)),
-            child: Card(
-              child: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Icon(
-                          Icons.info_outline,
+      body: isDesktop ? _buildDesktopLayout(context) : _buildMobileLayout(context),
+      floatingActionButton: isDesktop ? null : FloatingActionButton(
+        onPressed: _addSlot,
+        child: const Icon(Icons.add),
+      ),
+    );
+  }
+
+  Widget _buildMobileLayout(BuildContext context) {
+    return Column(
+      children: [
+        Padding(
+          padding: EdgeInsets.all(AppSpacing.getHorizontalPadding(context)),
+          child: Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.info_outline,
+                        color: Theme.of(context).primaryColor,
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          'Configure Overtime Slots',
+                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                fontWeight: FontWeight.bold,
+                              ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Define hour ranges and rates for overtime calculation',
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        Expanded(
+          child: _buildSlotsList(context),
+        ),
+        Padding(
+          padding: EdgeInsets.all(AppSpacing.getHorizontalPadding(context)),
+          child: ElevatedButton(
+            onPressed: _saveSlots,
+            child: const Padding(
+              padding: EdgeInsets.symmetric(vertical: 16.0),
+              child: Text('Save Slots'),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDesktopLayout(BuildContext context) {
+    return Row(
+      children: [
+        // Left side - White background with info
+        Expanded(
+          child: Container(
+            color: Colors.white,
+            padding: const EdgeInsets.all(48.0),
+            child: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    Icons.timer,
+                    size: 120,
+                    color: Theme.of(context).primaryColor,
+                  ),
+                  const SizedBox(height: 24),
+                  Text(
+                    'Overtime Slots',
+                    style: Theme.of(context).textTheme.displaySmall?.copyWith(
+                          fontWeight: FontWeight.bold,
                           color: Theme.of(context).primaryColor,
                         ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Text(
-                            'Configure Overtime Slots',
-                            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                  fontWeight: FontWeight.bold,
-                                ),
-                          ),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    'Define hour ranges and rates for overtime calculation',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          color: Colors.grey[600],
                         ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 32),
+                  Container(
+                    padding: const EdgeInsets.all(24),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).primaryColor.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'How it works:',
+                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                fontWeight: FontWeight.bold,
+                              ),
+                        ),
+                        const SizedBox(height: 12),
+                        _buildInfoItem('1. Add slots for different hour ranges'),
+                        _buildInfoItem('2. Set rates for each slot'),
+                        _buildInfoItem('3. Slots cannot overlap'),
+                        _buildInfoItem('4. Save to apply changes'),
                       ],
                     ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Define hour ranges and rates for overtime calculation',
-                      style: Theme.of(context).textTheme.bodyMedium,
-                    ),
-                  ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+        // Right side - Primary color background with slots
+        Expanded(
+          child: Container(
+            color: Theme.of(context).primaryColor,
+            child: Center(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(48.0),
+                child: Container(
+                  constraints: const BoxConstraints(maxWidth: 600),
+                  padding: const EdgeInsets.all(40.0),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.1),
+                        blurRadius: 20,
+                        offset: const Offset(0, 10),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'Manage Slots',
+                        style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                              fontWeight: FontWeight.bold,
+                            ),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 24),
+                      // Slots list
+                      ...slots.asMap().entries.map((entry) {
+                        final index = entry.key;
+                        final slot = entry.value;
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 16.0),
+                          child: _SlotCard(
+                            slot: slot,
+                            index: index,
+                            onUpdate: (slot) => _updateSlot(index, slot),
+                            onRemove: () => _removeSlot(index),
+                          ),
+                        );
+                      }).toList(),
+                      const SizedBox(height: 16),
+                      // Back, Add Slot and Save buttons in a row
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              onPressed: () => Navigator.pop(context),
+                              icon: const Icon(Icons.arrow_back),
+                              label: const Padding(
+                                padding: EdgeInsets.symmetric(vertical: 12.0),
+                                child: Text('Back'),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              onPressed: _addSlot,
+                              icon: const Icon(Icons.add),
+                              label: const Padding(
+                                padding: EdgeInsets.symmetric(vertical: 12.0),
+                                child: Text('Add Slot'),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: ElevatedButton.icon(
+                              onPressed: _saveSlots,
+                              icon: const Icon(Icons.save),
+                              label: const Padding(
+                                padding: EdgeInsets.symmetric(vertical: 12.0),
+                                child: Text('Save'),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
           ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildInfoItem(String text) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8.0),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            Icons.check_circle,
+            size: 20,
+            color: Theme.of(context).primaryColor,
+          ),
+          const SizedBox(width: 8),
           Expanded(
-            child: slots.isEmpty
-                ? Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.timer_off,
-                          size: 64,
-                          color: Colors.grey[400],
-                        ),
-                        const SizedBox(height: 16),
-                        Text(
-                          'No slots configured',
-                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                color: Colors.grey[600],
-                              ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Tap + to add a slot',
-                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                color: Colors.grey[600],
-                              ),
-                        ),
-                      ],
-                    ),
-                  )
-                : ListView.builder(
-                    padding: EdgeInsets.all(AppSpacing.getHorizontalPadding(context)),
-                    itemCount: slots.length,
-                    itemBuilder: (context, index) {
-                      return _SlotCard(
-                        slot: slots[index],
-                        index: index,
-                        onUpdate: (slot) => _updateSlot(index, slot),
-                        onRemove: () => _removeSlot(index),
-                      );
-                    },
-                  ),
+            child: Text(text),
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _addSlot,
-        child: const Icon(Icons.add),
-      ),
+    );
+  }
+
+  Widget _buildSlotsList(BuildContext context) {
+    if (slots.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.timer_off,
+              size: 64,
+              color: Colors.grey[400],
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'No slots configured',
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    color: Colors.grey[600],
+                  ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Tap + to add a slot',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: Colors.grey[600],
+                  ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return ListView.builder(
+      padding: EdgeInsets.all(AppSpacing.getHorizontalPadding(context)),
+      itemCount: slots.length,
+      itemBuilder: (context, index) {
+        return _SlotCard(
+          slot: slots[index],
+          index: index,
+          onUpdate: (slot) => _updateSlot(index, slot),
+          onRemove: () => _removeSlot(index),
+        );
+      },
     );
   }
 }

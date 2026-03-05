@@ -22,6 +22,10 @@ class MainLayout extends ConsumerWidget {
         return 'Mark Attendance';
       case '/payroll':
         return 'Payroll';
+      case '/salary-configuration':
+        return 'Salary Configuration';
+      case '/overtime-configuration':
+        return 'Overtime Configuration';
       case '/profile':
         return 'Profile';
       case '/settings':
@@ -65,10 +69,7 @@ class MainLayout extends ConsumerWidget {
                   decoration: BoxDecoration(
                     color: cardColor,
                     border: Border(
-                      bottom: BorderSide(
-                        color: dividerColor,
-                        width: 1,
-                      ),
+                      bottom: BorderSide(color: dividerColor, width: 1),
                     ),
                   ),
                   padding: const EdgeInsets.symmetric(horizontal: 24),
@@ -93,11 +94,9 @@ class MainLayout extends ConsumerWidget {
                     ],
                   ),
                 ),
-                
+
                 // Page Content
-                Expanded(
-                  child: child,
-                ),
+                Expanded(child: child),
               ],
             ),
           ),

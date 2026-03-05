@@ -42,67 +42,96 @@ class DashboardScreen extends ConsumerWidget {
       builder: (context) => SafeArea(
         child: SingleChildScrollView(
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 16.0),
+            padding: const EdgeInsets.all(20.0),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  'Quick Actions',
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
+                // Header
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Quick Actions',
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                            fontWeight: FontWeight.bold,
+                          ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close),
+                      onPressed: () => Navigator.pop(context),
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 16),
-                _QuickActionTile(
-                  icon: Icons.calculate,
-                  title: 'Configure Salary',
-                  subtitle: 'Salary calculation rules',
-                  onTap: () {
-                    Navigator.pop(context);
-                    Navigator.pushNamed(context, '/salary-configuration');
-                  },
+                const SizedBox(height: 24),
+                // Grid of actions
+                GridView.count(
+                  crossAxisCount: 3,
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  mainAxisSpacing: 16,
+                  crossAxisSpacing: 12,
+                  childAspectRatio: 0.95,
+                  children: [
+                    _QuickActionItem(
+                      icon: Icons.calculate,
+                      title: 'Configure\nSalary',
+                      color: Colors.blue,
+                      onTap: () {
+                        Navigator.pop(context);
+                        Navigator.pushNamed(context, '/salary-configuration');
+                      },
+                    ),
+                    _QuickActionItem(
+                      icon: Icons.timer,
+                      title: 'Configure\nOvertime',
+                      color: Colors.orange,
+                      onTap: () {
+                        Navigator.pop(context);
+                        Navigator.pushNamed(context, '/overtime-configuration');
+                      },
+                    ),
+                    _QuickActionItem(
+                      icon: Icons.payment,
+                      title: 'Configure\nPayroll',
+                      color: Colors.purple,
+                      onTap: () {
+                        Navigator.pop(context);
+                        Navigator.pushNamed(context, AppRoutes.payrollConfiguration);
+                      },
+                    ),
+                    _QuickActionItem(
+                      icon: Icons.person_add,
+                      title: 'Add\nEmployee',
+                      color: Colors.green,
+                      onTap: () {
+                        Navigator.pop(context);
+                        Navigator.pushNamed(context, AppRoutes.employees);
+                      },
+                    ),
+                    _QuickActionItem(
+                      icon: Icons.check_circle,
+                      title: 'Mark\nAttendance',
+                      color: Colors.teal,
+                      onTap: () {
+                        Navigator.pop(context);
+                        Navigator.pushNamed(context, AppRoutes.attendance);
+                      },
+                    ),
+                    _QuickActionItem(
+                      icon: Icons.receipt_long,
+                      title: 'Generate\nPayroll',
+                      color: Colors.indigo,
+                      onTap: () {
+                        Navigator.pop(context);
+                        Navigator.pushNamed(context, AppRoutes.payroll);
+                      },
+                    ),
+                  ],
                 ),
-                const Divider(height: 1),
-                _QuickActionTile(
-                  icon: Icons.timer,
-                  title: 'Configure Overtime',
-                  subtitle: 'Overtime calculation',
-                  onTap: () {
-                    Navigator.pop(context);
-                    Navigator.pushNamed(context, '/overtime-configuration');
-                  },
-                ),
-                const Divider(height: 1),
-                _QuickActionTile(
-                  icon: Icons.payment,
-                  title: 'Configure Payroll',
-                  subtitle: 'Payroll settings',
-                  onTap: () {
-                    Navigator.pop(context);
-                    Navigator.pushNamed(context, AppRoutes.payrollConfiguration);
-                  },
-                ),
-                const Divider(height: 1),
-                _QuickActionTile(
-                  icon: Icons.person_add,
-                  title: 'Add Employee',
-                  subtitle: 'Add new employee',
-                  onTap: () {
-                    Navigator.pop(context);
-                    Navigator.pushNamed(context, AppRoutes.employees);
-                  },
-                ),
-                const Divider(height: 1),
-                _QuickActionTile(
-                  icon: Icons.check_circle,
-                  title: 'Mark Attendance',
-                  subtitle: 'Record attendance',
-                  onTap: () {
-                    Navigator.pop(context);
-                    Navigator.pushNamed(context, AppRoutes.attendance);
-                  },
-                ),
+                const SizedBox(height: 8),
               ],
             ),
           ),
@@ -245,16 +274,16 @@ class DashboardScreen extends ConsumerWidget {
   }
 }
 
-class _QuickActionTile extends StatelessWidget {
+class _QuickActionItem extends StatelessWidget {
   final IconData icon;
   final String title;
-  final String subtitle;
+  final Color color;
   final VoidCallback onTap;
 
-  const _QuickActionTile({
+  const _QuickActionItem({
     required this.icon,
     required this.title,
-    required this.subtitle,
+    required this.color,
     required this.onTap,
   });
 
@@ -262,49 +291,42 @@ class _QuickActionTile extends StatelessWidget {
   Widget build(BuildContext context) {
     return InkWell(
       onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 12.0),
-        child: Row(
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
           children: [
             Container(
-              padding: const EdgeInsets.all(10),
+              width: 52,
+              height: 52,
               decoration: BoxDecoration(
-                color: Theme.of(context).primaryColor.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(10),
+                color: color.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(14),
               ),
               child: Icon(
                 icon,
-                color: Theme.of(context).primaryColor,
-                size: 22,
+                color: color,
+                size: 26,
               ),
             ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w600,
-                      fontSize: 15,
-                    ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    subtitle,
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey[600],
-                    ),
-                  ),
-                ],
+            const SizedBox(height: 8),
+            Flexible(
+              child: Text(
+                title,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  height: 1.2,
+                ),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
               ),
-            ),
-            Icon(
-              Icons.arrow_forward_ios,
-              size: 14,
-              color: Colors.grey[400],
             ),
           ],
         ),

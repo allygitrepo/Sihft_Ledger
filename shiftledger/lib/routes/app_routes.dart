@@ -38,60 +38,33 @@ class AppRoutes {
     login: (context) => const LoginScreen(),
     register: (context) => const RegisterScreen(),
     companyRegister: (context) => const CompanyRegisterScreen(),
+    salaryConfiguration: (context) =>
+        _wrapWithLayout(const SalaryConfigurationScreen(), salaryConfiguration),
+    overtimeConfiguration: (context) => _wrapWithLayout(
+      const OvertimeConfigurationScreen(),
+      overtimeConfiguration,
+    ),
+    overtimeSlots: (context) =>
+        _wrapWithLayout(const OvertimeSlotsScreen(), overtimeSlots),
     payrollConfiguration: (context) => const PayrollConfigurationScreen(),
     dashboard: (context) => const DashboardScreen(),
     profile: (context) => _wrapWithLayout(const ProfileScreen(), profile),
     settings: (context) => _wrapWithLayout(const SettingsScreen(), settings),
     aboutUs: (context) => _wrapWithLayout(const AboutUsScreen(), aboutUs),
     employees: (context) => _wrapWithLayout(const EmployeesScreen(), employees),
-    attendance: (context) => _wrapWithLayout(const AttendanceScreen(), attendance),
+    attendance: (context) =>
+        _wrapWithLayout(const AttendanceScreen(), attendance),
     payroll: (context) => _wrapWithLayout(const PayrollScreen(), payroll),
   };
 
   static Widget _wrapWithLayout(Widget child, String route) {
-    return MainLayout(
-      currentRoute: route,
-      child: child,
-    );
+    return MainLayout(currentRoute: route, child: child);
   }
 
   static Route<dynamic>? onGenerateRoute(RouteSettings settings) {
-    // Handle routes with arguments
-    if (settings.name == salaryConfiguration) {
-      final args = settings.arguments as Map<String, dynamic>?;
-      final isFirstTimeSetup = args?['isFirstTimeSetup'] ?? false;
-      return MaterialPageRoute(
-        builder: (context) => SalaryConfigurationScreen(
-          isFirstTimeSetup: isFirstTimeSetup,
-        ),
-        settings: settings,
-      );
-    }
-    
-    if (settings.name == overtimeConfiguration) {
-      final args = settings.arguments as Map<String, dynamic>?;
-      final isFirstTimeSetup = args?['isFirstTimeSetup'] ?? false;
-      return MaterialPageRoute(
-        builder: (context) => OvertimeConfigurationScreen(
-          isFirstTimeSetup: isFirstTimeSetup,
-        ),
-        settings: settings,
-      );
-    }
-    
-    if (settings.name == overtimeSlots) {
-      return MaterialPageRoute(
-        builder: (context) => const OvertimeSlotsScreen(),
-        settings: settings,
-      );
-    }
-
     final builder = routes[settings.name];
     if (builder != null) {
-      return MaterialPageRoute(
-        builder: builder,
-        settings: settings,
-      );
+      return MaterialPageRoute(builder: builder, settings: settings);
     }
     return null;
   }
