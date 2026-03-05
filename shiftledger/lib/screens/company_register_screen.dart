@@ -15,8 +15,6 @@ class CompanyRegisterScreen extends ConsumerStatefulWidget {
   @override
   ConsumerState<CompanyRegisterScreen> createState() =>
       _CompanyRegisterScreenState();
-  ConsumerState<CompanyRegisterScreen> createState() =>
-      _CompanyRegisterScreenState();
 }
 
 class _CompanyRegisterScreenState extends ConsumerState<CompanyRegisterScreen> {
@@ -64,11 +62,6 @@ class _CompanyRegisterScreenState extends ConsumerState<CompanyRegisterScreen> {
           .read(companyProvider.notifier)
           .registerCompany();
 
-
-      final success = await ref
-          .read(companyProvider.notifier)
-          .registerCompany();
-
       if (success && mounted) {
         // Navigate directly to dashboard after registration
         Navigator.pushReplacementNamed(context, AppRoutes.dashboard);
@@ -89,27 +82,20 @@ class _CompanyRegisterScreenState extends ConsumerState<CompanyRegisterScreen> {
       appBar: isDesktop
           ? null
           : AppBar(title: const Text('Company Details'), centerTitle: true),
-      appBar: isDesktop
-          ? null
-          : AppBar(title: const Text('Company Details'), centerTitle: true),
       body: Stack(
         children: [
           GestureDetector(
             onTap: () => FocusScope.of(context).unfocus(),
             child: isDesktop
-               
                 ? _buildDesktopLayout(context, companyState)
-               
                 : _buildMobileLayout(
-                    
                     context,
-                   
+
                     screenHeight,
-                   
+
                     padding,
-                   
+
                     companyState,
-                  ,
                   ),
           ),
           // Full screen loader
@@ -124,15 +110,13 @@ class _CompanyRegisterScreenState extends ConsumerState<CompanyRegisterScreen> {
   }
 
   Widget _buildMobileLayout(
-    
     BuildContext context,
-   
+
     double screenHeight,
-   
+
     EdgeInsets padding,
-   
+
     dynamic companyState,
-  ,
   ) {
     return SafeArea(
       child: Center(
@@ -169,9 +153,7 @@ class _CompanyRegisterScreenState extends ConsumerState<CompanyRegisterScreen> {
                     style: Theme.of(
                       context,
                     ).textTheme.bodyLarge?.copyWith(color: Colors.grey[600]),
-                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
+
                     textAlign: TextAlign.center,
                   ),
                   SizedBox(height: screenHeight * 0.06),
