@@ -8,19 +8,27 @@ import '../widgets/toast.dart';
 class EmployeeState {
   final List<EmployeeModel> employees;
   final bool isLoading;
+  final bool isParsingCSV;
+  final bool isImporting;
 
   const EmployeeState({
     this.employees = const [],
     this.isLoading = false,
+    this.isParsingCSV = false,
+    this.isImporting = false,
   });
 
   EmployeeState copyWith({
     List<EmployeeModel>? employees,
     bool? isLoading,
+    bool? isParsingCSV,
+    bool? isImporting,
   }) {
     return EmployeeState(
       employees: employees ?? this.employees,
       isLoading: isLoading ?? this.isLoading,
+      isParsingCSV: isParsingCSV ?? this.isParsingCSV,
+      isImporting: isImporting ?? this.isImporting,
     );
   }
 }
@@ -37,9 +45,13 @@ class EmployeeNotifier extends Notifier<EmployeeState> {
     print('[EmployeeProvider] loadEmployees() called');
     state = state.copyWith(isLoading: true);
     final employees = await EmployeeService.loadEmployees();
-    print('[EmployeeProvider] Loaded ${employees.length} employees from storage');
+    print(
+      '[EmployeeProvider] Loaded ${employees.length} employees from storage',
+    );
     state = state.copyWith(employees: employees, isLoading: false);
-    print('[EmployeeProvider] State updated with ${state.employees.length} employees');
+    print(
+      '[EmployeeProvider] State updated with ${state.employees.length} employees',
+    );
   }
 
   Future<void> addEmployee(EmployeeModel employee) async {
@@ -64,50 +76,49 @@ class EmployeeNotifier extends Notifier<EmployeeState> {
   }
 
   Future<void> importEmployees(List<EmployeeModel> employees) async {
-    state = state.copyWith(isLoading: true);
-    print('[EmployeeProvider] Starting import of ${employees.length} employees');
-    
+    state = state.copyWith(isImporting: true);
+    print(
+      '[EmployeeProvider] Starting import of ${employees.length} employees',
+    );
+
     final currentEmployees = await EmployeeService.loadEmployees();
-    print('[EmployeeProvider] Current employees count: ${currentEmployees.length}');
-    
     currentEmployees.addAll(employees);
-    print('[EmployeeProvider] Total after adding: ${currentEmployees.length}');
-    
+
     await EmployeeService.saveEmployees(currentEmployees);
-    print('[EmployeeProvider] Employees saved to storage');
-    
     await loadEmployees();
-    print('[EmployeeProvider] Employees reloaded, new count: ${state.employees.length}');
-    
+
+    state = state.copyWith(isImporting: false);
     ToastHelper.success('${employees.length} employees imported successfully');
   }
 
   // Recalculate all employee salaries when settings change
   Future<void> recalculateEmployeeSalaries(SettingsModel settings) async {
     state = state.copyWith(isLoading: true);
-    print('[EmployeeProvider] Recalculating salaries for ${state.employees.length} employees');
-    
+    print(
+      '[EmployeeProvider] Recalculating salaries for ${state.employees.length} employees',
+    );
+
     final updatedEmployees = <EmployeeModel>[];
-    
+
     for (final employee in state.employees) {
       final conversion = EmployeeService.convertSalary(
         employee.salaryOriginal,
         settings,
       );
-      
+
       final updatedEmployee = employee.copyWith(
         salaryType: conversion['salaryType'] as String,
         hourlyRate: conversion['hourlyRate'] as double?,
         dailyRate: conversion['dailyRate'] as double?,
         salary: employee.salaryOriginal, // Keep original salary
       );
-      
+
       updatedEmployees.add(updatedEmployee);
     }
-    
+
     await EmployeeService.saveEmployees(updatedEmployees);
     await loadEmployees();
-    
+
     print('[EmployeeProvider] Salary recalculation completed');
     ToastHelper.success('Employee salaries recalculated');
   }
