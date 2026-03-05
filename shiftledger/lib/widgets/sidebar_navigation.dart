@@ -18,10 +18,7 @@ class SidebarNavigation extends ConsumerWidget {
         decoration: BoxDecoration(
           color: Theme.of(context).scaffoldBackgroundColor,
           border: Border(
-            right: BorderSide(
-              color: Theme.of(context).dividerColor,
-              width: 1,
-            ),
+            right: BorderSide(color: Theme.of(context).dividerColor, width: 1),
           ),
         ),
         child: Column(
@@ -51,155 +48,207 @@ class SidebarNavigation extends ConsumerWidget {
                   Text(
                     'ShiftLedger',
                     style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                   const SizedBox(height: 8),
                   Text(
                     authState.userData?['name'] ?? 'User',
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: Theme.of(context).textTheme.bodySmall?.color,
-                        ),
+                      color: Theme.of(context).textTheme.bodySmall?.color,
+                    ),
                   ),
                 ],
               ),
             ),
             const Divider(height: 1),
-          Expanded(
-            child: ListView(
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              children: [
-                _buildMenuTile(
-                  context: context,
-                  icon: Icons.home,
-                  label: 'Home',
-                  onTap: () {
-                    // Reset navigation index and go to dashboard
-                    ref.read(navigationProvider.notifier).setIndex(0);
-                    Navigator.pushReplacementNamed(context, AppRoutes.dashboard);
-                  },
-                ),
-                const Divider(height: 24),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  child: Text(
-                    'MANAGEMENT',
-                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                          color: Colors.grey[600],
-                          fontWeight: FontWeight.bold,
-                          letterSpacing: 1.2,
-                        ),
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                children: [
+                  _buildMenuTile(
+                    context: context,
+                    icon: Icons.home,
+                    label: 'Home',
+                    onTap: () {
+                      // Reset navigation index and go to dashboard
+                      ref.read(navigationProvider.notifier).setIndex(0);
+                      Navigator.pushReplacementNamed(
+                        context,
+                        AppRoutes.dashboard,
+                      );
+                    },
                   ),
-                ),
-                _buildMenuTile(
-                  context: context,
-                  icon: Icons.people,
-                  label: 'Employees',
-                  onTap: () {
-                    Navigator.pushReplacementNamed(context, AppRoutes.employees);
-                  },
-                ),
-                _buildMenuTile(
-                  context: context,
-                  icon: Icons.access_time,
-                  label: 'Attendance',
-                  onTap: () {
-                    Navigator.pushReplacementNamed(context, AppRoutes.attendance);
-                  },
-                ),
-                _buildMenuTile(
-                  context: context,
-                  icon: Icons.payment,
-                  label: 'Payroll',
-                  onTap: () {
-                    Navigator.pushReplacementNamed(context, AppRoutes.payroll);
-                  },
-                ),
-                const Divider(height: 24),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  child: Text(
-                    'CONFIGURATION',
-                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                          color: Colors.grey[600],
-                          fontWeight: FontWeight.bold,
-                          letterSpacing: 1.2,
-                        ),
+                  const Divider(height: 24),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 8,
+                    ),
+                    child: Text(
+                      'MANAGEMENT',
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        color: Colors.grey[600],
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 1.2,
+                      ),
+                    ),
                   ),
-                ),
-                _buildMenuTile(
-                  context: context,
-                  icon: Icons.account_balance_wallet,
-                  label: 'Salary Configuration',
-                  onTap: () {
-                    Navigator.pushNamed(context, '/salary-configuration');
-                  },
-                ),
-                _buildMenuTile(
-                  context: context,
-                  icon: Icons.timer,
-                  label: 'Overtime Configuration',
-                  onTap: () {
-                    Navigator.pushNamed(context, '/overtime-configuration');
-                  },
-                ),
-                _buildMenuTile(
-                  context: context,
-                  icon: Icons.settings,
-                  label: 'Settings',
-                  onTap: () {
-                    // Reset navigation index and go to dashboard settings
-                    ref.read(navigationProvider.notifier).setIndex(2);
-                    Navigator.pushReplacementNamed(context, AppRoutes.dashboard);
-                  },
-                ),
-                const Divider(height: 24),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  child: Text(
-                    'ACCOUNT',
-                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                          color: Colors.grey[600],
-                          fontWeight: FontWeight.bold,
-                          letterSpacing: 1.2,
-                        ),
+                  _buildMenuTile(
+                    context: context,
+                    icon: Icons.people,
+                    label: 'Employees',
+                    onTap: () {
+                      Navigator.pushReplacementNamed(
+                        context,
+                        AppRoutes.employees,
+                      );
+                    },
                   ),
-                ),
-                _buildMenuTile(
-                  context: context,
-                  icon: Icons.person,
-                  label: 'Profile',
-                  onTap: () {
-                    Navigator.pushReplacementNamed(context, AppRoutes.profile);
-                  },
-                ),
-                _buildMenuTile(
-                  context: context,
-                  icon: Icons.info,
-                  label: 'About Us',
-                  onTap: () {
-                    Navigator.pushReplacementNamed(context, AppRoutes.aboutUs);
-                  },
-                ),
-              ],
+                  _buildMenuTile(
+                    context: context,
+                    icon: Icons.business,
+                    label: 'Departments',
+                    onTap: () {
+                      Navigator.pushReplacementNamed(
+                        context,
+                        AppRoutes.departments,
+                      );
+                    },
+                  ),
+                  _buildMenuTile(
+                    context: context,
+                    icon: Icons.badge,
+                    label: 'Designations',
+                    onTap: () {
+                      Navigator.pushReplacementNamed(
+                        context,
+                        AppRoutes.designations,
+                      );
+                    },
+                  ),
+                  _buildMenuTile(
+                    context: context,
+                    icon: Icons.access_time,
+                    label: 'Attendance',
+                    onTap: () {
+                      Navigator.pushReplacementNamed(
+                        context,
+                        AppRoutes.attendance,
+                      );
+                    },
+                  ),
+                  _buildMenuTile(
+                    context: context,
+                    icon: Icons.payment,
+                    label: 'Payroll',
+                    onTap: () {
+                      Navigator.pushReplacementNamed(
+                        context,
+                        AppRoutes.payroll,
+                      );
+                    },
+                  ),
+                  const Divider(height: 24),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 8,
+                    ),
+                    child: Text(
+                      'CONFIGURATION',
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        color: Colors.grey[600],
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 1.2,
+                      ),
+                    ),
+                  ),
+                  _buildMenuTile(
+                    context: context,
+                    icon: Icons.account_balance_wallet,
+                    label: 'Salary Configuration',
+                    onTap: () {
+                      Navigator.pushNamed(context, '/salary-configuration');
+                    },
+                  ),
+                  _buildMenuTile(
+                    context: context,
+                    icon: Icons.timer,
+                    label: 'Overtime Configuration',
+                    onTap: () {
+                      Navigator.pushNamed(context, '/overtime-configuration');
+                    },
+                  ),
+                  _buildMenuTile(
+                    context: context,
+                    icon: Icons.settings,
+                    label: 'Settings',
+                    onTap: () {
+                      // Reset navigation index and go to dashboard settings
+                      ref.read(navigationProvider.notifier).setIndex(2);
+                      Navigator.pushReplacementNamed(
+                        context,
+                        AppRoutes.dashboard,
+                      );
+                    },
+                  ),
+                  const Divider(height: 24),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 8,
+                    ),
+                    child: Text(
+                      'ACCOUNT',
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        color: Colors.grey[600],
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 1.2,
+                      ),
+                    ),
+                  ),
+                  _buildMenuTile(
+                    context: context,
+                    icon: Icons.person,
+                    label: 'Profile',
+                    onTap: () {
+                      Navigator.pushReplacementNamed(
+                        context,
+                        AppRoutes.profile,
+                      );
+                    },
+                  ),
+                  _buildMenuTile(
+                    context: context,
+                    icon: Icons.info,
+                    label: 'About Us',
+                    onTap: () {
+                      Navigator.pushReplacementNamed(
+                        context,
+                        AppRoutes.aboutUs,
+                      );
+                    },
+                  ),
+                ],
+              ),
             ),
-          ),
-          const Divider(height: 1),
-          _buildMenuTile(
-            context: context,
-            icon: Icons.logout,
-            label: 'Logout',
-            onTap: () async {
-              await ref.read(authProvider.notifier).logout();
-              if (context.mounted) {
-                Navigator.pushReplacementNamed(context, AppRoutes.login);
-              }
-            },
-          ),
-          const SizedBox(height: 16),
-        ],
+            const Divider(height: 1),
+            _buildMenuTile(
+              context: context,
+              icon: Icons.logout,
+              label: 'Logout',
+              onTap: () async {
+                await ref.read(authProvider.notifier).logout();
+                if (context.mounted) {
+                  Navigator.pushReplacementNamed(context, AppRoutes.login);
+                }
+              },
+            ),
+            const SizedBox(height: 16),
+          ],
+        ),
       ),
-    ),
     );
   }
 
@@ -211,7 +260,7 @@ class SidebarNavigation extends ConsumerWidget {
   }) {
     final theme = Theme.of(context);
     final iconColor = theme.iconTheme.color ?? Colors.grey[600];
-    
+
     return ListTile(
       leading: Icon(icon, color: iconColor),
       title: Text(label),
