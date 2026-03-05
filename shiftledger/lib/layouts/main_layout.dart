@@ -38,6 +38,8 @@ class MainLayout extends ConsumerWidget {
         return 'Departments';
       case '/designations':
         return 'Designations';
+      case '/overtime-slots':
+        return 'Overtime Slots';
       default:
         return title;
     }
