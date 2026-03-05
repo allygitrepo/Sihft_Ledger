@@ -4,6 +4,7 @@ import '../providers/owner_provider.dart';
 import '../providers/company_provider.dart';
 import '../routes/app_routes.dart';
 import '../utills/app_spacing.dart';
+import '../widgets/toast.dart';
 
 class ProfileScreen extends ConsumerWidget {
   const ProfileScreen({super.key});
@@ -18,10 +19,7 @@ class ProfileScreen extends ConsumerWidget {
     return Scaffold(
       appBar: isDesktop
           ? null
-          : AppBar(
-              title: const Text('Profile'),
-              centerTitle: true,
-            ),
+          : AppBar(title: const Text('Profile'), centerTitle: true),
       body: SingleChildScrollView(
         padding: EdgeInsets.all(AppSpacing.getHorizontalPadding(context)),
         child: Column(
@@ -31,25 +29,21 @@ class ProfileScreen extends ConsumerWidget {
             CircleAvatar(
               radius: 60,
               backgroundColor: Theme.of(context).primaryColor,
-              child: const Icon(
-                Icons.person,
-                size: 60,
-                color: Colors.white,
-              ),
+              child: const Icon(Icons.person, size: 60, color: Colors.white),
             ),
             const SizedBox(height: 12),
             Text(
               ownerState.owner?.ownerName ?? 'User',
-              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
+              style: Theme.of(
+                context,
+              ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 4),
             Text(
               ownerState.owner?.email ?? ownerState.owner?.mobileNumber ?? '',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: Colors.grey[600],
-                  ),
+              style: Theme.of(
+                context,
+              ).textTheme.bodyMedium?.copyWith(color: Colors.grey[600]),
             ),
             const SizedBox(height: 32),
 
@@ -58,9 +52,13 @@ class ProfileScreen extends ConsumerWidget {
                 ? Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Expanded(child: _buildPersonalInfoCard(context, ownerState)),
+                      Expanded(
+                        child: _buildPersonalInfoCard(context, ownerState),
+                      ),
                       const SizedBox(width: 24),
-                      Expanded(child: _buildCompanyInfoCard(context, companyState)),
+                      Expanded(
+                        child: _buildCompanyInfoCard(context, companyState),
+                      ),
                     ],
                   )
                 : Column(
@@ -81,9 +79,7 @@ class ProfileScreen extends ConsumerWidget {
                   Expanded(
                     child: ElevatedButton.icon(
                       onPressed: () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Edit profile feature coming soon!')),
-                        );
+                        ToastHelper.show('Edit profile feature coming soon!');
                       },
                       icon: const Icon(Icons.edit),
                       label: const Text('Edit Profile'),
@@ -100,9 +96,12 @@ class ProfileScreen extends ConsumerWidget {
                         // Clear owner and company data
                         await ref.read(ownerProvider.notifier).clearOwner();
                         await ref.read(companyProvider.notifier).clearCompany();
-                        
+
                         if (context.mounted) {
-                          Navigator.pushReplacementNamed(context, AppRoutes.login);
+                          Navigator.pushReplacementNamed(
+                            context,
+                            AppRoutes.login,
+                          );
                         }
                       },
                       icon: const Icon(Icons.logout),
@@ -143,9 +142,9 @@ class ProfileScreen extends ConsumerWidget {
                 const SizedBox(width: 12),
                 Text(
                   'Personal Information',
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
                 ),
               ],
             ),
@@ -176,7 +175,10 @@ class ProfileScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildCompanyInfoCard(BuildContext context, CompanyState companyState) {
+  Widget _buildCompanyInfoCard(
+    BuildContext context,
+    CompanyState companyState,
+  ) {
     return Card(
       elevation: 2,
       child: Padding(
@@ -194,9 +196,9 @@ class ProfileScreen extends ConsumerWidget {
                 const SizedBox(width: 12),
                 Text(
                   'Company Information',
-                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
                 ),
               ],
             ),
@@ -236,11 +238,7 @@ class ProfileScreen extends ConsumerWidget {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Icon(
-          icon,
-          size: 20,
-          color: Colors.grey[600],
-        ),
+        Icon(icon, size: 20, color: Colors.grey[600]),
         const SizedBox(width: 12),
         Expanded(
           child: Column(
