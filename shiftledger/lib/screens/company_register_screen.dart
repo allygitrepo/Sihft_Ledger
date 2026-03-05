@@ -7,17 +7,19 @@ import '../routes/app_routes.dart';
 import '../utills/app_assets.dart';
 import '../utills/app_spacing.dart';
 import '../widgets/loader.dart';
+import '../widgets/toast.dart';
 
 class CompanyRegisterScreen extends ConsumerStatefulWidget {
   const CompanyRegisterScreen({super.key});
 
   @override
-  ConsumerState<CompanyRegisterScreen> createState() => _CompanyRegisterScreenState();
+  ConsumerState<CompanyRegisterScreen> createState() =>
+      _CompanyRegisterScreenState();
 }
 
 class _CompanyRegisterScreenState extends ConsumerState<CompanyRegisterScreen> {
   late GlobalKey<FormState> formKey;
-  
+
   // Industry types
   final List<String> industryTypes = [
     'Manufacturing',
@@ -47,9 +49,7 @@ class _CompanyRegisterScreenState extends ConsumerState<CompanyRegisterScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to pick image: $e')),
-        );
+        ToastHelper.error('Failed to pick image: $e');
       }
     }
   }
@@ -57,9 +57,11 @@ class _CompanyRegisterScreenState extends ConsumerState<CompanyRegisterScreen> {
   Future<void> _handleRegister() async {
     if (formKey.currentState!.validate()) {
       FocusScope.of(context).unfocus();
-      
-      final success = await ref.read(companyProvider.notifier).registerCompany();
-      
+
+      final success = await ref
+          .read(companyProvider.notifier)
+          .registerCompany();
+
       if (success && mounted) {
         // Navigate directly to dashboard after registration
         Navigator.pushReplacementNamed(context, AppRoutes.dashboard);
@@ -77,30 +79,39 @@ class _CompanyRegisterScreenState extends ConsumerState<CompanyRegisterScreen> {
 
     return Scaffold(
       resizeToAvoidBottomInset: true,
-      appBar: isDesktop ? null : AppBar(
-        title: const Text('Company Details'),
-        centerTitle: true,
-      ),
+      appBar: isDesktop
+          ? null
+          : AppBar(title: const Text('Company Details'), centerTitle: true),
       body: Stack(
         children: [
           GestureDetector(
             onTap: () => FocusScope.of(context).unfocus(),
-            child: isDesktop ? _buildDesktopLayout(context, companyState) : _buildMobileLayout(context, screenHeight, padding, companyState),
+            child: isDesktop
+                ? _buildDesktopLayout(context, companyState)
+                : _buildMobileLayout(
+                    context,
+                    screenHeight,
+                    padding,
+                    companyState,
+                  ),
           ),
           // Full screen loader
           if (companyState.isLoading)
             Container(
               color: Colors.black.withValues(alpha: 0.5),
-              child: const Center(
-                child: AppLoader(size: 80),
-              ),
+              child: const Center(child: AppLoader(size: 80)),
             ),
         ],
       ),
     );
   }
 
-  Widget _buildMobileLayout(BuildContext context, double screenHeight, EdgeInsets padding, dynamic companyState) {
+  Widget _buildMobileLayout(
+    BuildContext context,
+    double screenHeight,
+    EdgeInsets padding,
+    dynamic companyState,
+  ) {
     return SafeArea(
       child: Center(
         child: SingleChildScrollView(
@@ -125,20 +136,17 @@ class _CompanyRegisterScreenState extends ConsumerState<CompanyRegisterScreen> {
                   SizedBox(height: screenHeight * 0.03),
                   Text(
                     'Company Registration',
-                    style: Theme.of(context)
-                        .textTheme
-                        .headlineMedium
-                        ?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
+                    style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
                     textAlign: TextAlign.center,
                   ),
                   SizedBox(height: screenHeight * 0.01),
                   Text(
                     'Step 2 of 2',
-                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                          color: Colors.grey[600],
-                        ),
+                    style: Theme.of(
+                      context,
+                    ).textTheme.bodyLarge?.copyWith(color: Colors.grey[600]),
                     textAlign: TextAlign.center,
                   ),
                   SizedBox(height: screenHeight * 0.06),
@@ -163,25 +171,21 @@ class _CompanyRegisterScreenState extends ConsumerState<CompanyRegisterScreen> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Image.asset(
-                    AppAssets.appLogo,
-                    height: 200,
-                    width: 200,
-                  ),
+                  Image.asset(AppAssets.appLogo, height: 200, width: 200),
                   const SizedBox(height: 24),
                   Text(
                     'ShiftLedger',
                     style: Theme.of(context).textTheme.displaySmall?.copyWith(
-                          fontWeight: FontWeight.bold,
-                          color: Theme.of(context).primaryColor,
-                        ),
+                      fontWeight: FontWeight.bold,
+                      color: Theme.of(context).primaryColor,
+                    ),
                   ),
                   const SizedBox(height: 12),
                   Text(
                     'Manage your workforce efficiently',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          color: Colors.grey[600],
-                        ),
+                    style: Theme.of(
+                      context,
+                    ).textTheme.titleMedium?.copyWith(color: Colors.grey[600]),
                   ),
                 ],
               ),
@@ -217,24 +221,23 @@ class _CompanyRegisterScreenState extends ConsumerState<CompanyRegisterScreen> {
                       children: [
                         Text(
                           'Company Registration',
-                          style: Theme.of(context)
-                              .textTheme
-                              .headlineMedium
-                              ?.copyWith(
-                                fontWeight: FontWeight.bold,
-                              ),
+                          style: Theme.of(context).textTheme.headlineMedium
+                              ?.copyWith(fontWeight: FontWeight.bold),
                           textAlign: TextAlign.center,
                         ),
                         const SizedBox(height: 8),
                         Text(
                           'Step 2 of 2',
-                          style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                                color: Colors.grey[600],
-                              ),
+                          style: Theme.of(context).textTheme.bodyLarge
+                              ?.copyWith(color: Colors.grey[600]),
                           textAlign: TextAlign.center,
                         ),
                         const SizedBox(height: 40),
-                        ..._buildFormFields(context, MediaQuery.of(context).size.height, companyState),
+                        ..._buildFormFields(
+                          context,
+                          MediaQuery.of(context).size.height,
+                          companyState,
+                        ),
                       ],
                     ),
                   ),
@@ -247,7 +250,11 @@ class _CompanyRegisterScreenState extends ConsumerState<CompanyRegisterScreen> {
     );
   }
 
-  List<Widget> _buildFormFields(BuildContext context, double screenHeight, dynamic companyState) {
+  List<Widget> _buildFormFields(
+    BuildContext context,
+    double screenHeight,
+    dynamic companyState,
+  ) {
     return [
       // Company Photo Upload
       Center(
@@ -307,7 +314,8 @@ class _CompanyRegisterScreenState extends ConsumerState<CompanyRegisterScreen> {
 
       // Company Name Field
       TextFormField(
-        onChanged: (value) => ref.read(companyProvider.notifier).setCompanyName(value),
+        onChanged: (value) =>
+            ref.read(companyProvider.notifier).setCompanyName(value),
         decoration: const InputDecoration(
           labelText: 'Company Name *',
           prefixIcon: Icon(Icons.business),
@@ -328,7 +336,9 @@ class _CompanyRegisterScreenState extends ConsumerState<CompanyRegisterScreen> {
 
       // Industry Type Dropdown
       DropdownButtonFormField<String>(
-        value: companyState.industryType.isEmpty ? null : companyState.industryType,
+        value: companyState.industryType.isEmpty
+            ? null
+            : companyState.industryType,
         decoration: const InputDecoration(
           labelText: 'Industry Type *',
           prefixIcon: Icon(Icons.factory),
@@ -356,7 +366,8 @@ class _CompanyRegisterScreenState extends ConsumerState<CompanyRegisterScreen> {
 
       // Company Address Field
       TextFormField(
-        onChanged: (value) => ref.read(companyProvider.notifier).setAddress(value),
+        onChanged: (value) =>
+            ref.read(companyProvider.notifier).setAddress(value),
         decoration: const InputDecoration(
           labelText: 'Company Address (Optional)',
           prefixIcon: Icon(Icons.location_on),
