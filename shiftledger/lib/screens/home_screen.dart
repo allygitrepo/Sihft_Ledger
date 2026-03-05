@@ -16,35 +16,27 @@ class HomeScreen extends ConsumerStatefulWidget {
 }
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
-  int todayAttendanceCount = 0;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadTodayAttendance();
-  }
-
-  Future<void> _loadTodayAttendance() async {
-    final records = await ref.read(attendanceProvider.notifier).getTodayAttendance();
-    if (mounted) {
-      setState(() {
-        todayAttendanceCount = records.where((r) => r.present).length;
-      });
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final employeeState = ref.watch(employeeProvider);
     final payrollState = ref.watch(payrollProvider);
+    final attendanceList = ref.watch(attendanceListProvider);
     final horizontalPadding = AppSpacing.getHorizontalPadding(context);
     final deviceType = ResponsiveHelper.getDeviceTypeFromContext(context);
+
+    // Calculate today's attendance count
+    final today = DateTime.now();
+    final todayAttendanceCount = attendanceList.attendanceRecords.where((r) {
+      return r.date.year == today.year &&
+          r.date.month == today.month &&
+          r.date.day == today.day;
+    }).length;
 
     return RefreshIndicator(
       onRefresh: () async {
         await ref.read(employeeProvider.notifier).loadEmployees();
-        await ref.read(payrollProvider.notifier).loadPayroll();
-        await _loadTodayAttendance();
+        await ref.read(payrollProvider.notifier).loadSavedPayroll();
+        await ref.read(attendanceListProvider.notifier).loadAttendance();
       },
       child: ListView(
         padding: EdgeInsets.all(horizontalPadding),
@@ -58,7 +50,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           const SizedBox(height: 16),
 
           // Statistics Cards - Responsive Grid
-          _buildStatsGrid(context, employeeState, payrollState, deviceType),
+          _buildStatsGrid(context, employeeState, payrollState, todayAttendanceCount, deviceType),
 
           const SizedBox(height: 24),
 
@@ -106,6 +98,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     BuildContext context,
     employeeState,
     payrollState,
+    int todayAttendanceCount,
     DeviceScreenType deviceType,
   ) {
     final stats = [
@@ -129,7 +122,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       ),
       _StatData(
         title: 'Total Payout',
-        value: '₹${_formatAmount(ref.read(payrollProvider.notifier).getTotalPayroll())}',
+        value: '₹${_formatAmount(payrollState.totalSalary)}',
         icon: Icons.account_balance_wallet,
         color: Colors.orange,
       ),

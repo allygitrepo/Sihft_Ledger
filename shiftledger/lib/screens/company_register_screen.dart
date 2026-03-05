@@ -1,27 +1,33 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../services/owner_service.dart';
+import 'package:file_picker/file_picker.dart';
+import '../providers/company_provider.dart';
 import '../routes/app_routes.dart';
 import '../utills/app_assets.dart';
 import '../utills/app_spacing.dart';
 import '../widgets/loader.dart';
-import '../widgets/toast.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
-class LoginScreen extends ConsumerStatefulWidget {
-  const LoginScreen({super.key});
+class CompanyRegisterScreen extends ConsumerStatefulWidget {
+  const CompanyRegisterScreen({super.key});
 
   @override
-  ConsumerState<LoginScreen> createState() => _LoginScreenState();
+  ConsumerState<CompanyRegisterScreen> createState() =>
+      _CompanyRegisterScreenState();
 }
 
-class _LoginScreenState extends ConsumerState<LoginScreen> {
+class _CompanyRegisterScreenState extends ConsumerState<CompanyRegisterScreen> {
   late GlobalKey<FormState> formKey;
-  bool isPasswordVisible = false;
-  bool isLoading = false;
 
-  String mobileNumber = '';
-  String password = '';
+  // Industry types
+  final List<String> industryTypes = [
+    'Manufacturing',
+    'Textile',
+    'Construction',
+    'IT',
+    'Retail',
+    'Other',
+  ];
 
   @override
   void initState() {
@@ -29,38 +35,37 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     formKey = GlobalKey<FormState>();
   }
 
-  Future<void> _handleLogin() async {
+  Future<void> _pickImage() async {
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.image,
+        allowMultiple: false,
+      );
+
+      if (result != null && result.files.single.path != null) {
+        final file = File(result.files.single.path!);
+        await ref.read(companyProvider.notifier).setCompanyPhoto(file);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Failed to pick image: $e')));
+      }
+    }
+  }
+
+  Future<void> _handleRegister() async {
     if (formKey.currentState!.validate()) {
       FocusScope.of(context).unfocus();
 
-      setState(() => isLoading = true);
+      final success = await ref
+          .read(companyProvider.notifier)
+          .registerCompany();
 
-      // Check if owner exists
-      final hasOwner = await OwnerService.hasOwner();
-
-      if (!hasOwner) {
-        setState(() => isLoading = false);
-        ToastHelper.error('No account found. Please register first.');
-        return;
-      }
-
-      // Validate credentials
-      final isValid = await OwnerService.validateLogin(mobileNumber, password);
-
-      if (isValid) {
-        // Save login state
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setBool('is_logged_in', true);
-
-        setState(() => isLoading = false);
-
-        if (mounted) {
-          ToastHelper.success('Login successful');
-          Navigator.pushReplacementNamed(context, AppRoutes.dashboard);
-        }
-      } else {
-        setState(() => isLoading = false);
-        ToastHelper.error('Invalid mobile number or password');
+      if (success && mounted) {
+        // Navigate directly to dashboard after registration
+        Navigator.pushReplacementNamed(context, AppRoutes.dashboard);
       }
     }
   }
@@ -70,20 +75,29 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     final screenWidth = MediaQuery.of(context).size.width;
     final screenHeight = MediaQuery.of(context).size.height;
     final padding = MediaQuery.of(context).padding;
+    final companyState = ref.watch(companyProvider);
     final isDesktop = screenWidth > 900;
 
     return Scaffold(
       resizeToAvoidBottomInset: true,
+      appBar: isDesktop
+          ? null
+          : AppBar(title: const Text('Company Details'), centerTitle: true),
       body: Stack(
         children: [
           GestureDetector(
             onTap: () => FocusScope.of(context).unfocus(),
             child: isDesktop
-                ? _buildDesktopLayout(context)
-                : _buildMobileLayout(context, screenHeight, padding),
+                ? _buildDesktopLayout(context, companyState)
+                : _buildMobileLayout(
+                    context,
+                    screenHeight,
+                    padding,
+                    companyState,
+                  ),
           ),
           // Full screen loader
-          if (isLoading)
+          if (companyState.isLoading)
             Container(
               color: Colors.black.withValues(alpha: 0.5),
               child: const Center(child: AppLoader(size: 80)),
@@ -97,6 +111,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     BuildContext context,
     double screenHeight,
     EdgeInsets padding,
+    dynamic companyState,
   ) {
     return SafeArea(
       child: Center(
@@ -119,8 +134,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     height: AppAssets.logoSizeAuth,
                     width: AppAssets.logoSizeAuth,
                   ),
+                  SizedBox(height: screenHeight * 0.03),
                   Text(
-                    'Welcome Back',
+                    'Company Registration',
                     style: Theme.of(context).textTheme.headlineMedium?.copyWith(
                       fontWeight: FontWeight.bold,
                     ),
@@ -128,14 +144,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   ),
                   SizedBox(height: screenHeight * 0.01),
                   Text(
-                    'Sign in to your account',
+                    'Step 2 of 2',
                     style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                       color: Theme.of(context).colorScheme.onSurfaceVariant,
                     ),
                     textAlign: TextAlign.center,
                   ),
                   SizedBox(height: screenHeight * 0.06),
-                  ..._buildFormFields(context, screenHeight),
+                  ..._buildFormFields(context, screenHeight, companyState),
                 ],
               ),
             ),
@@ -145,7 +161,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     );
   }
 
-  Widget _buildDesktopLayout(BuildContext context) {
+  Widget _buildDesktopLayout(BuildContext context, dynamic companyState) {
     return Row(
       children: [
         // Left side - White background with logo and app name
@@ -177,7 +193,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             ),
           ),
         ),
-        // Right side - Primary color background with login form
+        // Right side - Primary color background with company form
         Expanded(
           child: Container(
             color: Theme.of(context).primaryColor,
@@ -205,14 +221,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Text(
-                          'Welcome Back',
+                          'Company Registration',
                           style: Theme.of(context).textTheme.headlineMedium
                               ?.copyWith(fontWeight: FontWeight.bold),
                           textAlign: TextAlign.center,
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          'Sign in to your account',
+                          'Step 2 of 2',
                           style: Theme.of(context).textTheme.bodyLarge
                               ?.copyWith(
                                 color: Theme.of(
@@ -225,6 +241,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         ..._buildFormFields(
                           context,
                           MediaQuery.of(context).size.height,
+                          companyState,
                         ),
                       ],
                     ),
@@ -238,97 +255,143 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     );
   }
 
-  List<Widget> _buildFormFields(BuildContext context, double screenHeight) {
+  List<Widget> _buildFormFields(
+    BuildContext context,
+    double screenHeight,
+    dynamic companyState,
+  ) {
     return [
-      // Mobile Number Field
-      TextFormField(
-        onChanged: (value) => mobileNumber = value.trim(),
-        decoration: const InputDecoration(
-          labelText: 'Mobile Number',
-          prefixIcon: Icon(Icons.phone),
-          border: OutlineInputBorder(),
-          counterText: '',
+      // Company Photo Upload
+      Center(
+        child: GestureDetector(
+          onTap: _pickImage,
+          child: Container(
+            width: 120,
+            height: 120,
+            decoration: BoxDecoration(
+              color: Theme.of(context).primaryColor.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: Theme.of(context).primaryColor,
+                width: 2,
+              ),
+            ),
+            child: companyState.photoFile != null
+                ? ClipRRect(
+                    borderRadius: BorderRadius.circular(10),
+                    child: Image.file(
+                      companyState.photoFile!,
+                      fit: BoxFit.cover,
+                    ),
+                  )
+                : Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.add_photo_alternate,
+                        size: 40,
+                        color: Theme.of(context).primaryColor,
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Company Logo',
+                        style: TextStyle(
+                          color: Theme.of(context).primaryColor,
+                          fontSize: 12,
+                        ),
+                      ),
+                    ],
+                  ),
+          ),
         ),
-        keyboardType: TextInputType.phone,
+      ),
+      if (companyState.photoFile != null)
+        Center(
+          child: TextButton.icon(
+            onPressed: () {
+              ref.read(companyProvider.notifier).clearCompanyPhoto();
+            },
+            icon: const Icon(Icons.delete, size: 16),
+            label: const Text('Remove Photo'),
+          ),
+        ),
+      SizedBox(height: screenHeight * 0.04),
+
+      // Company Name Field
+      TextFormField(
+        onChanged: (value) =>
+            ref.read(companyProvider.notifier).setCompanyName(value),
+        decoration: const InputDecoration(
+          labelText: 'Company Name *',
+          prefixIcon: Icon(Icons.business),
+          border: OutlineInputBorder(),
+        ),
         textInputAction: TextInputAction.next,
-        maxLength: 10,
         validator: (value) {
           if (value == null || value.isEmpty) {
-            return 'Please enter mobile number';
+            return 'Please enter company name';
           }
-          if (value.length != 10) {
-            return 'Mobile number must be 10 digits';
-          }
-          if (!RegExp(r'^[0-9]+$').hasMatch(value)) {
-            return 'Please enter valid mobile number';
+          if (value.length < 2) {
+            return 'Company name must be at least 2 characters';
           }
           return null;
         },
       ),
       SizedBox(height: screenHeight * 0.02),
 
-      // Password Field
-      TextFormField(
-        onChanged: (value) => password = value,
-        decoration: InputDecoration(
-          labelText: 'Password',
-          prefixIcon: const Icon(Icons.lock),
-          suffixIcon: IconButton(
-            icon: Icon(
-              isPasswordVisible ? Icons.visibility : Icons.visibility_off,
-            ),
-            onPressed: () => setState(() {
-              isPasswordVisible = !isPasswordVisible;
-            }),
-          ),
-          border: const OutlineInputBorder(),
+      // Industry Type Dropdown
+      DropdownButtonFormField<String>(
+        value: companyState.industryType.isEmpty
+            ? null
+            : companyState.industryType,
+        decoration: const InputDecoration(
+          labelText: 'Industry Type *',
+          prefixIcon: Icon(Icons.factory),
+          border: OutlineInputBorder(),
         ),
-        obscureText: !isPasswordVisible,
-        textInputAction: TextInputAction.done,
+        items: industryTypes.map((String industry) {
+          return DropdownMenuItem<String>(
+            value: industry,
+            child: Text(industry),
+          );
+        }).toList(),
+        onChanged: (value) {
+          if (value != null) {
+            ref.read(companyProvider.notifier).setIndustryType(value);
+          }
+        },
         validator: (value) {
           if (value == null || value.isEmpty) {
-            return 'Please enter password';
-          }
-          if (value.length < 6) {
-            return 'Password must be at least 6 characters';
+            return 'Please select industry type';
           }
           return null;
         },
+      ),
+      SizedBox(height: screenHeight * 0.02),
+
+      // Company Address Field
+      TextFormField(
+        onChanged: (value) =>
+            ref.read(companyProvider.notifier).setAddress(value),
+        decoration: const InputDecoration(
+          labelText: 'Company Address (Optional)',
+          prefixIcon: Icon(Icons.location_on),
+          border: OutlineInputBorder(),
+        ),
+        maxLines: 3,
+        textInputAction: TextInputAction.done,
       ),
       SizedBox(height: screenHeight * 0.04),
 
-      // Login Button
+      // Register Button
       ElevatedButton(
-        onPressed: isLoading ? null : _handleLogin,
+        onPressed: companyState.isLoading ? null : _handleRegister,
         child: const Padding(
           padding: EdgeInsets.symmetric(vertical: 12.0),
-          child: Text('Login'),
+          child: Text('Complete Registration'),
         ),
       ),
       SizedBox(height: screenHeight * 0.02),
-
-      // Register Link
-      Center(
-        child: TextButton(
-          onPressed: () =>
-              Navigator.pushReplacementNamed(context, AppRoutes.register),
-          child: RichText(
-            text: TextSpan(
-              text: "Don't have an account? ",
-              style: Theme.of(context).textTheme.bodyMedium,
-              children: [
-                TextSpan(
-                  text: 'Sign up',
-                  style: TextStyle(
-                    color: Theme.of(context).primaryColor,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
     ];
   }
 }

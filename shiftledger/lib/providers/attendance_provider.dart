@@ -1,71 +1,477 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:riverpod/riverpod.dart';
 import '../models/attendance_model.dart';
+import '../models/employee_model.dart';
 import '../services/attendance_service.dart';
-import '../widgets/toast.dart';
+import '../services/salary_calculator_service.dart';
+import '../providers/settings_provider.dart';
 
-class AttendanceState {
+// Attendance Form State
+class AttendanceFormState {
+  final EmployeeModel? selectedEmployee;
+  final DateTime selectedDate;
+  
+  // Time tracking
+  final DateTime? checkInTime;
+  final DateTime? checkOutTime;
+  
+  // Calculated values
+  final double calculatedWorkingHours;
+  final double workSalary;
+  final double overtimeHours;
+  final double overtimeSalary;
+  final double totalSalary;
+  final AttendanceStatus attendanceStatus;
+  
+  // Loading state
+  final bool isLoading;
+
+  const AttendanceFormState({
+    this.selectedEmployee,
+    required this.selectedDate,
+    this.checkInTime,
+    this.checkOutTime,
+    this.calculatedWorkingHours = 0.0,
+    this.workSalary = 0.0,
+    this.overtimeHours = 0.0,
+    this.overtimeSalary = 0.0,
+    this.totalSalary = 0.0,
+    this.attendanceStatus = AttendanceStatus.absent,
+    this.isLoading = false,
+  });
+
+  AttendanceFormState copyWith({
+    EmployeeModel? selectedEmployee,
+    DateTime? selectedDate,
+    DateTime? checkInTime,
+    DateTime? checkOutTime,
+    double? calculatedWorkingHours,
+    double? workSalary,
+    double? overtimeHours,
+    double? overtimeSalary,
+    double? totalSalary,
+    AttendanceStatus? attendanceStatus,
+    bool? isLoading,
+  }) {
+    return AttendanceFormState(
+      selectedEmployee: selectedEmployee ?? this.selectedEmployee,
+      selectedDate: selectedDate ?? this.selectedDate,
+      checkInTime: checkInTime ?? this.checkInTime,
+      checkOutTime: checkOutTime ?? this.checkOutTime,
+      calculatedWorkingHours: calculatedWorkingHours ?? this.calculatedWorkingHours,
+      workSalary: workSalary ?? this.workSalary,
+      overtimeHours: overtimeHours ?? this.overtimeHours,
+      overtimeSalary: overtimeSalary ?? this.overtimeSalary,
+      totalSalary: totalSalary ?? this.totalSalary,
+      attendanceStatus: attendanceStatus ?? this.attendanceStatus,
+      isLoading: isLoading ?? this.isLoading,
+    );
+  }
+}
+
+// Attendance Form Notifier
+class AttendanceFormNotifier extends Notifier<AttendanceFormState> {
+  @override
+  AttendanceFormState build() {
+    return AttendanceFormState(
+      selectedDate: DateTime.now(),
+    );
+  }
+
+  void setEmployee(EmployeeModel employee) {
+    state = state.copyWith(selectedEmployee: employee);
+    _recalculate();
+  }
+
+  void setDate(DateTime date) {
+    state = state.copyWith(selectedDate: date);
+  }
+
+  void setCheckIn(DateTime time) {
+    state = state.copyWith(checkInTime: time);
+    _calculateWorkingHours();
+  }
+
+  void setCheckOut(DateTime time) {
+    state = state.copyWith(checkOutTime: time);
+    _calculateWorkingHours();
+  }
+
+  void _calculateWorkingHours() {
+    if (state.checkInTime == null || state.checkOutTime == null) {
+      return;
+    }
+
+    final hours = SalaryCalculatorService.calculateWorkingHours(
+      checkIn: state.checkInTime!,
+      checkOut: state.checkOutTime!,
+    );
+
+    state = state.copyWith(calculatedWorkingHours: hours);
+    _recalculate();
+  }
+
+  void _recalculate() {
+    if (state.selectedEmployee == null || state.calculatedWorkingHours <= 0) {
+      return;
+    }
+
+    final employee = state.selectedEmployee!;
+    final settings = ref.read(settingsProvider);
+
+    // Calculate all salary components using the new service
+    final calculation = SalaryCalculatorService.calculateAttendanceSalary(
+      employee: employee,
+      workingHours: state.calculatedWorkingHours,
+      settings: settings,
+    );
+
+    // Determine attendance status based on working hours
+    final status = _determineStatusFromHours(
+      state.calculatedWorkingHours,
+      settings.fixedHoursPerDay,
+    );
+
+    state = state.copyWith(
+      workSalary: calculation['workSalary']!,
+      overtimeHours: calculation['overtimeHours']!,
+      overtimeSalary: calculation['overtimeSalary']!,
+      totalSalary: calculation['totalSalary']!,
+      attendanceStatus: status,
+    );
+  }
+
+  AttendanceStatus _determineStatusFromHours(double hours, double fixedHours) {
+    if (hours >= fixedHours) {
+      return AttendanceStatus.fullDay;
+    } else if (hours >= fixedHours / 2) {
+      return AttendanceStatus.halfDay;
+    } else {
+      return AttendanceStatus.absent;
+    }
+  }
+
+  Future<bool> saveAttendance() async {
+    if (state.selectedEmployee == null) return false;
+
+    // Validation
+    if (state.checkInTime == null || state.checkOutTime == null) {
+      return false;
+    }
+    if (state.checkOutTime!.isBefore(state.checkInTime!)) {
+      return false;
+    }
+    if (state.calculatedWorkingHours <= 0) {
+      return false;
+    }
+    if (state.calculatedWorkingHours > 24) {
+      return false;
+    }
+
+    // Check for duplicate attendance
+    final exists = await AttendanceService.attendanceExists(
+      state.selectedEmployee!.id,
+      state.selectedDate,
+    );
+    if (exists) {
+      return false; // Duplicate attendance
+    }
+
+    state = state.copyWith(isLoading: true);
+
+    try {
+      final attendance = AttendanceModel(
+        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        employeeId: state.selectedEmployee!.id,
+        employeeName: state.selectedEmployee!.name,
+        date: state.selectedDate,
+        checkIn: state.checkInTime!,
+        checkOut: state.checkOutTime!,
+        workingHours: state.calculatedWorkingHours,
+        attendanceStatus: state.attendanceStatus,
+        workSalary: state.workSalary,
+        overtimeHours: state.overtimeHours,
+        overtimeSalary: state.overtimeSalary,
+        totalSalary: state.totalSalary,
+      );
+
+      await AttendanceService.addAttendance(attendance);
+      
+      // Refresh attendance list
+      ref.read(attendanceListProvider.notifier).loadAttendance();
+      
+      // Reset form
+      state = AttendanceFormState(
+        selectedDate: DateTime.now(),
+        isLoading: false,
+      );
+
+      return true;
+    } catch (e) {
+      state = state.copyWith(isLoading: false);
+      return false;
+    }
+  }
+
+  void reset() {
+    state = AttendanceFormState(
+      selectedDate: DateTime.now(),
+    );
+  }
+}
+
+// Attendance List State
+class AttendanceListState {
   final List<AttendanceModel> attendanceRecords;
   final bool isLoading;
 
-  const AttendanceState({
+  const AttendanceListState({
     this.attendanceRecords = const [],
     this.isLoading = false,
   });
 
-  AttendanceState copyWith({
+  AttendanceListState copyWith({
     List<AttendanceModel>? attendanceRecords,
     bool? isLoading,
   }) {
-    return AttendanceState(
+    return AttendanceListState(
       attendanceRecords: attendanceRecords ?? this.attendanceRecords,
       isLoading: isLoading ?? this.isLoading,
     );
   }
 }
 
-class AttendanceNotifier extends Notifier<AttendanceState> {
+// Attendance List Notifier
+class AttendanceListNotifier extends Notifier<AttendanceListState> {
   @override
-  AttendanceState build() {
-    loadAttendance();
-    return const AttendanceState();
+  AttendanceListState build() {
+    // Load attendance asynchronously after build
+    Future.microtask(() => loadAttendance());
+    return const AttendanceListState(isLoading: true);
   }
 
   Future<void> loadAttendance() async {
-    state = state.copyWith(isLoading: true);
-    final records = await AttendanceService.loadAttendance();
-    state = state.copyWith(attendanceRecords: records, isLoading: false);
+    try {
+      state = state.copyWith(isLoading: true);
+      final records = await AttendanceService.loadAttendance();
+      state = state.copyWith(attendanceRecords: records, isLoading: false);
+    } catch (e) {
+      state = state.copyWith(attendanceRecords: [], isLoading: false);
+    }
   }
 
-  Future<void> addAttendance(AttendanceModel record) async {
+  Future<void> deleteAttendance(String id) async {
     state = state.copyWith(isLoading: true);
-    await AttendanceService.addAttendance(record);
+    await AttendanceService.deleteAttendance(id);
     await loadAttendance();
-    ToastHelper.success('Attendance recorded successfully');
   }
 
-  Future<void> updateAttendance(AttendanceModel record) async {
-    state = state.copyWith(isLoading: true);
-    await AttendanceService.updateAttendance(record);
-    await loadAttendance();
-    ToastHelper.success('Attendance updated successfully');
+  List<AttendanceModel> getAttendanceByDate(DateTime date) {
+    return state.attendanceRecords.where((r) {
+      return r.date.year == date.year &&
+          r.date.month == date.month &&
+          r.date.day == date.day;
+    }).toList();
   }
 
-  Future<List<AttendanceModel>> getTodayAttendance() async {
-    return await AttendanceService.getTodayAttendance();
-  }
-
-  Future<List<AttendanceModel>> getAttendanceByDate(DateTime date) async {
-    return await AttendanceService.getAttendanceByDate(date);
-  }
-
-  List<AttendanceModel> getEmployeeAttendance(String employeeId) {
+  List<AttendanceModel> getAttendanceByEmployee(String employeeId) {
     return state.attendanceRecords
         .where((r) => r.employeeId == employeeId)
         .toList();
   }
 }
 
-final attendanceProvider = NotifierProvider<AttendanceNotifier, AttendanceState>(() {
-  return AttendanceNotifier();
+// Providers
+final attendanceFormProvider =
+    NotifierProvider<AttendanceFormNotifier, AttendanceFormState>(() {
+  return AttendanceFormNotifier();
+});
+
+final attendanceListProvider =
+    NotifierProvider<AttendanceListNotifier, AttendanceListState>(() {
+  return AttendanceListNotifier();
+});
+
+
+// Attendance Edit State
+class AttendanceEditState {
+  final AttendanceModel? originalAttendance;
+  final EmployeeModel? employee;
+  final DateTime? checkInTime;
+  final DateTime? checkOutTime;
+  
+  // Calculated values
+  final double calculatedWorkingHours;
+  final double workSalary;
+  final double overtimeHours;
+  final double overtimeSalary;
+  final double totalSalary;
+  
+  final bool isLoading;
+
+  const AttendanceEditState({
+    this.originalAttendance,
+    this.employee,
+    this.checkInTime,
+    this.checkOutTime,
+    this.calculatedWorkingHours = 0.0,
+    this.workSalary = 0.0,
+    this.overtimeHours = 0.0,
+    this.overtimeSalary = 0.0,
+    this.totalSalary = 0.0,
+    this.isLoading = false,
+  });
+
+  AttendanceEditState copyWith({
+    AttendanceModel? originalAttendance,
+    EmployeeModel? employee,
+    DateTime? checkInTime,
+    DateTime? checkOutTime,
+    double? calculatedWorkingHours,
+    double? workSalary,
+    double? overtimeHours,
+    double? overtimeSalary,
+    double? totalSalary,
+    bool? isLoading,
+  }) {
+    return AttendanceEditState(
+      originalAttendance: originalAttendance ?? this.originalAttendance,
+      employee: employee ?? this.employee,
+      checkInTime: checkInTime ?? this.checkInTime,
+      checkOutTime: checkOutTime ?? this.checkOutTime,
+      calculatedWorkingHours: calculatedWorkingHours ?? this.calculatedWorkingHours,
+      workSalary: workSalary ?? this.workSalary,
+      overtimeHours: overtimeHours ?? this.overtimeHours,
+      overtimeSalary: overtimeSalary ?? this.overtimeSalary,
+      totalSalary: totalSalary ?? this.totalSalary,
+      isLoading: isLoading ?? this.isLoading,
+    );
+  }
+}
+
+// Attendance Edit Notifier
+class AttendanceEditNotifier extends Notifier<AttendanceEditState> {
+  @override
+  AttendanceEditState build() {
+    return const AttendanceEditState();
+  }
+
+  void initialize(AttendanceModel attendance, EmployeeModel employee) {
+    state = AttendanceEditState(
+      originalAttendance: attendance,
+      employee: employee,
+      checkInTime: attendance.checkIn,
+      checkOutTime: attendance.checkOut,
+      calculatedWorkingHours: attendance.workingHours,
+      workSalary: attendance.workSalary,
+      overtimeHours: attendance.overtimeHours,
+      overtimeSalary: attendance.overtimeSalary,
+      totalSalary: attendance.totalSalary,
+    );
+  }
+
+  void setCheckIn(DateTime time) {
+    state = state.copyWith(checkInTime: time);
+    _recalculate();
+  }
+
+  void setCheckOut(DateTime time) {
+    state = state.copyWith(checkOutTime: time);
+    _recalculate();
+  }
+
+  void _recalculate() {
+    if (state.employee == null || state.checkInTime == null || state.checkOutTime == null) {
+      return;
+    }
+
+    // Calculate working hours
+    final workingHours = SalaryCalculatorService.calculateWorkingHours(
+      checkIn: state.checkInTime!,
+      checkOut: state.checkOutTime!,
+    );
+
+    if (workingHours <= 0) {
+      return;
+    }
+
+    // Get settings and calculate salary
+    final settings = ref.read(settingsProvider);
+    final calculation = SalaryCalculatorService.calculateAttendanceSalary(
+      employee: state.employee!,
+      workingHours: workingHours,
+      settings: settings,
+    );
+
+    state = state.copyWith(
+      calculatedWorkingHours: calculation['workingHours']!,
+      workSalary: calculation['workSalary']!,
+      overtimeHours: calculation['overtimeHours']!,
+      overtimeSalary: calculation['overtimeSalary']!,
+      totalSalary: calculation['totalSalary']!,
+    );
+  }
+
+  Future<bool> saveChanges() async {
+    if (state.originalAttendance == null || state.employee == null) {
+      return false;
+    }
+
+    // Validation
+    if (state.checkInTime == null || state.checkOutTime == null) {
+      return false;
+    }
+    if (state.checkOutTime!.isBefore(state.checkInTime!)) {
+      return false;
+    }
+    if (state.calculatedWorkingHours <= 0) {
+      return false;
+    }
+    if (state.calculatedWorkingHours > 24) {
+      return false;
+    }
+
+    state = state.copyWith(isLoading: true);
+
+    try {
+      // Determine attendance status
+      final settings = ref.read(settingsProvider);
+      final status = state.calculatedWorkingHours >= settings.fixedHoursPerDay
+          ? AttendanceStatus.fullDay
+          : state.calculatedWorkingHours >= settings.fixedHoursPerDay / 2
+              ? AttendanceStatus.halfDay
+              : AttendanceStatus.absent;
+
+      final updatedAttendance = state.originalAttendance!.copyWith(
+        checkIn: state.checkInTime,
+        checkOut: state.checkOutTime,
+        workingHours: state.calculatedWorkingHours,
+        workSalary: state.workSalary,
+        overtimeHours: state.overtimeHours,
+        overtimeSalary: state.overtimeSalary,
+        totalSalary: state.totalSalary,
+        attendanceStatus: status,
+      );
+
+      await AttendanceService.updateAttendance(updatedAttendance);
+      
+      // Refresh attendance list
+      ref.read(attendanceListProvider.notifier).loadAttendance();
+      
+      state = const AttendanceEditState();
+      return true;
+    } catch (e) {
+      state = state.copyWith(isLoading: false);
+      return false;
+    }
+  }
+
+  void reset() {
+    state = const AttendanceEditState();
+  }
+}
+
+// Providers
+final attendanceEditProvider =
+    NotifierProvider<AttendanceEditNotifier, AttendanceEditState>(() {
+  return AttendanceEditNotifier();
 });

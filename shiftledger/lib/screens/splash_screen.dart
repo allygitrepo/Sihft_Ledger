@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../providers/auth_provider.dart';
+import '../providers/setup_provider.dart';
 import '../routes/app_routes.dart';
 import '../utills/app_assets.dart';
 import '../utills/app_theme.dart';
@@ -17,29 +17,24 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
   @override
   void initState() {
     super.initState();
-    _checkAuthStatus();
+    _checkSetupStatus();
   }
 
-  void _checkAuthStatus() async {
+  void _checkSetupStatus() async {
     // Wait for minimum splash time
     await Future.delayed(const Duration(seconds: 2));
     
     if (!mounted) return;
     
-    // Wait for auth provider to initialize
-    while (!ref.read(authProvider).isInitialized) {
+    // Wait for setup provider to initialize
+    while (ref.read(setupProvider).isLoading) {
       await Future.delayed(const Duration(milliseconds: 100));
       if (!mounted) return;
     }
     
-    final authState = ref.read(authProvider);
-    
-    // Navigate based on auth status
-    if (authState.isLoggedIn) {
-      Navigator.pushReplacementNamed(context, AppRoutes.dashboard);
-    } else {
-      Navigator.pushReplacementNamed(context, AppRoutes.login);
-    }
+    // Always navigate to login screen
+    // Users can navigate to register from login if they're new
+    Navigator.pushReplacementNamed(context, AppRoutes.login);
   }
 
   @override
