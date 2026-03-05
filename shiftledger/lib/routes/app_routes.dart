@@ -14,6 +14,8 @@ import '../screens/about_us_screen.dart';
 import '../screens/employees_screen.dart';
 import '../screens/attendance_screen.dart';
 import '../screens/payroll_screen.dart';
+import '../screens/departments_screen.dart';
+import '../screens/designations_screen.dart';
 import '../layouts/main_layout.dart';
 
 class AppRoutes {
@@ -32,6 +34,8 @@ class AppRoutes {
   static const String employees = '/employees';
   static const String attendance = '/attendance';
   static const String payroll = '/payroll';
+  static const String departments = '/departments';
+  static const String designations = '/designations';
 
   static Map<String, WidgetBuilder> get routes => {
     splash: (context) => const SplashScreen(),
@@ -46,7 +50,10 @@ class AppRoutes {
     ),
     overtimeSlots: (context) =>
         _wrapWithLayout(const OvertimeSlotsScreen(), overtimeSlots),
-    payrollConfiguration: (context) => const PayrollConfigurationScreen(),
+    payrollConfiguration: (context) => _wrapWithLayout(
+      const PayrollConfigurationScreen(),
+      payrollConfiguration,
+    ),
     dashboard: (context) => const DashboardScreen(),
     profile: (context) => _wrapWithLayout(const ProfileScreen(), profile),
     settings: (context) => _wrapWithLayout(const SettingsScreen(), settings),
@@ -55,6 +62,10 @@ class AppRoutes {
     attendance: (context) =>
         _wrapWithLayout(const AttendanceScreen(), attendance),
     payroll: (context) => _wrapWithLayout(const PayrollScreen(), payroll),
+    departments: (context) =>
+        _wrapWithLayout(const DepartmentsScreen(), departments),
+    designations: (context) =>
+        _wrapWithLayout(const DesignationsScreen(), designations),
   };
 
   static Widget _wrapWithLayout(Widget child, String route) {
