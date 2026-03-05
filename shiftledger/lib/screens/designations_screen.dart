@@ -237,129 +237,145 @@ class _DesignationsScreenState extends ConsumerState<DesignationsScreen> {
             ),
           ],
         ),
-        child: SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: DataTable(
-            headingRowColor: WidgetStateProperty.all(
-              theme.brightness == Brightness.dark
-                  ? Colors.grey.withValues(alpha: 0.15)
-                  : Colors.grey.withValues(alpha: 0.05),
-            ),
-            headingRowHeight: 56,
-            dataRowMinHeight: 64,
-            dataRowMaxHeight: 64,
-            columnSpacing: 48,
-            horizontalMargin: 24,
-            dividerThickness: 1,
-            columns: const [
-              DataColumn(
-                label: Text(
-                  'ID',
-                  style: TextStyle(fontWeight: FontWeight.bold),
-                ),
-              ),
-              DataColumn(
-                label: Text(
-                  'Department',
-                  style: TextStyle(fontWeight: FontWeight.bold),
-                ),
-              ),
-              DataColumn(
-                label: Text(
-                  'Designation Name',
-                  style: TextStyle(fontWeight: FontWeight.bold),
-                ),
-              ),
-              DataColumn(
-                label: Text(
-                  'Status',
-                  style: TextStyle(fontWeight: FontWeight.bold),
-                ),
-              ),
-              DataColumn(
-                label: Text(
-                  'Created Date',
-                  style: TextStyle(fontWeight: FontWeight.bold),
-                ),
-              ),
-              DataColumn(
-                label: Text(
-                  'Actions',
-                  style: TextStyle(fontWeight: FontWeight.bold),
-                ),
-              ),
-            ],
-            rows: designations.map((desig) {
-              final dept = departments.firstWhere(
-                (d) => d.id == desig.departmentId,
-                orElse: () => DepartmentModel(
-                  id: '',
-                  companyId: '',
-                  departmentName: 'Unknown',
-                  createdAt: DateTime.now(),
-                  updatedAt: DateTime.now(),
-                ),
-              );
-
-              return DataRow(
-                cells: [
-                  DataCell(Text(desig.id.substring(0, 8))),
-                  DataCell(Text(dept.departmentName)),
-                  DataCell(
-                    Text(
-                      desig.designationName,
-                      style: const TextStyle(fontWeight: FontWeight.w600),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            return SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: ConstrainedBox(
+                constraints: BoxConstraints(minWidth: constraints.maxWidth),
+                child: DataTable(
+                  headingRowColor: WidgetStateProperty.all(
+                    theme.brightness == Brightness.dark
+                        ? Colors.grey.withValues(alpha: 0.15)
+                        : Colors.grey.withValues(alpha: 0.05),
+                  ),
+                  headingRowHeight: 56,
+                  dataRowMinHeight: 64,
+                  dataRowMaxHeight: 64,
+                  columnSpacing: 48,
+                  horizontalMargin: 24,
+                  dividerThickness: 1,
+                  columns: const [
+                    DataColumn(
+                      label: Text(
+                        'S.No',
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                      ),
                     ),
-                  ),
-                  DataCell(_buildStatusBadge(desig.status)),
-                  DataCell(
-                    Text(DateFormat('dd MMM yyyy').format(desig.createdAt)),
-                  ),
-                  DataCell(
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        IconButton(
-                          icon: const Icon(
-                            Icons.edit_outlined,
-                            color: Colors.blue,
-                          ),
-                          tooltip: 'Edit',
-                          onPressed: () => _showDesignationDialog(
-                            context,
-                            departments,
-                            designation: desig,
+                    DataColumn(
+                      label: Text(
+                        'Department',
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                    DataColumn(
+                      label: Text(
+                        'Designation Name',
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                    DataColumn(
+                      label: Text(
+                        'Status',
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                    DataColumn(
+                      label: Text(
+                        'Created Date',
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                    DataColumn(
+                      label: Text(
+                        'Actions',
+                        style: TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                  ],
+                  rows: designations.asMap().entries.map((entry) {
+                    final index = entry.key;
+                    final desig = entry.value;
+                    final dept = departments.firstWhere(
+                      (d) => d.id == desig.departmentId,
+                      orElse: () => DepartmentModel(
+                        id: '',
+                        companyId: '',
+                        departmentName: 'Unknown',
+                        createdAt: DateTime.now(),
+                        updatedAt: DateTime.now(),
+                      ),
+                    );
+
+                    return DataRow(
+                      cells: [
+                        DataCell(Text('${index + 1}')),
+                        DataCell(Text(dept.departmentName)),
+                        DataCell(
+                          Text(
+                            desig.designationName,
+                            style: const TextStyle(fontWeight: FontWeight.w600),
                           ),
                         ),
-                        IconButton(
-                          icon: Icon(
-                            desig.status ? Icons.toggle_on : Icons.toggle_off,
-                            color: desig.status ? Colors.green : Colors.grey,
-                            size: 28,
+                        DataCell(_buildStatusBadge(desig.status)),
+                        DataCell(
+                          Text(
+                            DateFormat('dd MMM yyyy').format(desig.createdAt),
                           ),
-                          tooltip: 'Toggle Status',
-                          onPressed: () async {
-                            await ref
-                                .read(designationProvider.notifier)
-                                .toggleStatus(desig.id);
-                            ToastHelper.show('Status updated');
-                          },
                         ),
-                        IconButton(
-                          icon: const Icon(
-                            Icons.delete_outline,
-                            color: Colors.red,
+                        DataCell(
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              IconButton(
+                                icon: const Icon(
+                                  Icons.edit_outlined,
+                                  color: Colors.blue,
+                                ),
+                                tooltip: 'Edit',
+                                onPressed: () => _showDesignationDialog(
+                                  context,
+                                  departments,
+                                  designation: desig,
+                                ),
+                              ),
+                              IconButton(
+                                icon: Icon(
+                                  desig.status
+                                      ? Icons.toggle_on
+                                      : Icons.toggle_off,
+                                  color: desig.status
+                                      ? Colors.green
+                                      : Colors.grey,
+                                  size: 28,
+                                ),
+                                tooltip: 'Toggle Status',
+                                onPressed: () async {
+                                  await ref
+                                      .read(designationProvider.notifier)
+                                      .toggleStatus(desig.id);
+                                  ToastHelper.show('Status updated');
+                                },
+                              ),
+                              IconButton(
+                                icon: const Icon(
+                                  Icons.delete_outline,
+                                  color: Colors.red,
+                                ),
+                                tooltip: 'Delete',
+                                onPressed: () =>
+                                    _confirmDelete(context, ref, desig),
+                              ),
+                            ],
                           ),
-                          tooltip: 'Delete',
-                          onPressed: () => _confirmDelete(context, ref, desig),
                         ),
                       ],
-                    ),
-                  ),
-                ],
-              );
-            }).toList(),
-          ),
+                    );
+                  }).toList(),
+                ),
+              ),
+            );
+          },
         ),
       ),
     );
