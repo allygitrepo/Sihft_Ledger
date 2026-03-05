@@ -8,6 +8,8 @@ import 'dart:convert';
 import 'dart:developer' as developer;
 import '../providers/employee_provider.dart';
 import '../providers/settings_provider.dart';
+import '../providers/department_provider.dart';
+import '../providers/designation_provider.dart';
 import '../models/employee_model.dart';
 import '../services/csv_import_service.dart';
 import '../services/employee_service.dart';
@@ -1127,10 +1129,14 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
     final nameController = TextEditingController();
     final codeController = TextEditingController();
     final mobileController = TextEditingController();
-    final positionController = TextEditingController();
-    final departmentController = TextEditingController();
     final salaryController = TextEditingController();
     final formKey = GlobalKey<FormState>();
+
+    final departments = ref.read(departmentProvider).departments;
+    final allDesignations = ref.read(designationProvider).designations;
+
+    String? selectedDepartmentId;
+    String? selectedDesignationId;
 
     showModalBottomSheet(
       context: context,
@@ -1138,162 +1144,196 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      builder: (context) => Padding(
-        padding: EdgeInsets.only(
-          bottom: MediaQuery.of(context).viewInsets.bottom,
-        ),
-        child: Container(
-          padding: const EdgeInsets.all(24),
-          child: Form(
-            key: formKey,
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Container(
-                    width: 40,
-                    height: 4,
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      color: Colors.grey[300],
-                      borderRadius: BorderRadius.circular(2),
+      builder: (context) => StatefulBuilder(
+        builder: (context, setModalState) => Padding(
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.of(context).viewInsets.bottom,
+          ),
+          child: Container(
+            padding: const EdgeInsets.all(24),
+            child: Form(
+              key: formKey,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Container(
+                      width: 40,
+                      height: 4,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: Colors.grey[300],
+                        borderRadius: BorderRadius.circular(2),
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 20),
-                  Text(
-                    'Add New Employee',
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      fontWeight: FontWeight.bold,
+                    const SizedBox(height: 20),
+                    Text(
+                      'Add New Employee',
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                      textAlign: TextAlign.center,
                     ),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 24),
-                  TextFormField(
-                    controller: codeController,
-                    decoration: const InputDecoration(
-                      labelText: 'Employee ID',
-                      prefixIcon: Icon(Icons.badge),
-                      border: OutlineInputBorder(),
+                    const SizedBox(height: 24),
+                    TextFormField(
+                      controller: codeController,
+                      decoration: const InputDecoration(
+                        labelText: 'Employee ID',
+                        prefixIcon: Icon(Icons.badge),
+                        border: OutlineInputBorder(),
+                      ),
+                      validator: (value) {
+                        if (value == null || value.isEmpty) {
+                          return 'Please enter employee ID';
+                        }
+                        return null;
+                      },
                     ),
-                    validator: (value) {
-                      if (value == null || value.isEmpty) {
-                        return 'Please enter employee ID';
-                      }
-                      return null;
-                    },
-                  ),
-                  const SizedBox(height: 16),
-                  TextFormField(
-                    controller: nameController,
-                    decoration: const InputDecoration(
-                      labelText: 'Employee Name',
-                      prefixIcon: Icon(Icons.person),
-                      border: OutlineInputBorder(),
+                    const SizedBox(height: 16),
+                    TextFormField(
+                      controller: nameController,
+                      decoration: const InputDecoration(
+                        labelText: 'Employee Name',
+                        prefixIcon: Icon(Icons.person),
+                        border: OutlineInputBorder(),
+                      ),
+                      validator: (value) {
+                        if (value == null || value.isEmpty) {
+                          return 'Please enter employee name';
+                        }
+                        return null;
+                      },
                     ),
-                    validator: (value) {
-                      if (value == null || value.isEmpty) {
-                        return 'Please enter employee name';
-                      }
-                      return null;
-                    },
-                  ),
-                  const SizedBox(height: 16),
-                  TextFormField(
-                    controller: mobileController,
-                    decoration: const InputDecoration(
-                      labelText: 'Mobile Number',
-                      prefixIcon: Icon(Icons.phone),
-                      border: OutlineInputBorder(),
+                    const SizedBox(height: 16),
+                    TextFormField(
+                      controller: mobileController,
+                      decoration: const InputDecoration(
+                        labelText: 'Mobile Number',
+                        prefixIcon: Icon(Icons.phone),
+                        border: OutlineInputBorder(),
+                      ),
+                      keyboardType: TextInputType.phone,
+                      validator: (value) {
+                        if (value == null || value.isEmpty) {
+                          return 'Please enter mobile number';
+                        }
+                        if (value.length != 10) {
+                          return 'Mobile number must be 10 digits';
+                        }
+                        return null;
+                      },
                     ),
-                    keyboardType: TextInputType.phone,
-                    validator: (value) {
-                      if (value == null || value.isEmpty) {
-                        return 'Please enter mobile number';
-                      }
-                      if (value.length != 10) {
-                        return 'Mobile number must be 10 digits';
-                      }
-                      return null;
-                    },
-                  ),
-                  const SizedBox(height: 16),
-                  TextFormField(
-                    controller: positionController,
-                    decoration: const InputDecoration(
-                      labelText: 'Position',
-                      prefixIcon: Icon(Icons.work),
-                      border: OutlineInputBorder(),
-                    ),
-                    validator: (value) {
-                      if (value == null || value.isEmpty) {
-                        return 'Please enter position';
-                      }
-                      return null;
-                    },
-                  ),
-                  const SizedBox(height: 16),
-                  TextFormField(
-                    controller: departmentController,
-                    decoration: const InputDecoration(
-                      labelText: 'Department',
-                      prefixIcon: Icon(Icons.business),
-                      border: OutlineInputBorder(),
-                    ),
-                    validator: (value) {
-                      if (value == null || value.isEmpty) {
-                        return 'Please enter department';
-                      }
-                      return null;
-                    },
-                  ),
-                  const SizedBox(height: 16),
-                  TextFormField(
-                    controller: salaryController,
-                    decoration: const InputDecoration(
-                      labelText: 'Monthly Salary',
-                      prefixIcon: Icon(Icons.currency_rupee),
-                      border: OutlineInputBorder(),
-                      helperText: 'Enter monthly salary amount',
-                    ),
-                    keyboardType: const TextInputType.numberWithOptions(
-                      decimal: true,
-                    ),
-                    validator: (value) {
-                      if (value == null || value.isEmpty) {
-                        return 'Please enter salary';
-                      }
-                      if (double.tryParse(value) == null) {
-                        return 'Please enter valid number';
-                      }
-                      if (double.parse(value) <= 0) {
-                        return 'Salary must be greater than 0';
-                      }
-                      return null;
-                    },
-                  ),
-                  const SizedBox(height: 24),
-                  ElevatedButton(
-                    onPressed: () {
-                      if (formKey.currentState!.validate()) {
-                        _addEmployeeManually(
-                          context,
-                          nameController.text,
-                          codeController.text,
-                          mobileController.text,
-                          positionController.text,
-                          departmentController.text,
-                          double.parse(salaryController.text),
+                    const SizedBox(height: 16),
+                    // Department Dropdown
+                    DropdownButtonFormField<String>(
+                      value: selectedDepartmentId,
+                      decoration: const InputDecoration(
+                        labelText: 'Department',
+                        prefixIcon: Icon(Icons.business),
+                        border: OutlineInputBorder(),
+                      ),
+                      items: departments.map((dept) {
+                        return DropdownMenuItem(
+                          value: dept.id,
+                          child: Text(dept.departmentName),
                         );
-                      }
-                    },
-                    style: ElevatedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      }).toList(),
+                      onChanged: (value) {
+                        setModalState(() {
+                          selectedDepartmentId = value;
+                          selectedDesignationId = null; // reset designation
+                        });
+                      },
+                      validator: (value) =>
+                          value == null ? 'Please select a department' : null,
                     ),
-                    child: const Text('Add Employee'),
-                  ),
-                  const SizedBox(height: 12),
-                ],
+                    const SizedBox(height: 16),
+                    // Designation Dropdown (filtered by selected department)
+                    DropdownButtonFormField<String>(
+                      value: selectedDesignationId,
+                      decoration: const InputDecoration(
+                        labelText: 'Designation / Position',
+                        prefixIcon: Icon(Icons.work),
+                        border: OutlineInputBorder(),
+                      ),
+                      items: allDesignations
+                          .where(
+                            (d) =>
+                                selectedDepartmentId == null ||
+                                d.departmentId == selectedDepartmentId,
+                          )
+                          .map((desig) {
+                            return DropdownMenuItem(
+                              value: desig.id,
+                              child: Text(desig.designationName),
+                            );
+                          })
+                          .toList(),
+                      onChanged: (value) {
+                        setModalState(() {
+                          selectedDesignationId = value;
+                        });
+                      },
+                      validator: (value) =>
+                          value == null ? 'Please select a designation' : null,
+                    ),
+                    const SizedBox(height: 16),
+                    TextFormField(
+                      controller: salaryController,
+                      decoration: const InputDecoration(
+                        labelText: 'Monthly Salary',
+                        prefixIcon: Icon(Icons.currency_rupee),
+                        border: OutlineInputBorder(),
+                        helperText: 'Enter monthly salary amount',
+                      ),
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
+                      validator: (value) {
+                        if (value == null || value.isEmpty) {
+                          return 'Please enter salary';
+                        }
+                        if (double.tryParse(value) == null) {
+                          return 'Please enter valid number';
+                        }
+                        if (double.parse(value) <= 0) {
+                          return 'Salary must be greater than 0';
+                        }
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 24),
+                    ElevatedButton(
+                      onPressed: () {
+                        if (formKey.currentState!.validate()) {
+                          final dept = departments.firstWhere(
+                            (d) => d.id == selectedDepartmentId,
+                          );
+                          final desig = allDesignations.firstWhere(
+                            (d) => d.id == selectedDesignationId,
+                          );
+                          _addEmployeeManually(
+                            context,
+                            nameController.text,
+                            codeController.text,
+                            mobileController.text,
+                            desig.designationName,
+                            dept.departmentName,
+                            double.parse(salaryController.text),
+                          );
+                        }
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                      ),
+                      child: const Text('Add Employee'),
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+                ),
               ),
             ),
           ),
@@ -1383,144 +1423,205 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
     final nameController = TextEditingController(text: employee.name);
     final codeController = TextEditingController(text: employee.employeeCode);
     final mobileController = TextEditingController(text: employee.mobileNo);
-    final positionController = TextEditingController(text: employee.position);
-    final departmentController = TextEditingController(
-      text: employee.department,
-    );
     final salaryController = TextEditingController(
       text: employee.salaryOriginal.toString(),
     );
     final formKey = GlobalKey<FormState>();
 
+    final departments = ref.read(departmentProvider).departments;
+    final allDesignations = ref.read(designationProvider).designations;
+
+    // Try to match existing values to dropdown entries (by name)
+    String? selectedDepartmentId = departments
+        .cast<dynamic>()
+        .firstWhere(
+          (d) => d.departmentName == employee.department,
+          orElse: () => null,
+        )
+        ?.id;
+    String? selectedDesignationId = allDesignations
+        .cast<dynamic>()
+        .firstWhere(
+          (d) => d.designationName == employee.position,
+          orElse: () => null,
+        )
+        ?.id;
+
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Edit Employee'),
-        content: SingleChildScrollView(
-          child: Form(
-            key: formKey,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextFormField(
-                  controller: nameController,
-                  decoration: const InputDecoration(
-                    labelText: 'Employee Name',
-                    border: OutlineInputBorder(),
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Edit Employee'),
+          content: SingleChildScrollView(
+            child: Form(
+              key: formKey,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextFormField(
+                    controller: nameController,
+                    decoration: const InputDecoration(
+                      labelText: 'Employee Name',
+                      border: OutlineInputBorder(),
+                    ),
+                    validator: (value) =>
+                        value?.isEmpty ?? true ? 'Required' : null,
                   ),
-                  validator: (value) =>
-                      value?.isEmpty ?? true ? 'Required' : null,
-                ),
-                const SizedBox(height: 12),
-                TextFormField(
-                  controller: codeController,
-                  decoration: const InputDecoration(
-                    labelText: 'Employee Code',
-                    border: OutlineInputBorder(),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: codeController,
+                    decoration: const InputDecoration(
+                      labelText: 'Employee Code',
+                      border: OutlineInputBorder(),
+                    ),
+                    validator: (value) =>
+                        value?.isEmpty ?? true ? 'Required' : null,
                   ),
-                  validator: (value) =>
-                      value?.isEmpty ?? true ? 'Required' : null,
-                ),
-                const SizedBox(height: 12),
-                TextFormField(
-                  controller: mobileController,
-                  decoration: const InputDecoration(
-                    labelText: 'Mobile Number',
-                    border: OutlineInputBorder(),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: mobileController,
+                    decoration: const InputDecoration(
+                      labelText: 'Mobile Number',
+                      border: OutlineInputBorder(),
+                    ),
+                    keyboardType: TextInputType.phone,
+                    validator: (value) =>
+                        value?.isEmpty ?? true ? 'Required' : null,
                   ),
-                  keyboardType: TextInputType.phone,
-                  validator: (value) =>
-                      value?.isEmpty ?? true ? 'Required' : null,
-                ),
-                const SizedBox(height: 12),
-                TextFormField(
-                  controller: positionController,
-                  decoration: const InputDecoration(
-                    labelText: 'Position',
-                    border: OutlineInputBorder(),
+                  const SizedBox(height: 12),
+                  // Department Dropdown
+                  DropdownButtonFormField<String>(
+                    value: selectedDepartmentId,
+                    decoration: const InputDecoration(
+                      labelText: 'Department',
+                      prefixIcon: Icon(Icons.business),
+                      border: OutlineInputBorder(),
+                    ),
+                    items: departments.map((dept) {
+                      return DropdownMenuItem(
+                        value: dept.id,
+                        child: Text(dept.departmentName),
+                      );
+                    }).toList(),
+                    onChanged: (value) {
+                      setDialogState(() {
+                        selectedDepartmentId = value;
+                        selectedDesignationId = null;
+                      });
+                    },
+                    validator: (value) =>
+                        value == null ? 'Please select a department' : null,
                   ),
-                  validator: (value) =>
-                      value?.isEmpty ?? true ? 'Required' : null,
-                ),
-                const SizedBox(height: 12),
-                TextFormField(
-                  controller: departmentController,
-                  decoration: const InputDecoration(
-                    labelText: 'Department',
-                    border: OutlineInputBorder(),
+                  const SizedBox(height: 12),
+                  // Designation Dropdown (filtered by selected department)
+                  DropdownButtonFormField<String>(
+                    value: selectedDesignationId,
+                    decoration: const InputDecoration(
+                      labelText: 'Designation / Position',
+                      prefixIcon: Icon(Icons.work),
+                      border: OutlineInputBorder(),
+                    ),
+                    items: allDesignations
+                        .where(
+                          (d) =>
+                              selectedDepartmentId == null ||
+                              d.departmentId == selectedDepartmentId,
+                        )
+                        .map((desig) {
+                          return DropdownMenuItem(
+                            value: desig.id,
+                            child: Text(desig.designationName),
+                          );
+                        })
+                        .toList(),
+                    onChanged: (value) {
+                      setDialogState(() {
+                        selectedDesignationId = value;
+                      });
+                    },
+                    validator: (value) =>
+                        value == null ? 'Please select a designation' : null,
                   ),
-                  validator: (value) =>
-                      value?.isEmpty ?? true ? 'Required' : null,
-                ),
-                const SizedBox(height: 12),
-                TextFormField(
-                  controller: salaryController,
-                  decoration: const InputDecoration(
-                    labelText: 'Monthly Salary',
-                    border: OutlineInputBorder(),
-                    helperText: 'Enter monthly salary amount',
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: salaryController,
+                    decoration: const InputDecoration(
+                      labelText: 'Monthly Salary',
+                      border: OutlineInputBorder(),
+                      helperText: 'Enter monthly salary amount',
+                    ),
+                    keyboardType: TextInputType.number,
+                    validator: (value) {
+                      if (value?.isEmpty ?? true) return 'Required';
+                      if (double.tryParse(value!) == null)
+                        return 'Invalid number';
+                      if (double.parse(value) <= 0)
+                        return 'Must be greater than 0';
+                      return null;
+                    },
                   ),
-                  keyboardType: TextInputType.number,
-                  validator: (value) {
-                    if (value?.isEmpty ?? true) return 'Required';
-                    if (double.tryParse(value!) == null)
-                      return 'Invalid number';
-                    if (double.parse(value) <= 0)
-                      return 'Must be greater than 0';
-                    return null;
-                  },
-                ),
-              ],
+                ],
+              ),
             ),
           ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                if (formKey.currentState!.validate()) {
+                  final newSalary = double.parse(salaryController.text);
+                  final dept = departments.firstWhere(
+                    (d) => d.id == selectedDepartmentId,
+                  );
+                  final desig = allDesignations.firstWhere(
+                    (d) => d.id == selectedDesignationId,
+                  );
+
+                  // Get settings and convert salary
+                  final settings = ref.read(settingsProvider);
+                  final conversion = EmployeeService.convertSalary(
+                    newSalary,
+                    settings,
+                  );
+
+                  final updatedEmployee = EmployeeModel(
+                    id: employee.id,
+                    name: nameController.text,
+                    employeeCode: codeController.text,
+                    mobileNo: mobileController.text,
+                    position: desig.designationName,
+                    department: dept.departmentName,
+                    salary: newSalary,
+                    salaryOriginal: newSalary,
+                    salaryType: conversion['salaryType'] as String,
+                    hourlyRate: conversion['hourlyRate'] as double?,
+                    dailyRate: conversion['dailyRate'] as double?,
+                    createdAt: employee.createdAt,
+                    employeeType: employee.employeeType,
+                    overtimeType: employee.overtimeType,
+                    overtimeRate: employee.overtimeRate,
+                    overtimeSlots: employee.overtimeSlots,
+                  );
+
+                  ref
+                      .read(employeeProvider.notifier)
+                      .updateEmployee(updatedEmployee);
+                  Navigator.pop(context);
+
+                  ToastHelper.success('Employee updated successfully');
+                }
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+              ),
+              child: const Text('Update'),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              if (formKey.currentState!.validate()) {
-                final newSalary = double.parse(salaryController.text);
-
-                // Get settings and convert salary
-                final settings = ref.read(settingsProvider);
-                final conversion = EmployeeService.convertSalary(
-                  newSalary,
-                  settings,
-                );
-
-                final updatedEmployee = EmployeeModel(
-                  id: employee.id,
-                  name: nameController.text,
-                  employeeCode: codeController.text,
-                  mobileNo: mobileController.text,
-                  position: positionController.text,
-                  department: departmentController.text,
-                  salary: newSalary,
-                  salaryOriginal: newSalary,
-                  salaryType: conversion['salaryType'] as String,
-                  hourlyRate: conversion['hourlyRate'] as double?,
-                  dailyRate: conversion['dailyRate'] as double?,
-                  createdAt: employee.createdAt,
-                  employeeType: employee.employeeType,
-                  overtimeType: employee.overtimeType,
-                  overtimeRate: employee.overtimeRate,
-                  overtimeSlots: employee.overtimeSlots,
-                );
-
-                ref
-                    .read(employeeProvider.notifier)
-                    .updateEmployee(updatedEmployee);
-                Navigator.pop(context);
-
-                ToastHelper.success('Employee updated successfully');
-              }
-            },
-            child: const Text('Update'),
-          ),
-        ],
       ),
     );
   }
