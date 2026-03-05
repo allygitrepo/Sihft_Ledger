@@ -26,9 +26,9 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   Future<void> _handleRegister() async {
     if (formKey.currentState!.validate()) {
       FocusScope.of(context).unfocus();
-      
+
       final success = await ref.read(ownerProvider.notifier).registerOwner();
-      
+
       if (success && mounted) {
         // Navigate to company registration screen
         Navigator.pushNamed(context, AppRoutes.companyRegister);
@@ -50,22 +50,32 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
         children: [
           GestureDetector(
             onTap: () => FocusScope.of(context).unfocus(),
-            child: isDesktop ? _buildDesktopLayout(context, ownerState) : _buildMobileLayout(context, screenHeight, padding, ownerState),
+            child: isDesktop
+                ? _buildDesktopLayout(context, ownerState)
+                : _buildMobileLayout(
+                    context,
+                    screenHeight,
+                    padding,
+                    ownerState,
+                  ),
           ),
           // Full screen loader
           if (ownerState.isLoading)
             Container(
               color: Colors.black.withValues(alpha: 0.5),
-              child: const Center(
-                child: AppLoader(size: 80),
-              ),
+              child: const Center(child: AppLoader(size: 80)),
             ),
         ],
       ),
     );
   }
 
-  Widget _buildMobileLayout(BuildContext context, double screenHeight, EdgeInsets padding, dynamic ownerState) {
+  Widget _buildMobileLayout(
+    BuildContext context,
+    double screenHeight,
+    EdgeInsets padding,
+    dynamic ownerState,
+  ) {
     return SafeArea(
       child: Center(
         child: SingleChildScrollView(
@@ -90,20 +100,17 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                   SizedBox(height: screenHeight * 0.03),
                   Text(
                     'Owner Registration',
-                    style: Theme.of(context)
-                        .textTheme
-                        .headlineMedium
-                        ?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
+                    style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
                     textAlign: TextAlign.center,
                   ),
                   SizedBox(height: screenHeight * 0.01),
                   Text(
                     'Step 1 of 2',
                     style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                          color: Colors.grey[600],
-                        ),
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
                     textAlign: TextAlign.center,
                   ),
                   SizedBox(height: screenHeight * 0.06),
@@ -123,30 +130,26 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
         // Left side - White background with logo and app name
         Expanded(
           child: Container(
-            color: Colors.white,
+            color: Theme.of(context).colorScheme.surface,
             child: Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Image.asset(
-                    AppAssets.appLogo,
-                    height: 200,
-                    width: 200,
-                  ),
+                  Image.asset(AppAssets.appLogo, height: 200, width: 200),
                   const SizedBox(height: 24),
                   Text(
                     'ShiftLedger',
                     style: Theme.of(context).textTheme.displaySmall?.copyWith(
-                          fontWeight: FontWeight.bold,
-                          color: Theme.of(context).primaryColor,
-                        ),
+                      fontWeight: FontWeight.bold,
+                      color: Theme.of(context).primaryColor,
+                    ),
                   ),
                   const SizedBox(height: 12),
                   Text(
                     'Manage your workforce efficiently',
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          color: Colors.grey[600],
-                        ),
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
                   ),
                 ],
               ),
@@ -164,7 +167,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                   constraints: const BoxConstraints(maxWidth: 450),
                   padding: const EdgeInsets.all(40.0),
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    color: Theme.of(context).colorScheme.surface,
                     borderRadius: BorderRadius.circular(16),
                     boxShadow: [
                       BoxShadow(
@@ -182,24 +185,26 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                       children: [
                         Text(
                           'Owner Registration',
-                          style: Theme.of(context)
-                              .textTheme
-                              .headlineMedium
-                              ?.copyWith(
-                                fontWeight: FontWeight.bold,
-                              ),
+                          style: Theme.of(context).textTheme.headlineMedium
+                              ?.copyWith(fontWeight: FontWeight.bold),
                           textAlign: TextAlign.center,
                         ),
                         const SizedBox(height: 8),
                         Text(
                           'Step 1 of 2',
-                          style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                                color: Colors.grey[600],
+                          style: Theme.of(context).textTheme.bodyLarge
+                              ?.copyWith(
+                                color: Theme.of(
+                                  context,
+                                ).colorScheme.onSurfaceVariant,
                               ),
                           textAlign: TextAlign.center,
                         ),
                         const SizedBox(height: 40),
-                        ..._buildFormFields(context, MediaQuery.of(context).size.height),
+                        ..._buildFormFields(
+                          context,
+                          MediaQuery.of(context).size.height,
+                        ),
                       ],
                     ),
                   ),
@@ -216,7 +221,8 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     return [
       // Owner Name Field
       TextFormField(
-        onChanged: (value) => ref.read(ownerProvider.notifier).setOwnerName(value),
+        onChanged: (value) =>
+            ref.read(ownerProvider.notifier).setOwnerName(value),
         decoration: const InputDecoration(
           labelText: 'Owner Name *',
           prefixIcon: Icon(Icons.person),
@@ -237,7 +243,8 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
 
       // Mobile Number Field
       TextFormField(
-        onChanged: (value) => ref.read(ownerProvider.notifier).setMobileNumber(value),
+        onChanged: (value) =>
+            ref.read(ownerProvider.notifier).setMobileNumber(value),
         decoration: const InputDecoration(
           labelText: 'Mobile Number *',
           prefixIcon: Icon(Icons.phone),
@@ -285,15 +292,14 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
 
       // Password Field
       TextFormField(
-        onChanged: (value) => ref.read(ownerProvider.notifier).setPassword(value),
+        onChanged: (value) =>
+            ref.read(ownerProvider.notifier).setPassword(value),
         decoration: InputDecoration(
           labelText: 'Password *',
           prefixIcon: const Icon(Icons.lock),
           suffixIcon: IconButton(
             icon: Icon(
-              isPasswordVisible
-                  ? Icons.visibility
-                  : Icons.visibility_off,
+              isPasswordVisible ? Icons.visibility : Icons.visibility_off,
             ),
             onPressed: () => setState(() {
               isPasswordVisible = !isPasswordVisible;
@@ -323,13 +329,14 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
           child: Text('Continue to Company Details'),
         ),
       ),
-     
+
       SizedBox(height: screenHeight * 0.02),
 
       // Login Link
       Center(
         child: TextButton(
-          onPressed: () => Navigator.pushReplacementNamed(context, AppRoutes.login),
+          onPressed: () =>
+              Navigator.pushReplacementNamed(context, AppRoutes.login),
           child: RichText(
             text: TextSpan(
               text: "Already have an account? ",

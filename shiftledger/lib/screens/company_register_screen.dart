@@ -15,6 +15,8 @@ class CompanyRegisterScreen extends ConsumerStatefulWidget {
   @override
   ConsumerState<CompanyRegisterScreen> createState() =>
       _CompanyRegisterScreenState();
+  ConsumerState<CompanyRegisterScreen> createState() =>
+      _CompanyRegisterScreenState();
 }
 
 class _CompanyRegisterScreenState extends ConsumerState<CompanyRegisterScreen> {
@@ -62,6 +64,11 @@ class _CompanyRegisterScreenState extends ConsumerState<CompanyRegisterScreen> {
           .read(companyProvider.notifier)
           .registerCompany();
 
+
+      final success = await ref
+          .read(companyProvider.notifier)
+          .registerCompany();
+
       if (success && mounted) {
         // Navigate directly to dashboard after registration
         Navigator.pushReplacementNamed(context, AppRoutes.dashboard);
@@ -82,17 +89,27 @@ class _CompanyRegisterScreenState extends ConsumerState<CompanyRegisterScreen> {
       appBar: isDesktop
           ? null
           : AppBar(title: const Text('Company Details'), centerTitle: true),
+      appBar: isDesktop
+          ? null
+          : AppBar(title: const Text('Company Details'), centerTitle: true),
       body: Stack(
         children: [
           GestureDetector(
             onTap: () => FocusScope.of(context).unfocus(),
             child: isDesktop
+               
                 ? _buildDesktopLayout(context, companyState)
+               
                 : _buildMobileLayout(
+                    
                     context,
+                   
                     screenHeight,
+                   
                     padding,
+                   
                     companyState,
+                  ,
                   ),
           ),
           // Full screen loader
@@ -107,10 +124,15 @@ class _CompanyRegisterScreenState extends ConsumerState<CompanyRegisterScreen> {
   }
 
   Widget _buildMobileLayout(
+    
     BuildContext context,
+   
     double screenHeight,
+   
     EdgeInsets padding,
+   
     dynamic companyState,
+  ,
   ) {
     return SafeArea(
       child: Center(
@@ -147,6 +169,9 @@ class _CompanyRegisterScreenState extends ConsumerState<CompanyRegisterScreen> {
                     style: Theme.of(
                       context,
                     ).textTheme.bodyLarge?.copyWith(color: Colors.grey[600]),
+                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
                     textAlign: TextAlign.center,
                   ),
                   SizedBox(height: screenHeight * 0.06),
@@ -166,7 +191,7 @@ class _CompanyRegisterScreenState extends ConsumerState<CompanyRegisterScreen> {
         // Left side - White background with logo and app name
         Expanded(
           child: Container(
-            color: Colors.white,
+            color: Theme.of(context).colorScheme.surface,
             child: Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -183,9 +208,9 @@ class _CompanyRegisterScreenState extends ConsumerState<CompanyRegisterScreen> {
                   const SizedBox(height: 12),
                   Text(
                     'Manage your workforce efficiently',
-                    style: Theme.of(
-                      context,
-                    ).textTheme.titleMedium?.copyWith(color: Colors.grey[600]),
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
                   ),
                 ],
               ),
@@ -203,7 +228,7 @@ class _CompanyRegisterScreenState extends ConsumerState<CompanyRegisterScreen> {
                   constraints: const BoxConstraints(maxWidth: 450),
                   padding: const EdgeInsets.all(40.0),
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    color: Theme.of(context).colorScheme.surface,
                     borderRadius: BorderRadius.circular(16),
                     boxShadow: [
                       BoxShadow(
@@ -229,7 +254,11 @@ class _CompanyRegisterScreenState extends ConsumerState<CompanyRegisterScreen> {
                         Text(
                           'Step 2 of 2',
                           style: Theme.of(context).textTheme.bodyLarge
-                              ?.copyWith(color: Colors.grey[600]),
+                              ?.copyWith(
+                                color: Theme.of(
+                                  context,
+                                ).colorScheme.onSurfaceVariant,
+                              ),
                           textAlign: TextAlign.center,
                         ),
                         const SizedBox(height: 40),

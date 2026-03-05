@@ -19,7 +19,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   late GlobalKey<FormState> formKey;
   bool isPasswordVisible = false;
   bool isLoading = false;
-  
+
   String mobileNumber = '';
   String password = '';
 
@@ -32,28 +32,28 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   Future<void> _handleLogin() async {
     if (formKey.currentState!.validate()) {
       FocusScope.of(context).unfocus();
-      
+
       setState(() => isLoading = true);
-      
+
       // Check if owner exists
       final hasOwner = await OwnerService.hasOwner();
-      
+
       if (!hasOwner) {
         setState(() => isLoading = false);
         ToastHelper.error('No account found. Please register first.');
         return;
       }
-      
+
       // Validate credentials
       final isValid = await OwnerService.validateLogin(mobileNumber, password);
-      
+
       if (isValid) {
         // Save login state
         final prefs = await SharedPreferences.getInstance();
         await prefs.setBool('is_logged_in', true);
-        
+
         setState(() => isLoading = false);
-        
+
         if (mounted) {
           ToastHelper.success('Login successful');
           Navigator.pushReplacementNamed(context, AppRoutes.dashboard);
@@ -78,22 +78,26 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         children: [
           GestureDetector(
             onTap: () => FocusScope.of(context).unfocus(),
-            child: isDesktop ? _buildDesktopLayout(context) : _buildMobileLayout(context, screenHeight, padding),
+            child: isDesktop
+                ? _buildDesktopLayout(context)
+                : _buildMobileLayout(context, screenHeight, padding),
           ),
           // Full screen loader
           if (isLoading)
             Container(
               color: Colors.black.withValues(alpha: 0.5),
-              child: const Center(
-                child: AppLoader(size: 80),
-              ),
+              child: const Center(child: AppLoader(size: 80)),
             ),
         ],
       ),
     );
   }
 
-  Widget _buildMobileLayout(BuildContext context, double screenHeight, EdgeInsets padding) {
+  Widget _buildMobileLayout(
+    BuildContext context,
+    double screenHeight,
+    EdgeInsets padding,
+  ) {
     return SafeArea(
       child: Center(
         child: SingleChildScrollView(
@@ -117,20 +121,17 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   ),
                   Text(
                     'Welcome Back',
-                    style: Theme.of(context)
-                        .textTheme
-                        .headlineMedium
-                        ?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
+                    style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
                     textAlign: TextAlign.center,
                   ),
                   SizedBox(height: screenHeight * 0.01),
                   Text(
                     'Sign in to your account',
                     style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                          color: Colors.grey[600],
-                        ),
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
                     textAlign: TextAlign.center,
                   ),
                   SizedBox(height: screenHeight * 0.06),
@@ -150,30 +151,26 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         // Left side - White background with logo and app name
         Expanded(
           child: Container(
-            color: Colors.white,
+            color: Theme.of(context).colorScheme.surface,
             child: Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Image.asset(
-                    AppAssets.appLogo,
-                    height: 200,
-                    width: 200,
-                  ),
+                  Image.asset(AppAssets.appLogo, height: 200, width: 200),
                   const SizedBox(height: 24),
                   Text(
                     'ShiftLedger',
                     style: Theme.of(context).textTheme.displaySmall?.copyWith(
-                          fontWeight: FontWeight.bold,
-                          color: Theme.of(context).primaryColor,
-                        ),
+                      fontWeight: FontWeight.bold,
+                      color: Theme.of(context).primaryColor,
+                    ),
                   ),
                   const SizedBox(height: 12),
                   Text(
                     'Manage your workforce efficiently',
                     style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                          color: Colors.grey[600],
-                        ),
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
                   ),
                 ],
               ),
@@ -191,7 +188,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   constraints: const BoxConstraints(maxWidth: 450),
                   padding: const EdgeInsets.all(40.0),
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    color: Theme.of(context).colorScheme.surface,
                     borderRadius: BorderRadius.circular(16),
                     boxShadow: [
                       BoxShadow(
@@ -209,24 +206,26 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       children: [
                         Text(
                           'Welcome Back',
-                          style: Theme.of(context)
-                              .textTheme
-                              .headlineMedium
-                              ?.copyWith(
-                                fontWeight: FontWeight.bold,
-                              ),
+                          style: Theme.of(context).textTheme.headlineMedium
+                              ?.copyWith(fontWeight: FontWeight.bold),
                           textAlign: TextAlign.center,
                         ),
                         const SizedBox(height: 8),
                         Text(
                           'Sign in to your account',
-                          style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                                color: Colors.grey[600],
+                          style: Theme.of(context).textTheme.bodyLarge
+                              ?.copyWith(
+                                color: Theme.of(
+                                  context,
+                                ).colorScheme.onSurfaceVariant,
                               ),
                           textAlign: TextAlign.center,
                         ),
                         const SizedBox(height: 40),
-                        ..._buildFormFields(context, MediaQuery.of(context).size.height),
+                        ..._buildFormFields(
+                          context,
+                          MediaQuery.of(context).size.height,
+                        ),
                       ],
                     ),
                   ),
@@ -276,9 +275,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           prefixIcon: const Icon(Icons.lock),
           suffixIcon: IconButton(
             icon: Icon(
-              isPasswordVisible
-                  ? Icons.visibility
-                  : Icons.visibility_off,
+              isPasswordVisible ? Icons.visibility : Icons.visibility_off,
             ),
             onPressed: () => setState(() {
               isPasswordVisible = !isPasswordVisible;
@@ -313,7 +310,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       // Register Link
       Center(
         child: TextButton(
-          onPressed: () => Navigator.pushReplacementNamed(context, AppRoutes.register),
+          onPressed: () =>
+              Navigator.pushReplacementNamed(context, AppRoutes.register),
           child: RichText(
             text: TextSpan(
               text: "Don't have an account? ",
