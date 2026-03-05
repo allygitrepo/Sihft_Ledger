@@ -16,9 +16,10 @@ const Attendance = sequelize.define("Attendance",
         date: { type: DataTypes.DATEONLY, allowNull: false },
         clock_in: { type: DataTypes.TIME, allowNull: true },
         clock_out: { type: DataTypes.TIME, allowNull: true },
-        status: { type: DataTypes.ENUM('Present', 'Absent', 'Leave', 'Half-day'), defaultValue: 'Present' },
+        attendance_status: { type: DataTypes.ENUM('Present', 'Absent', 'Leave', 'Half-day'), defaultValue: 'Present' },
         late_minutes: { type: DataTypes.INTEGER, defaultValue: 0 },
-        total_hours: { type: DataTypes.DECIMAL(4, 2), defaultValue: 0.00 }
+        total_hours: { type: DataTypes.DECIMAL(4, 2), defaultValue: 0.00 },
+        status: { type: DataTypes.BOOLEAN, defaultValue: true }
     },
     {
         tableName: "attendance",

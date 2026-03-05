@@ -23,7 +23,8 @@ const Salary = sequelize.define("Salaries",
         bonus: { type: DataTypes.DECIMAL(10, 2), defaultValue: 0.00 },
         deductions: { type: DataTypes.DECIMAL(10, 2), defaultValue: 0.00 },
         net_pay: { type: DataTypes.DECIMAL(10, 2), allowNull: false },
-        status: { type: DataTypes.ENUM('Unpaid', 'Paid'), defaultValue: 'Unpaid' }
+        payment_status: { type: DataTypes.ENUM('Unpaid', 'Paid'), defaultValue: 'Unpaid' },
+        status: { type: DataTypes.BOOLEAN, defaultValue: true }
     },
     {
         tableName: "calculated_salaries",

@@ -80,7 +80,7 @@ const salaryController = {
                 return res.status(404).json({ message: "Salary record not found" });
             }
 
-            await salary.update({ status: 'Paid' });
+            await salary.update({ payment_status: 'Paid' });
             return res.status(200).json({ message: "Salary marked as paid", salary });
         } catch (error) {
             console.error(error);

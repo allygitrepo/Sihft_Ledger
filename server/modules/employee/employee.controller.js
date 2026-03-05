@@ -84,17 +84,29 @@ const employeeController = {
     },
 
     delete: async (req, res) => {
+        const transaction = await sequelize.transaction();
         try {
             const { id } = req.params;
             const employee = await Employee.findByPk(id);
 
             if (!employee) {
+                await transaction.rollback();
                 return res.status(404).json({ message: "Employee not found" });
             }
 
-            await employee.destroy();
-            return res.status(200).json({ message: "Employee deleted successfully" });
+            // Soft delete Employee
+            await employee.update({ status: false }, { transaction });
+
+            // Soft delete related records
+            await Attendance.update({ status: false }, { where: { employee_id: id }, transaction });
+            await Salary.update({ status: false }, { where: { employee_id: id }, transaction });
+            await EmployeeSalary.update({ status: false }, { where: { emp_id: id }, transaction });
+            await EmployeeOvertimeConfig.update({ status: false }, { where: { employee_id: id }, transaction });
+
+            await transaction.commit();
+            return res.status(200).json({ message: "Employee and all associated records soft deleted successfully" });
         } catch (error) {
+            await transaction.rollback();
             console.error(error);
             return res.status(500).json({ message: "Internal server error" });
         }

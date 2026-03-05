@@ -19,7 +19,7 @@ const attendanceController = {
                 employee_id,
                 date,
                 clock_in,
-                status: 'Present'
+                attendance_status: 'Present'
             });
 
             return res.status(201).json({ message: "Clock-in successful", attendance });
@@ -81,7 +81,7 @@ const attendanceController = {
                 return res.status(404).json({ message: "Attendance record not found" });
             }
 
-            await attendance.update({ status });
+            await attendance.update({ attendance_status: status });
             return res.status(200).json({ message: "Status updated successfully", attendance });
         } catch (error) {
             console.error(error);
