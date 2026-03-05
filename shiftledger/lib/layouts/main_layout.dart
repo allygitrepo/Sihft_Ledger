@@ -26,12 +26,18 @@ class MainLayout extends ConsumerWidget {
         return 'Salary Configuration';
       case '/overtime-configuration':
         return 'Overtime Configuration';
+      case '/payroll-configuration':
+        return 'Payroll Configuration';
       case '/profile':
         return 'Profile';
       case '/settings':
         return 'Settings';
       case '/about-us':
         return 'About Us';
+      case '/departments':
+        return 'Departments';
+      case '/designations':
+        return 'Designations';
       default:
         return title;
     }
