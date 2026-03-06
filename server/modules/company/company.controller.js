@@ -1,4 +1,13 @@
 const Company = require("./company.model");
+const Department = require("../department/department.model");
+const OvertimeSlot = require("../overtime_slots/overtime_slots.model");
+const Designation = require("../designation/designation.model");
+const Employee = require("../employee/employee.model");
+const Attendance = require("../attendance/attendance.model");
+const Salary = require("../salary/salary.model");
+const EmployeeSalary = require("../employee_salary/employee_salary.model");
+const EmployeeOvertimeConfig = require("../employee_overtime_config/employee_overtime_config.model");
+const sequelize = require("../../config/db");
 
 const companyController = {
     create: async (req, res) => {
