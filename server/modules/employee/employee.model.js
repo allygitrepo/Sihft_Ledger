@@ -3,6 +3,7 @@ const sequelize = require("../../config/db");
 const Company = require("../company/company.model");
 const Department = require("../department/department.model");
 const Designation = require("../designation/designation.model");
+const Salary = require("../salary/salary.model"); // This is SalaryConfiguration
 
 const Employee = sequelize.define("Employees",
     {
@@ -31,12 +32,23 @@ const Employee = sequelize.define("Employees",
                 key: 'id'
             }
         },
-        first_name: { type: DataTypes.STRING, allowNull: false },
-        last_name: { type: DataTypes.STRING, allowNull: false },
+        salary_config_id: {
+            type: DataTypes.INTEGER,
+            allowNull: true,
+            references: {
+                model: Salary,
+                key: 'id'
+            }
+        },
+        full_name: { type: DataTypes.STRING, allowNull: false, defaultValue: '' },
         phone: { type: DataTypes.STRING, allowNull: false, unique: true },
-        email: { type: DataTypes.STRING, allowNull: true, unique: true },
         employee_code: { type: DataTypes.STRING, allowNull: true, unique: true },
-        join_date: { type: DataTypes.DATEONLY, allowNull: false },
+        monthly_salary: { type: DataTypes.DECIMAL(10, 2), defaultValue: 0.00 },
+        join_date: { 
+            type: DataTypes.DATEONLY, 
+            allowNull: false, 
+            defaultValue: DataTypes.NOW 
+        },
         status: { type: DataTypes.BOOLEAN, defaultValue: true }
     },
     {
