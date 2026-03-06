@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/auth_provider.dart';
+import '../providers/company_provider.dart';
 import '../routes/app_routes.dart';
 import '../utills/app_assets.dart';
 import '../utills/app_spacing.dart';
@@ -34,7 +35,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       final authState = ref.read(authProvider);
 
       if (authState.isLoggedIn && mounted) {
-        Navigator.pushReplacementNamed(context, AppRoutes.dashboard);
+        // Sync company data after successful login
+        await ref.read(companyProvider.notifier).syncCompanyWithBackend();
+
+        if (mounted) {
+          Navigator.pushReplacementNamed(context, AppRoutes.dashboard);
+        }
       }
     }
   }
