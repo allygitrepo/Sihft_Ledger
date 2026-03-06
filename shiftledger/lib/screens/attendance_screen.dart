@@ -3064,44 +3064,44 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
 
             // Illustration/Icon
             Container(
-              padding: const EdgeInsets.all(30),
+              padding: const EdgeInsets.all(24),
               decoration: BoxDecoration(
                 color: AppColors.primary.withValues(alpha: 0.1),
                 shape: BoxShape.circle,
               ),
               child: const Icon(
                 Icons.people_alt_outlined,
-                size: 80,
+                size: 48,
                 color: AppColors.primary,
               ),
             ),
-            const SizedBox(height: 32),
+            const SizedBox(height: 24),
 
             // Message
             Text(
               'No Employees Found',
               style: TextStyle(
-                fontSize: 24,
+                fontSize: 18,
                 fontWeight: FontWeight.bold,
                 color: theme.textTheme.headlineSmall?.color,
               ),
               textAlign: TextAlign.center,
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 8),
 
             // Description
             Text(
               'Add employees manually or import using CSV to start managing attendance.',
               style: TextStyle(
-                fontSize: 16,
+                fontSize: 14,
                 color: theme.textTheme.bodyMedium?.color?.withValues(
                   alpha: 0.7,
                 ),
-                height: 1.5,
+                height: 1.4,
               ),
               textAlign: TextAlign.center,
             ),
-            const SizedBox(height: 40),
+            const SizedBox(height: 32),
 
             // Action Buttons
             Wrap(
@@ -3148,8 +3148,8 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
       onTap: onTap,
       borderRadius: BorderRadius.circular(12),
       child: Container(
-        width: 180,
-        padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
+        width: 160,
+        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
         decoration: BoxDecoration(
           color: theme.brightness == Brightness.dark
               ? theme.cardColor
@@ -3166,16 +3166,20 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
         ),
         child: Column(
           children: [
-            Icon(icon, color: AppColors.primary, size: 28),
-            const SizedBox(height: 12),
+            Icon(icon, color: AppColors.primary, size: 24),
+            const SizedBox(height: 8),
             Text(
               title,
-              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
             ),
             const SizedBox(height: 4),
             Text(
               subtitle,
-              style: TextStyle(color: theme.textTheme.bodySmall?.color),
+              style: TextStyle(
+                color: theme.textTheme.bodySmall?.color,
+                fontSize: 12,
+              ),
+              textAlign: TextAlign.center,
             ),
           ],
         ),
