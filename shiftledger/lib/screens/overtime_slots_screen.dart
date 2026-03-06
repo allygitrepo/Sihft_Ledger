@@ -160,7 +160,7 @@ class _OvertimeSlotsScreenState extends ConsumerState<OvertimeSlotsScreen> {
         child: SingleChildScrollView(
           padding: const EdgeInsets.symmetric(horizontal: 48.0, vertical: 48.0),
           child: Container(
-            constraints: const BoxConstraints(maxWidth: 600),
+            constraints: const BoxConstraints(maxWidth: 1200),
             padding: const EdgeInsets.all(40.0),
             decoration: BoxDecoration(
               color: Theme.of(context).colorScheme.surface,
@@ -177,33 +177,31 @@ class _OvertimeSlotsScreenState extends ConsumerState<OvertimeSlotsScreen> {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               mainAxisSize: MainAxisSize.min,
               children: [
-                Text(
-                  'Manage Slots',
-                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.bold,
-                    color: Theme.of(context).colorScheme.onSurface,
-                  ),
-                  textAlign: TextAlign.center,
+                // Slots list in a Wrap for horizontal layout on desktop
+                Wrap(
+                  spacing: 24,
+                  runSpacing: 24,
+                  alignment: WrapAlignment.start,
+                  children: slots.asMap().entries.map((entry) {
+                    final index = entry.key;
+                    final slot = entry.value;
+                    return SizedBox(
+                      width: 340, // Fixed width for cards in desktop view
+                      child: _SlotCard(
+                        slot: slot,
+                        index: index,
+                        onUpdate: (slot) => _updateSlot(index, slot),
+                        onRemove: () => _removeSlot(index),
+                      ),
+                    );
+                  }).toList(),
                 ),
                 const SizedBox(height: 48),
-                // Slots list
-                ...slots.asMap().entries.map((entry) {
-                  final index = entry.key;
-                  final slot = entry.value;
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 24.0),
-                    child: _SlotCard(
-                      slot: slot,
-                      index: index,
-                      onUpdate: (slot) => _updateSlot(index, slot),
-                      onRemove: () => _removeSlot(index),
-                    ),
-                  );
-                }),
-                const SizedBox(height: 24),
                 Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
                   children: [
-                    Expanded(
+                    SizedBox(
+                      width: 120,
                       child: OutlinedButton(
                         onPressed: () => Navigator.pop(context),
                         style: OutlinedButton.styleFrom(
@@ -222,7 +220,8 @@ class _OvertimeSlotsScreenState extends ConsumerState<OvertimeSlotsScreen> {
                       ),
                     ),
                     const SizedBox(width: 16),
-                    Expanded(
+                    SizedBox(
+                      width: 150,
                       child: OutlinedButton(
                         onPressed: _addSlot,
                         style: OutlinedButton.styleFrom(
@@ -241,7 +240,8 @@ class _OvertimeSlotsScreenState extends ConsumerState<OvertimeSlotsScreen> {
                       ),
                     ),
                     const SizedBox(width: 16),
-                    Expanded(
+                    SizedBox(
+                      width: 150,
                       child: ElevatedButton(
                         onPressed: _saveSlots,
                         style: ElevatedButton.styleFrom(
@@ -367,11 +367,12 @@ class _SlotCardState extends State<_SlotCard> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: theme.cardColor,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey.withValues(alpha: 0.15)),
+        border: Border.all(color: theme.dividerColor.withValues(alpha: 0.1)),
       ),
       padding: const EdgeInsets.all(24.0),
       child: Column(
@@ -382,10 +383,8 @@ class _SlotCardState extends State<_SlotCard> {
             children: [
               Text(
                 'Slot ${widget.index + 1}',
-                style: const TextStyle(
-                  fontSize: 16,
+                style: theme.textTheme.titleMedium?.copyWith(
                   fontWeight: FontWeight.bold,
-                  color: Colors.black87,
                 ),
               ),
               InkWell(
@@ -409,7 +408,7 @@ class _SlotCardState extends State<_SlotCard> {
                     labelText: 'Start Hour',
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(8),
-                      borderSide: BorderSide(color: Colors.grey.shade400),
+                      borderSide: BorderSide(color: theme.dividerColor),
                     ),
                     contentPadding: const EdgeInsets.symmetric(
                       horizontal: 16,
@@ -428,7 +427,7 @@ class _SlotCardState extends State<_SlotCard> {
                     labelText: 'End Hour',
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(8),
-                      borderSide: BorderSide(color: Colors.grey.shade400),
+                      borderSide: BorderSide(color: theme.dividerColor),
                     ),
                     contentPadding: const EdgeInsets.symmetric(
                       horizontal: 16,
@@ -446,14 +445,14 @@ class _SlotCardState extends State<_SlotCard> {
             controller: rateController,
             decoration: InputDecoration(
               labelText: 'Rate per Hour',
-              prefixIcon: const Icon(
+              prefixIcon: Icon(
                 Icons.currency_rupee,
                 size: 20,
-                color: Colors.black54,
+                color: theme.iconTheme.color,
               ),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(8),
-                borderSide: BorderSide(color: Colors.grey.shade400),
+                borderSide: BorderSide(color: theme.dividerColor),
               ),
               contentPadding: const EdgeInsets.symmetric(
                 horizontal: 16,
@@ -466,7 +465,7 @@ class _SlotCardState extends State<_SlotCard> {
           const SizedBox(height: 12),
           Text(
             'Hours ${widget.slot.startHour}-${widget.slot.endHour}: ₹${widget.slot.rate}/hour',
-            style: TextStyle(color: Colors.grey[500], fontSize: 13),
+            style: theme.textTheme.bodySmall?.copyWith(fontSize: 13),
           ),
         ],
       ),
