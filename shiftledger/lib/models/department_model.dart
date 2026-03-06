@@ -30,8 +30,8 @@ class DepartmentModel {
 
   factory DepartmentModel.fromMap(Map<String, dynamic> map) {
     return DepartmentModel(
-      id: map['id'] ?? '',
-      companyId: map['company_id'] ?? '',
+      id: map['id']?.toString() ?? '',
+      companyId: map['company_id']?.toString() ?? '',
       departmentName: map['department_name'] ?? '',
       createdAt: DateTime.parse(map['created_at']),
       updatedAt: DateTime.parse(map['updated_at']),

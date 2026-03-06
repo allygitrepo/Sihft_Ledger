@@ -1,9 +1,8 @@
-import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import '../models/department_model.dart';
-
-const String _departmentsKey = 'departments_data';
+import '../services/api_service.dart';
+import '../providers/auth_provider.dart';
+import '../providers/company_provider.dart';
 
 class DepartmentState {
   final List<DepartmentModel> departments;
@@ -32,96 +31,157 @@ class DepartmentState {
 class DepartmentNotifier extends Notifier<DepartmentState> {
   @override
   DepartmentState build() {
-    Future.microtask(() => loadDepartments());
+    // We don't call loadDepartments here directly if it depends on other providers being settled
+    // But since build can watch other providers, we can link them
     return DepartmentState();
   }
 
   Future<void> loadDepartments() async {
+    final companyState = ref.read(companyProvider);
+    final company = companyState.company;
+    final token = ref.read(authProvider).token;
+
+    if (token == null) {
+      state = state.copyWith(error: 'Auth token missing');
+      return;
+    }
+
+    if (company == null || company.id == null) {
+      if (companyState.isLoading) {
+        state = state.copyWith(isLoading: true, error: null);
+        return; // Wait for company to load
+      }
+      state = state.copyWith(
+        error: 'Company ID missing. Please ensure your company is registered.',
+      );
+      return;
+    }
+
     state = state.copyWith(isLoading: true, error: null);
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final dataString = prefs.getString(_departmentsKey);
+      final response = await ApiService.getDepartments(company.id!, token);
 
-      if (dataString != null) {
-        final List<dynamic> decodedList = json.decode(dataString);
-        final departments = decodedList
+      if (response['success'] == true) {
+        final List<dynamic> data = response['departments'] ?? [];
+        final departments = data
             .map((item) => DepartmentModel.fromMap(item))
             .toList();
         state = state.copyWith(departments: departments, isLoading: false);
       } else {
-        state = state.copyWith(isLoading: false);
+        state = state.copyWith(
+          isLoading: false,
+          error: response['message'] ?? 'Failed to load departments',
+        );
       }
     } catch (e) {
       state = state.copyWith(isLoading: false, error: e.toString());
     }
   }
 
-  Future<bool> addDepartment(DepartmentModel department) async {
+  Future<bool> addDepartment(String name) async {
+    final company = ref.read(companyProvider).company;
+    final token = ref.read(authProvider).token;
+
+    print('Adding Department: $name');
+    print('Company ID: ${company?.id}');
+
+    if (company == null || token == null || company.id == null) {
+      print('Error: Company or Token or Company ID is null');
+      state = state.copyWith(error: 'Company ID or Auth token missing');
+      return false;
+    }
+
+    state = state.copyWith(isLoading: true, error: null);
     try {
-      final updatedList = [...state.departments, department];
-      await _saveToStorage(updatedList);
-      state = state.copyWith(departments: updatedList);
-      return true;
+      final response = await ApiService.createDepartment(
+        companyId: company.id!,
+        departmentName: name,
+        token: token,
+      );
+
+      print('Create Department response: ${response['success']}');
+      if (response['success'] == true) {
+        await loadDepartments(); // Refresh list
+        return true;
+      } else {
+        print('Create Department failed: ${response['message']}');
+        state = state.copyWith(
+          isLoading: false,
+          error: response['message'] ?? 'Failed to add department',
+        );
+        return false;
+      }
     } catch (e) {
-      state = state.copyWith(error: e.toString());
+      print('Create Department exception: $e');
+      state = state.copyWith(isLoading: false, error: e.toString());
       return false;
     }
   }
 
-  Future<bool> updateDepartment(DepartmentModel updatedDepartment) async {
-    try {
-      final updatedList = state.departments.map((dept) {
-        if (dept.id == updatedDepartment.id) {
-          return updatedDepartment;
-        }
-        return dept;
-      }).toList();
+  Future<bool> updateDepartment(DepartmentModel department) async {
+    final token = ref.read(authProvider).token;
 
-      await _saveToStorage(updatedList);
-      state = state.copyWith(departments: updatedList);
-      return true;
+    if (token == null) {
+      state = state.copyWith(error: 'Auth token missing');
+      return false;
+    }
+
+    state = state.copyWith(isLoading: true, error: null);
+    try {
+      final response = await ApiService.updateDepartment(
+        id: department.id,
+        departmentName: department.departmentName,
+        status: department.status,
+        token: token,
+      );
+
+      if (response['success'] == true) {
+        await loadDepartments();
+        return true;
+      } else {
+        state = state.copyWith(
+          isLoading: false,
+          error: response['message'] ?? 'Failed to update department',
+        );
+        return false;
+      }
     } catch (e) {
-      state = state.copyWith(error: e.toString());
+      state = state.copyWith(isLoading: false, error: e.toString());
       return false;
     }
   }
 
   Future<bool> deleteDepartment(String id) async {
+    final token = ref.read(authProvider).token;
+
+    if (token == null) {
+      state = state.copyWith(error: 'Auth token missing');
+      return false;
+    }
+
+    state = state.copyWith(isLoading: true, error: null);
     try {
-      final updatedList = state.departments
-          .where((dept) => dept.id != id)
-          .toList();
-      await _saveToStorage(updatedList);
-      state = state.copyWith(departments: updatedList);
-      return true;
+      final response = await ApiService.deleteDepartment(id, token);
+
+      if (response['success'] == true) {
+        await loadDepartments();
+        return true;
+      } else {
+        state = state.copyWith(
+          isLoading: false,
+          error: response['message'] ?? 'Failed to delete department',
+        );
+        return false;
+      }
     } catch (e) {
-      state = state.copyWith(error: e.toString());
+      state = state.copyWith(isLoading: false, error: e.toString());
       return false;
     }
   }
 
   Future<bool> toggleStatus(String id) async {
-    try {
-      final updatedList = state.departments.map((dept) {
-        if (dept.id == id) {
-          return dept.copyWith(status: !dept.status, updatedAt: DateTime.now());
-        }
-        return dept;
-      }).toList();
-
-      await _saveToStorage(updatedList);
-      state = state.copyWith(departments: updatedList);
-      return true;
-    } catch (e) {
-      state = state.copyWith(error: e.toString());
-      return false;
-    }
-  }
-
-  Future<void> _saveToStorage(List<DepartmentModel> departments) async {
-    final prefs = await SharedPreferences.getInstance();
-    final dataList = departments.map((dept) => dept.toMap()).toList();
-    await prefs.setString(_departmentsKey, json.encode(dataList));
+    final department = state.departments.firstWhere((d) => d.id == id);
+    return updateDepartment(department.copyWith(status: !department.status));
   }
 }
 

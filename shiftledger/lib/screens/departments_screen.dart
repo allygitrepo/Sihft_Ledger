@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../models/department_model.dart';
 import '../providers/department_provider.dart';
+import '../providers/company_provider.dart';
 import '../utills/app_colors.dart';
 import '../widgets/toast.dart';
 import '../widgets/loader.dart';
@@ -19,6 +20,14 @@ class _DepartmentsScreenState extends ConsumerState<DepartmentsScreen> {
   String _searchQuery = '';
 
   @override
+  void initState() {
+    super.initState();
+    Future.microtask(
+      () => ref.read(departmentProvider.notifier).loadDepartments(),
+    );
+  }
+
+  @override
   void dispose() {
     _searchController.dispose();
     super.dispose();
@@ -30,6 +39,13 @@ class _DepartmentsScreenState extends ConsumerState<DepartmentsScreen> {
     final theme = Theme.of(context);
     final screenWidth = MediaQuery.of(context).size.width;
     final isDesktop = screenWidth > 800;
+
+    // Listen for company sync updates to reload departments if ID was missing
+    ref.listen(companyProvider, (previous, next) {
+      if (previous?.company?.id == null && next.company?.id != null) {
+        ref.read(departmentProvider.notifier).loadDepartments();
+      }
+    });
 
     final filteredDepartments = departmentState.departments.where((dept) {
       if (_searchQuery.isEmpty) return true;
@@ -438,16 +454,9 @@ class _DepartmentsScreenState extends ConsumerState<DepartmentsScreen> {
                       );
                       success = await notifier.updateDepartment(updated);
                     } else {
-                      final newDept = DepartmentModel(
-                        id: DateTime.now().millisecondsSinceEpoch
-                            .toString(), // Simple ID gen
-                        companyId: 'COMP001', // Mock company ID for now
-                        departmentName: nameController.text.trim(),
-                        status: status,
-                        createdAt: DateTime.now(),
-                        updatedAt: DateTime.now(),
+                      success = await notifier.addDepartment(
+                        nameController.text.trim(),
                       );
-                      success = await notifier.addDepartment(newDept);
                     }
 
                     if (context.mounted) {
@@ -457,7 +466,10 @@ class _DepartmentsScreenState extends ConsumerState<DepartmentsScreen> {
                         );
                         Navigator.pop(context);
                       } else {
-                        ToastHelper.error('An error occurred');
+                        final error =
+                            ref.read(departmentProvider).error ??
+                            'An error occurred';
+                        ToastHelper.error(error);
                       }
                     }
                   },
