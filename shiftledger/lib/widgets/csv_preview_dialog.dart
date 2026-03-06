@@ -123,12 +123,15 @@ class _CsvPreviewDialogState extends ConsumerState<CsvPreviewDialog> {
                 children: [
                   const Icon(Icons.preview, color: AppColors.primary),
                   const SizedBox(width: 12),
-                  Text(
-                    'CSV Import Preview',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: theme.textTheme.bodyLarge?.color,
+                  Expanded(
+                    child: Text(
+                      'CSV Import Preview',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: theme.textTheme.bodyLarge?.color,
+                      ),
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
                   const Spacer(),
@@ -179,28 +182,33 @@ class _CsvPreviewDialogState extends ConsumerState<CsvPreviewDialog> {
                     child: const Text('Cancel'),
                   ),
                   const SizedBox(width: 12),
-                  ElevatedButton.icon(
-                    onPressed:
-                        _isParsing || _previews.isEmpty || _errorMessage != null
-                        ? null
-                        : () {
-                            final employees = _previews
-                                .map((p) => p.toEmployeeModel())
-                                .toList();
-                            Navigator.pop(context, employees);
-                          },
-                    icon: const Icon(Icons.upload),
-                    label: Text(
-                      _isParsing
-                          ? 'Processing...'
-                          : 'Import ${_previews.length} Employee${_previews.length > 1 ? 's' : ''}',
-                    ),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.primary,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 24,
-                        vertical: 12,
+                  Flexible(
+                    child: ElevatedButton.icon(
+                      onPressed:
+                          _isParsing ||
+                              _previews.isEmpty ||
+                              _errorMessage != null
+                          ? null
+                          : () {
+                              final employees = _previews
+                                  .map((p) => p.toEmployeeModel())
+                                  .toList();
+                              Navigator.pop(context, employees);
+                            },
+                      icon: const Icon(Icons.upload),
+                      label: Text(
+                        _isParsing
+                            ? 'Processing...'
+                            : 'Import ${_previews.length} Employee${_previews.length > 1 ? 's' : ''}',
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 24,
+                          vertical: 12,
+                        ),
                       ),
                     ),
                   ),
@@ -377,7 +385,7 @@ class _CsvPreviewDialogState extends ConsumerState<CsvPreviewDialog> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              preview.name,
+              '${preview.firstName} ${preview.lastName}',
               style: const TextStyle(fontWeight: FontWeight.bold),
               overflow: TextOverflow.ellipsis,
             ),
@@ -782,7 +790,7 @@ class _CsvPreviewDialogState extends ConsumerState<CsvPreviewDialog> {
         dense: true,
         leading: const Icon(Icons.warning, color: Colors.orange, size: 20),
         title: Text(
-          preview.name,
+          '${preview.firstName} ${preview.lastName}',
           style: TextStyle(
             fontSize: 14,
             decoration: TextDecoration.lineThrough,
