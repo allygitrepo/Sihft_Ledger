@@ -119,7 +119,6 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
     final theme = Theme.of(context);
     final backgroundColor = theme.scaffoldBackgroundColor;
     final cardColor = theme.cardColor;
-    final textColor = theme.textTheme.bodyLarge?.color ?? Colors.black;
     final subtitleColor = theme.textTheme.bodySmall?.color ?? Colors.grey;
 
     // Filter employees based on search query

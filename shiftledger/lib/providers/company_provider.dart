@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/legacy.dart';
 import '../models/company_model.dart';
@@ -16,6 +17,7 @@ class CompanyState {
   final String? address;
   final String? companyPhoto; // Base64 string
   final File? photoFile; // Temporary file for preview
+  final Uint8List? photoBytes; // Bytes fallback for web/desktop
 
   const CompanyState({
     this.isLoading = false,
@@ -25,6 +27,7 @@ class CompanyState {
     this.address,
     this.companyPhoto,
     this.photoFile,
+    this.photoBytes,
   });
 
   CompanyState copyWith({
@@ -35,6 +38,7 @@ class CompanyState {
     String? address,
     String? companyPhoto,
     File? photoFile,
+    Uint8List? photoBytes,
   }) {
     return CompanyState(
       isLoading: isLoading ?? this.isLoading,
@@ -44,6 +48,7 @@ class CompanyState {
       address: address ?? this.address,
       companyPhoto: companyPhoto ?? this.companyPhoto,
       photoFile: photoFile ?? this.photoFile,
+      photoBytes: photoBytes ?? this.photoBytes,
     );
   }
 }
@@ -78,15 +83,33 @@ class CompanyNotifier extends StateNotifier<CompanyState> {
     try {
       // Read file as bytes
       final bytes = await file.readAsBytes();
-      
+
       // Convert to base64
       final base64String = 'data:image/png;base64,${base64Encode(bytes)}';
-      
-      state = state.copyWith(
-        companyPhoto: base64String,
-        photoFile: file,
-      );
-      
+
+      state = state.copyWith(companyPhoto: base64String, photoFile: file);
+
+      ToastHelper.success('Photo uploaded successfully');
+    } catch (e) {
+      ToastHelper.error('Failed to upload photo: $e');
+    }
+  }
+
+  /// Set company photo from bytes (fallback for web/desktop)
+  Future<void> setCompanyPhotoFromBytes(
+    Uint8List bytes,
+    String filename,
+  ) async {
+    try {
+      // Convert to base64
+      final ext = filename.split('.').last.toLowerCase();
+      final mimeType = ext == 'jpg' || ext == 'jpeg'
+          ? 'image/jpeg'
+          : 'image/png';
+      final base64String = 'data:$mimeType;base64,${base64Encode(bytes)}';
+
+      state = state.copyWith(companyPhoto: base64String, photoBytes: bytes);
+
       ToastHelper.success('Photo uploaded successfully');
     } catch (e) {
       ToastHelper.error('Failed to upload photo: $e');
@@ -98,6 +121,7 @@ class CompanyNotifier extends StateNotifier<CompanyState> {
     state = state.copyWith(
       companyPhoto: null,
       photoFile: null,
+      photoBytes: null,
     );
   }
 
@@ -121,14 +145,11 @@ class CompanyNotifier extends StateNotifier<CompanyState> {
 
       // Save company data
       await CompanyService.saveCompany(company);
-      
+
       // Initialize default settings and complete setup
       await SetupService.finalizeSetup();
-      
-      state = state.copyWith(
-        isLoading: false,
-        company: company,
-      );
+
+      state = state.copyWith(isLoading: false, company: company);
 
       ToastHelper.success('Company registered successfully');
       return true;
@@ -147,6 +168,8 @@ class CompanyNotifier extends StateNotifier<CompanyState> {
 }
 
 // Provider for company management
-final companyProvider = StateNotifierProvider<CompanyNotifier, CompanyState>((ref) {
+final companyProvider = StateNotifierProvider<CompanyNotifier, CompanyState>((
+  ref,
+) {
   return CompanyNotifier();
 });
