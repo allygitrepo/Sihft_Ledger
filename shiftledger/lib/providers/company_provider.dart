@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flutter/widgets.dart';
 import 'dart:typed_data';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/legacy.dart';
@@ -75,6 +76,12 @@ class CompanyNotifier extends StateNotifier<CompanyState> {
       if (company.id == null) {
         syncCompanyWithBackend();
       }
+    } else {
+      // If no local company, try to sync with backend if token exists
+      // This handles re-login on a fresh install or cleared data
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        syncCompanyWithBackend();
+      });
     }
   }
 
