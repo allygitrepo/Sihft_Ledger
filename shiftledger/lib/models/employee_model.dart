@@ -1,12 +1,6 @@
-enum EmployeeType {
-  hourly,
-  daily,
-}
+enum EmployeeType { hourly, daily }
 
-enum OvertimeType {
-  hourwise,
-  slotwise,
-}
+enum OvertimeType { none, hourwise, slotwise }
 
 class OvertimeSlot {
   final int startHour;
@@ -20,11 +14,7 @@ class OvertimeSlot {
   });
 
   Map<String, dynamic> toJson() {
-    return {
-      'startHour': startHour,
-      'endHour': endHour,
-      'rate': rate,
-    };
+    return {'startHour': startHour, 'endHour': endHour, 'rate': rate};
   }
 
   factory OvertimeSlot.fromJson(Map<String, dynamic> json) {
@@ -35,11 +25,7 @@ class OvertimeSlot {
     );
   }
 
-  OvertimeSlot copyWith({
-    int? startHour,
-    int? endHour,
-    double? rate,
-  }) {
+  OvertimeSlot copyWith({int? startHour, int? endHour, double? rate}) {
     return OvertimeSlot(
       startHour: startHour ?? this.startHour,
       endHour: endHour ?? this.endHour,
@@ -50,18 +36,23 @@ class OvertimeSlot {
 
 class EmployeeModel {
   final String id;
-  final String name;
+  final String firstName;
+  final String lastName;
   final String employeeCode;
   final String mobileNo;
-  final String position;
-  final String department;
+  final String position; // Kept for name display if needed
+  final String department; // Kept for name display if needed
+  final int? departmentId;
+  final int? designationId;
   final double salary; // Kept for backward compatibility
   final DateTime createdAt;
-  
+
   // Salary conversion fields
-  final double salaryOriginal; // Original monthly salary from CSV or manual entry
-  final String salaryType; // 'hourwise' or 'daywise' - matches company configuration
-  
+  final double
+  salaryOriginal; // Original monthly salary from CSV or manual entry
+  final String
+  salaryType; // 'hourwise' or 'daywise' - matches company configuration
+
   // New fields for attendance system
   final EmployeeType employeeType;
   final double? hourlyRate;
@@ -70,13 +61,18 @@ class EmployeeModel {
   final double overtimeRate;
   final List<OvertimeSlot> overtimeSlots;
 
+  String get name => '$firstName $lastName'.trim();
+
   const EmployeeModel({
     required this.id,
-    required this.name,
+    required this.firstName,
+    required this.lastName,
     required this.employeeCode,
     required this.mobileNo,
     required this.position,
     required this.department,
+    this.departmentId,
+    this.designationId,
     required this.salary,
     required this.createdAt,
     required this.salaryOriginal,
@@ -92,11 +88,15 @@ class EmployeeModel {
   Map<String, dynamic> toJson() {
     return {
       'id': id,
-      'name': name,
-      'employeeCode': employeeCode,
-      'mobileNo': mobileNo,
+      'first_name': firstName,
+      'last_name': lastName,
+      'employee_code': employeeCode,
+      'mobileNo': mobileNo, // Frontend uses mobileNo, backend might use phone
+      'phone': mobileNo, // Add phone for backend
       'position': position,
       'department': department,
+      'department_id': departmentId,
+      'designation_id': designationId,
       'salary': salary,
       'createdAt': createdAt.toIso8601String(),
       'salaryOriginal': salaryOriginal,
@@ -111,16 +111,43 @@ class EmployeeModel {
   }
 
   factory EmployeeModel.fromJson(Map<String, dynamic> json) {
+    // Handle both frontend (name) and backend (first_name, last_name)
+    String fName = json['first_name'] ?? '';
+    String lName = json['last_name'] ?? '';
+    if (fName.isEmpty && json['name'] != null) {
+      final nameParts = (json['name'] as String).split(' ');
+      fName = nameParts[0];
+      lName = nameParts.length > 1 ? nameParts.sublist(1).join(' ') : '';
+    }
+
     return EmployeeModel(
-      id: json['id'] as String,
-      name: json['name'] as String,
-      employeeCode: json['employeeCode'] as String,
-      mobileNo: json['mobileNo'] as String,
-      position: json['position'] as String,
-      department: json['department'] as String,
-      salary: (json['salary'] as num).toDouble(),
-      createdAt: DateTime.parse(json['createdAt'] as String),
-      salaryOriginal: (json['salaryOriginal'] as num?)?.toDouble() ?? (json['salary'] as num).toDouble(),
+      id: json['id']?.toString() ?? '',
+      firstName: fName,
+      lastName: lName,
+      employeeCode: json['employee_code'] ?? json['employeeCode'] ?? '',
+      mobileNo: json['phone'] ?? json['mobileNo'] ?? '',
+      department: json['Department'] != null
+          ? json['Department']['department_name'] ?? ''
+          : (json['department'] ?? ''),
+      position: json['Designation'] != null
+          ? json['Designation']['designation_name'] ?? ''
+          : (json['position'] ?? ''),
+      departmentId: json['department_id'] is int
+          ? json['department_id']
+          : int.tryParse(json['department_id']?.toString() ?? ''),
+      designationId: json['designation_id'] is int
+          ? json['designation_id']
+          : int.tryParse(json['designation_id']?.toString() ?? ''),
+      salary: (json['salary'] as num?)?.toDouble() ?? 0.0,
+      createdAt: json['created_at'] != null
+          ? DateTime.parse(json['created_at'])
+          : (json['createdAt'] != null
+                ? DateTime.parse(json['createdAt'])
+                : DateTime.now()),
+      salaryOriginal:
+          (json['salaryOriginal'] as num?)?.toDouble() ??
+          (json['salary'] as num?)?.toDouble() ??
+          0.0,
       salaryType: (json['salaryType'] as String?) ?? 'hourwise',
       employeeType: json['employeeType'] != null
           ? EmployeeType.values.firstWhere(
@@ -137,7 +164,8 @@ class EmployeeModel {
             )
           : OvertimeType.hourwise,
       overtimeRate: (json['overtimeRate'] as num?)?.toDouble() ?? 100.0,
-      overtimeSlots: (json['overtimeSlots'] as List<dynamic>?)
+      overtimeSlots:
+          (json['overtimeSlots'] as List<dynamic>?)
               ?.map((s) => OvertimeSlot.fromJson(s as Map<String, dynamic>))
               .toList() ??
           const [],
@@ -146,11 +174,14 @@ class EmployeeModel {
 
   EmployeeModel copyWith({
     String? id,
-    String? name,
+    String? firstName,
+    String? lastName,
     String? employeeCode,
     String? mobileNo,
     String? position,
     String? department,
+    int? departmentId,
+    int? designationId,
     double? salary,
     DateTime? createdAt,
     double? salaryOriginal,
@@ -164,11 +195,14 @@ class EmployeeModel {
   }) {
     return EmployeeModel(
       id: id ?? this.id,
-      name: name ?? this.name,
+      firstName: firstName ?? this.firstName,
+      lastName: lastName ?? this.lastName,
       employeeCode: employeeCode ?? this.employeeCode,
       mobileNo: mobileNo ?? this.mobileNo,
       position: position ?? this.position,
       department: department ?? this.department,
+      departmentId: departmentId ?? this.departmentId,
+      designationId: designationId ?? this.designationId,
       salary: salary ?? this.salary,
       createdAt: createdAt ?? this.createdAt,
       salaryOriginal: salaryOriginal ?? this.salaryOriginal,

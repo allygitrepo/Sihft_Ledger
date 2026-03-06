@@ -79,13 +79,21 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
         double.tryParse(_editControllers['salary']!.text) ??
         originalEmployee.salary;
 
+    // Split name in case it was edited as a single string field (if applicable)
+    // Actually, in the desktop table view, it might be a single 'name' field
+    final name = _editControllers['name']!.text;
+    final nameParts = name.trim().split(' ');
+    final firstName = nameParts[0];
+    final lastName = nameParts.length > 1 ? nameParts.sublist(1).join(' ') : '';
+
     // Get settings and convert salary
     final settings = ref.read(settingsProvider);
     final conversion = EmployeeService.convertSalary(newSalary, settings);
 
     final updatedEmployee = EmployeeModel(
       id: originalEmployee.id,
-      name: _editControllers['name']!.text,
+      firstName: firstName,
+      lastName: lastName,
       employeeCode: _editControllers['code']!.text,
       mobileNo: _editControllers['mobile']!.text,
       position: _editControllers['position']!.text,
@@ -1320,6 +1328,8 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
                             desig.designationName,
                             dept.departmentName,
                             double.parse(salaryController.text),
+                            selectedDepartmentId!,
+                            selectedDesignationId!,
                           );
                         }
                       },
@@ -1388,10 +1398,17 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
     String position,
     String department,
     double salary,
+    String departmentId,
+    String designationId,
   ) {
     final id =
         DateTime.now().millisecondsSinceEpoch.toString() +
         code.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '');
+
+    // Split name into first and last name
+    final nameParts = name.trim().split(' ');
+    final firstName = nameParts[0];
+    final lastName = nameParts.length > 1 ? nameParts.sublist(1).join(' ') : '';
 
     // Get settings and convert salary
     final settings = ref.read(settingsProvider);
@@ -1399,11 +1416,14 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
 
     final employee = EmployeeModel(
       id: id,
-      name: name,
+      firstName: firstName,
+      lastName: lastName,
       employeeCode: code,
       mobileNo: mobileNo,
       position: position,
       department: department,
+      departmentId: int.tryParse(departmentId),
+      designationId: int.tryParse(designationId),
       salary: salary,
       salaryOriginal: salary,
       salaryType: conversion['salaryType'] as String,
@@ -1415,11 +1435,12 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
     ref.read(employeeProvider.notifier).addEmployee(employee);
     Navigator.pop(context);
 
-    ToastHelper.success('Employee $name added successfully');
+    ToastHelper.success('Employee $firstName $lastName added successfully');
   }
 
   void _showEditEmployeeDialog(BuildContext context, EmployeeModel employee) {
-    final nameController = TextEditingController(text: employee.name);
+    final firstNameController = TextEditingController(text: employee.firstName);
+    final lastNameController = TextEditingController(text: employee.lastName);
     final codeController = TextEditingController(text: employee.employeeCode);
     final mobileController = TextEditingController(text: employee.mobileNo);
     final salaryController = TextEditingController(
@@ -1458,9 +1479,19 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   TextFormField(
-                    controller: nameController,
+                    controller: firstNameController,
                     decoration: const InputDecoration(
-                      labelText: 'Employee Name',
+                      labelText: 'First Name',
+                      border: OutlineInputBorder(),
+                    ),
+                    validator: (value) =>
+                        value?.isEmpty ?? true ? 'Required' : null,
+                  ),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: lastNameController,
+                    decoration: const InputDecoration(
+                      labelText: 'Last Name',
                       border: OutlineInputBorder(),
                     ),
                     validator: (value) =>
@@ -1588,7 +1619,8 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
 
                   final updatedEmployee = EmployeeModel(
                     id: employee.id,
-                    name: nameController.text,
+                    firstName: firstNameController.text,
+                    lastName: lastNameController.text,
                     employeeCode: codeController.text,
                     mobileNo: mobileController.text,
                     position: desig.designationName,

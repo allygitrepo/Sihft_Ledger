@@ -1538,7 +1538,8 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
               ? employeeState.employees.first
               : EmployeeModel(
                   id: 'temp',
-                  name: 'N/A',
+                  firstName: 'N/A',
+                  lastName: 'N/A',
                   employeeCode: 'N/A',
                   mobileNo: '',
                   position: 'N/A',
@@ -1569,11 +1570,16 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
             children: [
               Row(
                 children: [
-                  const Text(
-                    'Attendance Records',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  const Expanded(
+                    child: Text(
+                      'Attendance Records',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
-                  const Spacer(),
                   // Date Range Button
                   OutlinedButton.icon(
                     onPressed: () async {
@@ -1622,18 +1628,119 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
                 ],
               ),
               const SizedBox(height: 12),
-              Row(
-                children: [
-                  // Department Filter
-                  Expanded(
-                    flex: 2,
-                    child: _buildDepartmentDropdown(employeeState.employees),
-                  ),
-                  const SizedBox(width: 12),
-                  // Search Field
-                  Expanded(
-                    flex: 3,
-                    child: TextField(
+              if (isDesktop)
+                Row(
+                  children: [
+                    // Department Filter
+                    Expanded(
+                      flex: 2,
+                      child: _buildDepartmentDropdown(employeeState.employees),
+                    ),
+                    const SizedBox(width: 12),
+                    // Search Field
+                    Expanded(
+                      flex: 3,
+                      child: TextField(
+                        onChanged: (value) =>
+                            setState(() => _tableSearchQuery = value),
+                        decoration: InputDecoration(
+                          hintText: 'Search Employee...',
+                          prefixIcon: const Icon(Icons.search, size: 20),
+                          isDense: true,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    // Export Button
+                    SizedBox(
+                      height: 40,
+                      child: ElevatedButton.icon(
+                        onPressed: _isExporting
+                            ? null
+                            : () => _handleExport(
+                                markedRecords,
+                                employeeState.employees,
+                              ),
+                        icon: _isExporting
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
+                              )
+                            : const Icon(Icons.download, size: 18),
+                        label: Text(
+                          _isExporting ? 'Exporting...' : 'Export CSV',
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.primary,
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                )
+              else
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Row(
+                      children: [
+                        // Department Filter
+                        Expanded(
+                          child: _buildDepartmentDropdown(
+                            employeeState.employees,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        // Export Button
+                        Expanded(
+                          child: SizedBox(
+                            height: 40,
+                            child: ElevatedButton.icon(
+                              onPressed: _isExporting
+                                  ? null
+                                  : () => _handleExport(
+                                      markedRecords,
+                                      employeeState.employees,
+                                    ),
+                              icon: _isExporting
+                                  ? const SizedBox(
+                                      width: 16,
+                                      height: 16,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        color: Colors.white,
+                                      ),
+                                    )
+                                  : const Icon(Icons.download, size: 18),
+                              label: Text(
+                                _isExporting ? 'Exporting...' : 'Export CSV',
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: AppColors.primary,
+                                foregroundColor: Colors.white,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    // Search Field
+                    TextField(
                       onChanged: (value) =>
                           setState(() => _tableSearchQuery = value),
                       decoration: InputDecoration(
@@ -1645,40 +1752,8 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
                         ),
                       ),
                     ),
-                  ),
-                  const SizedBox(width: 12),
-                  // Export Button
-                  SizedBox(
-                    height: 40,
-                    child: ElevatedButton.icon(
-                      onPressed: _isExporting
-                          ? null
-                          : () => _handleExport(
-                              markedRecords,
-                              employeeState.employees,
-                            ),
-                      icon: _isExporting
-                          ? const SizedBox(
-                              width: 16,
-                              height: 16,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: Colors.white,
-                              ),
-                            )
-                          : const Icon(Icons.download, size: 18),
-                      label: Text(_isExporting ? 'Exporting...' : 'Export CSV'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.primary,
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
+                  ],
+                ),
             ],
           ),
         ),
