@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/navigation_provider.dart';
 import '../providers/auth_provider.dart';
+import '../providers/company_provider.dart';
 import '../routes/app_routes.dart';
+import '../utills/image_converter.dart';
 import '../utills/app_colors.dart';
 
 class SidebarNavigation extends ConsumerWidget {
@@ -11,6 +13,8 @@ class SidebarNavigation extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final authState = ref.watch(authProvider);
+    final companyState = ref.watch(companyProvider);
+    final company = companyState.company;
 
     return Material(
       child: Container(
@@ -29,27 +33,35 @@ class SidebarNavigation extends ConsumerWidget {
                 children: [
                   ClipRRect(
                     borderRadius: BorderRadius.circular(12),
-                    child: Image.asset(
-                      'assets/shiftledger.png',
-                      width: 64,
-                      height: 64,
-                      fit: BoxFit.cover,
-                      errorBuilder: (context, error, stackTrace) {
-                        // Fallback to icon if image fails to load
-                        return const Icon(
-                          Icons.account_balance_wallet,
-                          size: 48,
-                          color: AppColors.primary,
-                        );
-                      },
-                    ),
+                    child: company?.companyPhoto != null
+                        ? Image.memory(
+                            ImageConverter.fromBase64(company!.companyPhoto)!,
+                            width: 64,
+                            height: 64,
+                            fit: BoxFit.cover,
+                          )
+                        : Image.asset(
+                            'assets/shiftledger.png',
+                            width: 64,
+                            height: 64,
+                            fit: BoxFit.cover,
+                            errorBuilder: (context, error, stackTrace) {
+                              // Fallback to icon if image fails to load
+                              return const Icon(
+                                Icons.account_balance_wallet,
+                                size: 48,
+                                color: AppColors.primary,
+                              );
+                            },
+                          ),
                   ),
                   const SizedBox(height: 12),
                   Text(
-                    'ShiftLedger',
+                    company?.companyName ?? 'ShiftLedger',
                     style: Theme.of(context).textTheme.titleLarge?.copyWith(
                       fontWeight: FontWeight.bold,
                     ),
+                    textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 8),
                   Text(
@@ -239,9 +251,36 @@ class SidebarNavigation extends ConsumerWidget {
               icon: Icons.logout,
               label: 'Logout',
               onTap: () async {
-                await ref.read(authProvider.notifier).logout();
-                if (context.mounted) {
-                  Navigator.pushReplacementNamed(context, AppRoutes.login);
+                final shouldLogout = await showDialog<bool>(
+                  context: context,
+                  builder: (context) => AlertDialog(
+                    title: const Text('Logout'),
+                    content: const Text('Are you sure you want to logout?'),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(context, false),
+                        child: const Text('Cancel'),
+                      ),
+                      TextButton(
+                        onPressed: () => Navigator.pop(context, true),
+                        style: TextButton.styleFrom(
+                          foregroundColor: Colors.red,
+                        ),
+                        child: const Text('Logout'),
+                      ),
+                    ],
+                  ),
+                );
+
+                if (shouldLogout == true) {
+                  await ref.read(authProvider.notifier).logout();
+                  if (context.mounted) {
+                    Navigator.pushNamedAndRemoveUntil(
+                      context,
+                      AppRoutes.login,
+                      (route) => false,
+                    );
+                  }
                 }
               },
             ),
