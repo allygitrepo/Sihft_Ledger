@@ -14,6 +14,11 @@ const employeeController = {
                 return res.status(400).json({ message: "Employee with this phone already exists" });
             }
 
+            const currentYear = new Date().getFullYear();
+            const employeeCount = await Employee.count({ where: { company_id } });
+            const employeeNumber = employeeCount + 1;
+            const employee_code = `EMP/${currentYear}/${company_id}/${employeeNumber}`;
+
             const employee = await Employee.create({
                 company_id,
                 department_id,
@@ -22,6 +27,7 @@ const employeeController = {
                 last_name,
                 phone,
                 email,
+                employee_code,
                 join_date
             });
 

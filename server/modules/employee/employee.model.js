@@ -35,6 +35,7 @@ const Employee = sequelize.define("Employees",
         last_name: { type: DataTypes.STRING, allowNull: false },
         phone: { type: DataTypes.STRING, allowNull: false, unique: true },
         email: { type: DataTypes.STRING, allowNull: true, unique: true },
+        employee_code: { type: DataTypes.STRING, allowNull: true, unique: true },
         join_date: { type: DataTypes.DATEONLY, allowNull: false },
         status: { type: DataTypes.BOOLEAN, defaultValue: true }
     },
