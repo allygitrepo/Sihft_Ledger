@@ -95,15 +95,40 @@ class ProfileScreen extends ConsumerWidget {
                   Expanded(
                     child: ElevatedButton.icon(
                       onPressed: () async {
-                        // Clear auth and company data
-                        await ref.read(authProvider.notifier).logout();
-                        await ref.read(companyProvider.notifier).clearCompany();
+                        final shouldLogout = await showDialog<bool>(
+                          context: context,
+                          builder: (context) => AlertDialog(
+                            title: const Text('Logout'),
+                            content: const Text(
+                              'Are you sure you want to logout?',
+                            ),
+                            actions: [
+                              TextButton(
+                                onPressed: () => Navigator.pop(context, false),
+                                child: const Text('Cancel'),
+                              ),
+                              TextButton(
+                                onPressed: () => Navigator.pop(context, true),
+                                style: TextButton.styleFrom(
+                                  foregroundColor: Colors.red,
+                                ),
+                                child: const Text('Logout'),
+                              ),
+                            ],
+                          ),
+                        );
 
-                        if (context.mounted) {
-                          Navigator.pushReplacementNamed(
-                            context,
-                            AppRoutes.login,
-                          );
+                        if (shouldLogout == true) {
+                          // Clear auth and company data
+                          await ref.read(authProvider.notifier).logout();
+
+                          if (context.mounted) {
+                            Navigator.pushNamedAndRemoveUntil(
+                              context,
+                              AppRoutes.login,
+                              (route) => false,
+                            );
+                          }
                         }
                       },
                       icon: const Icon(Icons.logout),
