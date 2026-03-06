@@ -54,8 +54,8 @@ class DashboardScreen extends ConsumerWidget {
                     Text(
                       'Quick Actions',
                       style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                            fontWeight: FontWeight.bold,
-                          ),
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                     IconButton(
                       icon: const Icon(Icons.close),
@@ -99,7 +99,28 @@ class DashboardScreen extends ConsumerWidget {
                       color: Colors.purple,
                       onTap: () {
                         Navigator.pop(context);
-                        Navigator.pushNamed(context, AppRoutes.payrollConfiguration);
+                        Navigator.pushNamed(
+                          context,
+                          AppRoutes.payrollConfiguration,
+                        );
+                      },
+                    ),
+                    _QuickActionItem(
+                      icon: Icons.business,
+                      title: 'Manage\nDepartments',
+                      color: Colors.orange,
+                      onTap: () {
+                        Navigator.pop(context);
+                        Navigator.pushNamed(context, AppRoutes.departments);
+                      },
+                    ),
+                    _QuickActionItem(
+                      icon: Icons.badge,
+                      title: 'Manage\nDesignations',
+                      color: Colors.cyan,
+                      onTap: () {
+                        Navigator.pop(context);
+                        Navigator.pushNamed(context, AppRoutes.designations);
                       },
                     ),
                     _QuickActionItem(
@@ -143,13 +164,13 @@ class DashboardScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final currentIndex = ref.watch(navigationProvider);
-    
+
     final screens = [
       const HomeScreen(),
       const SizedBox.shrink(),
       const SettingsScreen(),
     ];
-    
+
     final titles = ['Home', '', 'Settings'];
 
     return ResponsiveWrapper(
@@ -170,7 +191,7 @@ class DashboardScreen extends ConsumerWidget {
       canPop: false,
       onPopInvokedWithResult: (didPop, result) async {
         if (didPop) return;
-        
+
         final shouldPop = await _onWillPop(context);
         if (shouldPop && context.mounted) {
           Navigator.of(context).pop();
@@ -189,10 +210,7 @@ class DashboardScreen extends ConsumerWidget {
             ),
           ],
         ),
-        body: IndexedStack(
-          index: currentIndex,
-          children: screens,
-        ),
+        body: IndexedStack(index: currentIndex, children: screens),
         floatingActionButton: FloatingActionButton(
           onPressed: () => _showQuickActionsBottomSheet(context),
           backgroundColor: AppColors.primary,
@@ -215,7 +233,7 @@ class DashboardScreen extends ConsumerWidget {
       canPop: false,
       onPopInvokedWithResult: (didPop, result) async {
         if (didPop) return;
-        
+
         final shouldPop = await _onWillPop(context);
         if (shouldPop && context.mounted) {
           Navigator.of(context).pop();
@@ -245,9 +263,8 @@ class DashboardScreen extends ConsumerWidget {
                       children: [
                         Text(
                           titles[currentIndex],
-                          style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                                fontWeight: FontWeight.bold,
-                              ),
+                          style: Theme.of(context).textTheme.titleLarge
+                              ?.copyWith(fontWeight: FontWeight.bold),
                         ),
                         IconButton(
                           icon: const Icon(Icons.person),
@@ -259,10 +276,7 @@ class DashboardScreen extends ConsumerWidget {
                     ),
                   ),
                   Expanded(
-                    child: IndexedStack(
-                      index: currentIndex,
-                      children: screens,
-                    ),
+                    child: IndexedStack(index: currentIndex, children: screens),
                   ),
                 ],
               ),
@@ -294,9 +308,7 @@ class _QuickActionItem extends StatelessWidget {
       borderRadius: BorderRadius.circular(16),
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(16),
-        ),
+        decoration: BoxDecoration(borderRadius: BorderRadius.circular(16)),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           mainAxisSize: MainAxisSize.min,
@@ -308,11 +320,7 @@ class _QuickActionItem extends StatelessWidget {
                 color: color.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(14),
               ),
-              child: Icon(
-                icon,
-                color: color,
-                size: 26,
-              ),
+              child: Icon(icon, color: color, size: 26),
             ),
             const SizedBox(height: 8),
             Flexible(
