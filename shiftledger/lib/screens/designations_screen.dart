@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../models/designation_model.dart';
 import '../models/department_model.dart';
 import '../providers/designation_provider.dart';
+import '../providers/company_provider.dart';
 import '../providers/department_provider.dart';
 import '../utills/app_colors.dart';
 import '../widgets/toast.dart';
@@ -21,6 +22,18 @@ class _DesignationsScreenState extends ConsumerState<DesignationsScreen> {
   String _searchQuery = '';
 
   @override
+  void initState() {
+    super.initState();
+    // Initially we might not have a department selected, so we wait or load for the first one if available
+    Future.microtask(() {
+      final depts = ref.read(departmentProvider).departments;
+      if (depts.isNotEmpty) {
+        ref.read(designationProvider.notifier).loadDesignations(depts.first.id);
+      }
+    });
+  }
+
+  @override
   void dispose() {
     _searchController.dispose();
     super.dispose();
@@ -33,6 +46,15 @@ class _DesignationsScreenState extends ConsumerState<DesignationsScreen> {
     final theme = Theme.of(context);
     final screenWidth = MediaQuery.of(context).size.width;
     final isDesktop = screenWidth > 800;
+
+    // Listen for company sync updates
+    ref.listen(companyProvider, (previous, next) {
+      if (previous?.company?.id == null && next.company?.id != null) {
+        // If we are on this screen, we might need departments loaded first
+        // But since designations depend on a specific department,
+        // usually we come from the department selection.
+      }
+    });
 
     final filteredDesignations = designationState.designations.where((desig) {
       if (_searchQuery.isEmpty) return true;
@@ -516,16 +538,10 @@ class _DesignationsScreenState extends ConsumerState<DesignationsScreen> {
                       );
                       success = await notifier.updateDesignation(updated);
                     } else {
-                      final newDesig = DesignationModel(
-                        id: DateTime.now().millisecondsSinceEpoch.toString(),
-                        companyId: 'COMP001',
+                      success = await notifier.addDesignation(
                         departmentId: selectedDepartmentId!,
                         designationName: nameController.text.trim(),
-                        status: status,
-                        createdAt: DateTime.now(),
-                        updatedAt: DateTime.now(),
                       );
-                      success = await notifier.addDesignation(newDesig);
                     }
 
                     if (context.mounted) {
@@ -537,7 +553,10 @@ class _DesignationsScreenState extends ConsumerState<DesignationsScreen> {
                         );
                         Navigator.pop(context);
                       } else {
-                        ToastHelper.error('An error occurred');
+                        final error =
+                            ref.read(designationProvider).error ??
+                            'An error occurred';
+                        ToastHelper.error(error);
                       }
                     }
                   },
@@ -587,7 +606,7 @@ class _DesignationsScreenState extends ConsumerState<DesignationsScreen> {
     if (confirm == true) {
       final success = await ref
           .read(designationProvider.notifier)
-          .deleteDesignation(desig.id);
+          .deleteDesignation(desig.id, desig.departmentId);
       if (success) {
         ToastHelper.success('Designation deleted');
       } else {

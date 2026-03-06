@@ -33,9 +33,9 @@ class DesignationModel {
 
   factory DesignationModel.fromMap(Map<String, dynamic> map) {
     return DesignationModel(
-      id: map['id'] ?? '',
-      companyId: map['company_id'] ?? '',
-      departmentId: map['department_id'] ?? '',
+      id: map['id']?.toString() ?? '',
+      companyId: map['company_id']?.toString() ?? '',
+      departmentId: map['department_id']?.toString() ?? '',
       designationName: map['designation_name'] ?? '',
       createdAt: DateTime.parse(map['created_at']),
       updatedAt: DateTime.parse(map['updated_at']),
