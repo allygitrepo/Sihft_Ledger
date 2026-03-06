@@ -9,7 +9,8 @@ import '../providers/settings_provider.dart';
 import '../services/attendance_service.dart';
 import '../services/salary_calculator_service.dart';
 import '../utills/app_colors.dart';
-import '../widgets/loader.dart';
+import '../services/attendance_export_service.dart';
+import '../widgets/toast.dart';
 
 class AttendanceScreen extends ConsumerStatefulWidget {
   const AttendanceScreen({super.key});
@@ -24,13 +25,29 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
   final Map<String, DateTime> _bulkCheckOutTimes = {};
   final Map<String, AttendanceStatus> _bulkStatuses = {};
   final Map<String, double> _bulkOvertimeHours = {};
-  final Map<String, bool> _selectedEmployees = {}; // Track selected employees for marking
-  
+  final Map<String, bool> _selectedEmployees =
+      {}; // Track selected employees for marking
+
   int _selectedTabIndex = 0; // Track current tab
-  
+
   // Search functionality
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
+
+  // Attendance Table Filters
+  DateTime? _startDate;
+  DateTime? _endDate;
+  String? _selectedDepartment;
+  String _tableSearchQuery = '';
+  bool _isExporting = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _searchQuery = '';
+    _tableSearchQuery = '';
+    _isExporting = false;
+  }
 
   @override
   void dispose() {
@@ -43,14 +60,10 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
     final theme = Theme.of(context);
     final screenWidth = MediaQuery.of(context).size.width;
     final isDesktop = screenWidth > 900;
-    
+
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
-      appBar: isDesktop
-          ? null
-          : AppBar(
-              title: const Text('Attendance'),
-            ),
+      appBar: isDesktop ? null : AppBar(title: const Text('Attendance')),
       body: Column(
         children: [
           // Custom Tab Bar (50-50 ratio, no container)
@@ -69,7 +82,7 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
   Widget _buildCustomTabBar() {
     final theme = Theme.of(context);
     final cardColor = theme.cardColor;
-    
+
     return Container(
       color: cardColor,
       child: Row(
@@ -83,7 +96,9 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
                 decoration: BoxDecoration(
                   border: Border(
                     bottom: BorderSide(
-                      color: _selectedTabIndex == 0 ? AppColors.primary : Colors.transparent,
+                      color: _selectedTabIndex == 0
+                          ? AppColors.primary
+                          : Colors.transparent,
                       width: 3,
                     ),
                   ),
@@ -93,7 +108,9 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
                   children: [
                     Icon(
                       Icons.edit_note,
-                      color: _selectedTabIndex == 0 ? AppColors.primary : Colors.grey,
+                      color: _selectedTabIndex == 0
+                          ? AppColors.primary
+                          : Colors.grey,
                       size: 20,
                     ),
                     const SizedBox(width: 8),
@@ -102,7 +119,9 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
                       style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
-                        color: _selectedTabIndex == 0 ? AppColors.primary : Colors.grey,
+                        color: _selectedTabIndex == 0
+                            ? AppColors.primary
+                            : Colors.grey,
                       ),
                     ),
                   ],
@@ -119,7 +138,9 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
                 decoration: BoxDecoration(
                   border: Border(
                     bottom: BorderSide(
-                      color: _selectedTabIndex == 1 ? AppColors.primary : Colors.transparent,
+                      color: _selectedTabIndex == 1
+                          ? AppColors.primary
+                          : Colors.transparent,
                       width: 3,
                     ),
                   ),
@@ -129,7 +150,9 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
                   children: [
                     Icon(
                       Icons.table_chart,
-                      color: _selectedTabIndex == 1 ? AppColors.primary : Colors.grey,
+                      color: _selectedTabIndex == 1
+                          ? AppColors.primary
+                          : Colors.grey,
                       size: 20,
                     ),
                     const SizedBox(width: 8),
@@ -138,7 +161,9 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
                       style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
-                        color: _selectedTabIndex == 1 ? AppColors.primary : Colors.grey,
+                        color: _selectedTabIndex == 1
+                            ? AppColors.primary
+                            : Colors.grey,
                       ),
                     ),
                   ],
@@ -162,16 +187,21 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
 
     // Check how many employees have attendance marked for today
     final markedEmployeeIds = attendanceList.attendanceRecords
-        .where((record) =>
-            record.date.year == selectedDate.year &&
-            record.date.month == selectedDate.month &&
-            record.date.day == selectedDate.day)
+        .where(
+          (record) =>
+              record.date.year == selectedDate.year &&
+              record.date.month == selectedDate.month &&
+              record.date.day == selectedDate.day,
+        )
         .map((record) => record.employeeId)
         .toSet();
 
     // Check if ALL employees have attendance marked for today
-    final allEmployeesMarked = employeeState.employees.isNotEmpty &&
-        employeeState.employees.every((emp) => markedEmployeeIds.contains(emp.id));
+    final allEmployeesMarked =
+        (employeeState.employees.length > 0) &&
+        employeeState.employees.every(
+          (emp) => markedEmployeeIds.contains(emp.id),
+        );
 
     // If ALL employees have attendance marked for today, show message
     if (allEmployeesMarked) {
@@ -199,10 +229,7 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
               const SizedBox(height: 12),
               Text(
                 'All employees attendance has been marked for today',
-                style: TextStyle(
-                  fontSize: 16,
-                  color: Colors.grey[600],
-                ),
+                style: TextStyle(fontSize: 16, color: Colors.grey[600]),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 8),
@@ -226,7 +253,10 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.primary,
                   foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 32,
+                    vertical: 16,
+                  ),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(8),
                   ),
@@ -246,13 +276,13 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
     // Filter employees based on search query
     final filteredEmployees = unmarkedEmployees.where((employee) {
       if (_searchQuery.isEmpty) return true;
-      
+
       final query = _searchQuery.toLowerCase();
       return employee.name.toLowerCase().contains(query) ||
-             employee.employeeCode.toLowerCase().contains(query) ||
-             employee.mobileNo.toLowerCase().contains(query) ||
-             employee.department.toLowerCase().contains(query) ||
-             employee.position.toLowerCase().contains(query);
+          employee.employeeCode.toLowerCase().contains(query) ||
+          employee.mobileNo.toLowerCase().contains(query) ||
+          employee.department.toLowerCase().contains(query) ||
+          employee.position.toLowerCase().contains(query);
     }).toList();
 
     return Column(
@@ -265,9 +295,7 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
               ? Row(
                   children: [
                     // Search Bar
-                    Expanded(
-                      child: _buildSearchField(theme),
-                    ),
+                    Expanded(child: _buildSearchField(theme)),
                     const SizedBox(width: 12),
                     // Today's Date
                     _buildDateBadge(selectedDate),
@@ -294,7 +322,7 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
                 ),
         ),
         // Search Results Count (if searching)
-        if (_searchQuery.isNotEmpty)
+        if (_searchQuery != '')
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             color: Colors.blue.withValues(alpha: 0.05),
@@ -317,55 +345,74 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
           ),
         // Content - Cards for mobile, Table for desktop
         Expanded(
-          child: employeeState.isLoading
-              ? const Center(child: AppLoader(size: 60))
+          child: employeeState.employees.isEmpty
+              ? _buildEmptyState(employeeState.isLoading)
               : filteredEmployees.isEmpty
-                  ? Center(
-                      child: Padding(
-                        padding: const EdgeInsets.all(24),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              _searchQuery.isEmpty ? Icons.people_outline : Icons.search_off,
-                              size: 64,
-                              color: Colors.grey[400],
-                            ),
-                            const SizedBox(height: 16),
-                            Text(
-                              _searchQuery.isEmpty 
-                                  ? unmarkedEmployees.isEmpty 
-                                      ? 'All attendance marked for today'
-                                      : 'No employees found'
-                                  : 'No matching employees',
-                              style: TextStyle(fontSize: 16, color: Colors.grey[600]),
-                              textAlign: TextAlign.center,
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              _searchQuery.isEmpty
-                                  ? unmarkedEmployees.isEmpty
-                                      ? 'All employees have been marked present or absent'
-                                      : 'Add employees first to mark attendance'
-                                  : 'Try a different search term',
-                              style: TextStyle(fontSize: 14, color: Colors.grey[500]),
-                              textAlign: TextAlign.center,
-                            ),
-                          ],
+              ? Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        if (employeeState.isLoading)
+                          const Padding(
+                            padding: EdgeInsets.only(bottom: 20),
+                            child: CircularProgressIndicator(),
+                          ),
+                        Icon(
+                          _searchQuery.isEmpty
+                              ? Icons.people_outline
+                              : Icons.search_off,
+                          size: 64,
+                          color: Colors.grey[400],
                         ),
-                      ),
-                    )
-                  : isDesktop
-                      ? SingleChildScrollView(
-                          child: _buildBulkAttendanceTable(filteredEmployees, selectedDate),
-                        )
-                      : ListView.builder(
-                          padding: const EdgeInsets.all(16),
-                          itemCount: filteredEmployees.length,
-                          itemBuilder: (context, index) {
-                            return _buildAttendanceCard(filteredEmployees[index], selectedDate);
-                          },
+                        const SizedBox(height: 16),
+                        Text(
+                          _searchQuery.isEmpty
+                              ? unmarkedEmployees.isEmpty
+                                    ? 'All attendance marked for today'
+                                    : 'No employees found'
+                              : 'No matching employees',
+                          style: TextStyle(
+                            fontSize: 16,
+                            color: Colors.grey[600],
+                          ),
+                          textAlign: TextAlign.center,
                         ),
+                        const SizedBox(height: 8),
+                        Text(
+                          _searchQuery.isEmpty
+                              ? unmarkedEmployees.isEmpty
+                                    ? 'All employees have been marked present or absent'
+                                    : 'Add employees first to mark attendance'
+                              : 'Try a different search term',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Colors.grey[500],
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ],
+                    ),
+                  ),
+                )
+              : isDesktop
+              ? SingleChildScrollView(
+                  child: _buildBulkAttendanceTable(
+                    filteredEmployees,
+                    selectedDate,
+                  ),
+                )
+              : ListView.builder(
+                  padding: const EdgeInsets.all(16),
+                  itemCount: filteredEmployees.length,
+                  itemBuilder: (context, index) {
+                    return _buildAttendanceCard(
+                      filteredEmployees[index],
+                      selectedDate,
+                    );
+                  },
+                ),
         ),
       ],
     );
@@ -383,7 +430,7 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
         hintText: 'Search employees...',
         hintStyle: TextStyle(fontSize: 14, color: theme.hintColor),
         prefixIcon: Icon(Icons.search, color: theme.primaryColor),
-        suffixIcon: _searchQuery.isNotEmpty
+        suffixIcon: (_searchQuery != '')
             ? IconButton(
                 icon: const Icon(Icons.clear, size: 20),
                 onPressed: () {
@@ -406,7 +453,10 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
           borderRadius: BorderRadius.circular(8),
           borderSide: BorderSide(color: theme.primaryColor, width: 2),
         ),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 12,
+        ),
         filled: true,
         fillColor: theme.inputDecorationTheme.fillColor ?? theme.cardColor,
       ),
@@ -439,10 +489,13 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
     );
   }
 
-  Widget _buildSaveButton(List<EmployeeModel> filteredEmployees, DateTime selectedDate) {
+  Widget _buildSaveButton(
+    List<EmployeeModel> filteredEmployees,
+    DateTime selectedDate,
+  ) {
     return ElevatedButton.icon(
-      onPressed: filteredEmployees.isEmpty 
-          ? null 
+      onPressed: filteredEmployees.isEmpty
+          ? null
           : () => _markAllSelected(filteredEmployees, selectedDate),
       icon: const Icon(Icons.save, size: 18),
       label: const Text('Save'),
@@ -450,9 +503,7 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
         backgroundColor: AppColors.primary,
         foregroundColor: Colors.white,
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(8),
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       ),
     );
   }
@@ -461,12 +512,12 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
     // Get stored values or use defaults
     final defaultCheckIn = DateTime(date.year, date.month, date.day, 9, 0);
     final defaultCheckOut = DateTime(date.year, date.month, date.day, 18, 0);
-    
+
     final checkIn = _bulkCheckInTimes[employee.id] ?? defaultCheckIn;
     final checkOut = _bulkCheckOutTimes[employee.id] ?? defaultCheckOut;
     final status = _bulkStatuses[employee.id] ?? AttendanceStatus.fullDay;
     final otHours = _bulkOvertimeHours[employee.id] ?? 0.0;
-    
+
     // Check if attendance already marked for today
     final attendanceList = ref.watch(attendanceListProvider);
     final alreadyMarked = attendanceList.attendanceRecords.any((record) {
@@ -475,16 +526,14 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
           record.date.month == date.month &&
           record.date.day == date.day;
     });
-    
+
     // Check if employee is selected for marking
     final isSelected = _selectedEmployees[employee.id] ?? false;
 
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       elevation: 2,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -520,17 +569,17 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
                       const SizedBox(height: 2),
                       Text(
                         employee.employeeCode,
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.grey[600],
-                        ),
+                        style: TextStyle(fontSize: 12, color: Colors.grey[600]),
                       ),
                     ],
                   ),
                 ),
                 // Employee Type Badge
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
                     color: employee.employeeType == EmployeeType.hourly
                         ? Colors.blue.withValues(alpha: 0.1)
@@ -556,7 +605,9 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
                       ),
                       const SizedBox(width: 4),
                       Text(
-                        employee.employeeType == EmployeeType.hourly ? 'Hour' : 'Day',
+                        employee.employeeType == EmployeeType.hourly
+                            ? 'Hour'
+                            : 'Day',
                         style: TextStyle(
                           fontSize: 11,
                           fontWeight: FontWeight.bold,
@@ -580,11 +631,17 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
                 decoration: BoxDecoration(
                   color: Colors.green.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.green.withValues(alpha: 0.3)),
+                  border: Border.all(
+                    color: Colors.green.withValues(alpha: 0.3),
+                  ),
                 ),
                 child: Row(
                   children: [
-                    Icon(Icons.check_circle, color: Colors.green[700], size: 20),
+                    Icon(
+                      Icons.check_circle,
+                      color: Colors.green[700],
+                      size: 20,
+                    ),
                     const SizedBox(width: 12),
                     const Text(
                       'Attendance Already Marked',
@@ -643,7 +700,10 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(8),
                     ),
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 12,
+                    ),
                   ),
                   items: const [
                     DropdownMenuItem(
@@ -673,7 +733,10 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 12,
+                  ),
                   hintText: '0',
                 ),
                 keyboardType: TextInputType.number,
@@ -735,7 +798,10 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
     );
   }
 
-  Widget _buildBulkAttendanceTable(List<EmployeeModel> employees, DateTime date) {
+  Widget _buildBulkAttendanceTable(
+    List<EmployeeModel> employees,
+    DateTime date,
+  ) {
     // Safety check
     if (employees.isEmpty) {
       return const Center(
@@ -745,7 +811,7 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
         ),
       );
     }
-    
+
     return Container(
       width: double.infinity,
       decoration: BoxDecoration(
@@ -825,12 +891,12 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
     // Get stored values or use defaults
     final defaultCheckIn = DateTime(date.year, date.month, date.day, 9, 0);
     final defaultCheckOut = DateTime(date.year, date.month, date.day, 18, 0);
-    
+
     final checkIn = _bulkCheckInTimes[employee.id] ?? defaultCheckIn;
     final checkOut = _bulkCheckOutTimes[employee.id] ?? defaultCheckOut;
     final status = _bulkStatuses[employee.id] ?? AttendanceStatus.fullDay;
     final otHours = _bulkOvertimeHours[employee.id] ?? 0.0;
-    
+
     // Check if attendance already marked for today
     final attendanceList = ref.watch(attendanceListProvider);
     final alreadyMarked = attendanceList.attendanceRecords.any((record) {
@@ -839,21 +905,23 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
           record.date.month == date.month &&
           record.date.day == date.day;
     });
-    
+
     // Check if employee is selected for marking
     final isSelected = _selectedEmployees[employee.id] ?? false;
-    
+
     return DataRow(
       cells: [
         // Checkbox for selection
         DataCell(
           Checkbox(
             value: isSelected,
-            onChanged: alreadyMarked ? null : (value) {
-              setState(() {
-                _selectedEmployees[employee.id] = value ?? false;
-              });
-            },
+            onChanged: alreadyMarked
+                ? null
+                : (value) {
+                    setState(() {
+                      _selectedEmployees[employee.id] = value ?? false;
+                    });
+                  },
             activeColor: AppColors.primary,
           ),
         ),
@@ -865,7 +933,10 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
             children: [
               Text(
                 employee.name,
-                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 13,
+                ),
                 overflow: TextOverflow.ellipsis,
                 maxLines: 1,
               ),
@@ -924,7 +995,10 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
         DataCell(
           alreadyMarked
               ? Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
                     color: Colors.green.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(12),
@@ -978,11 +1052,13 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
         // Check-in Time
         DataCell(
           InkWell(
-            onTap: alreadyMarked ? null : () => _selectBulkTime(employee, date, true, checkIn),
+            onTap: alreadyMarked
+                ? null
+                : () => _selectBulkTime(employee, date, true, checkIn),
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
               decoration: BoxDecoration(
-                color: alreadyMarked 
+                color: alreadyMarked
                     ? Colors.grey.withValues(alpha: 0.05)
                     : Colors.grey.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(4),
@@ -992,8 +1068,8 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Icon(
-                    Icons.login, 
-                    size: 12, 
+                    Icons.login,
+                    size: 12,
                     color: alreadyMarked ? Colors.grey : Colors.green,
                   ),
                   const SizedBox(width: 4),
@@ -1012,11 +1088,13 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
         // Check-out Time
         DataCell(
           InkWell(
-            onTap: alreadyMarked ? null : () => _selectBulkTime(employee, date, false, checkOut),
+            onTap: alreadyMarked
+                ? null
+                : () => _selectBulkTime(employee, date, false, checkOut),
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
               decoration: BoxDecoration(
-                color: alreadyMarked 
+                color: alreadyMarked
                     ? Colors.grey.withValues(alpha: 0.05)
                     : Colors.grey.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(4),
@@ -1026,8 +1104,8 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Icon(
-                    Icons.logout, 
-                    size: 12, 
+                    Icons.logout,
+                    size: 12,
                     color: alreadyMarked ? Colors.grey : Colors.red,
                   ),
                   const SizedBox(width: 4),
@@ -1060,21 +1138,17 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
                       child: Text('Half Day', style: TextStyle(fontSize: 11)),
                     ),
                   ],
-                  onChanged: alreadyMarked ? null : (value) {
-                    if (value != null) {
-                      setState(() {
-                        _bulkStatuses[employee.id] = value;
-                      });
-                    }
-                  },
+                  onChanged: alreadyMarked
+                      ? null
+                      : (value) {
+                          if (value != null) {
+                            setState(() {
+                              _bulkStatuses[employee.id] = value;
+                            });
+                          }
+                        },
                 )
-              : Text(
-                  '-', 
-                  style: TextStyle(
-                    color: Colors.grey, 
-                    fontSize: 12,
-                  ),
-                ),
+              : Text('-', style: TextStyle(color: Colors.grey, fontSize: 12)),
         ),
         // OT Hours
         DataCell(
@@ -1083,14 +1157,21 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
             child: TextFormField(
               key: ValueKey('ot_${employee.id}'),
               initialValue: otHours.toString(),
-              enabled: !alreadyMarked && isSelected, // Only enable if selected (present)
+              enabled:
+                  !alreadyMarked &&
+                  isSelected, // Only enable if selected (present)
               decoration: InputDecoration(
                 border: const OutlineInputBorder(),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 6,
+                  vertical: 6,
+                ),
                 hintText: '0',
                 isDense: true,
                 filled: true,
-                fillColor: (!alreadyMarked && isSelected) ? null : Colors.grey.withValues(alpha: 0.1),
+                fillColor: (!alreadyMarked && isSelected)
+                    ? null
+                    : Colors.grey.withValues(alpha: 0.1),
               ),
               keyboardType: TextInputType.number,
               style: TextStyle(
@@ -1111,7 +1192,12 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
     );
   }
 
-  Future<void> _selectBulkTime(EmployeeModel employee, DateTime date, bool isCheckIn, DateTime currentTime) async {
+  Future<void> _selectBulkTime(
+    EmployeeModel employee,
+    DateTime date,
+    bool isCheckIn,
+    DateTime currentTime,
+  ) async {
     final picked = await showTimePicker(
       context: context,
       initialTime: TimeOfDay.fromDateTime(currentTime),
@@ -1125,7 +1211,7 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
         picked.hour,
         picked.minute,
       );
-      
+
       setState(() {
         if (isCheckIn) {
           _bulkCheckInTimes[employee.id] = newTime;
@@ -1136,19 +1222,17 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
     }
   }
 
-  Future<void> _markAllSelected(List<EmployeeModel> employees, DateTime date) async {
+  Future<void> _markAllSelected(
+    List<EmployeeModel> employees,
+    DateTime date,
+  ) async {
     // Get all selected employees
     final selectedEmployees = employees.where((emp) {
       return _selectedEmployees[emp.id] == true;
     }).toList();
 
     if (selectedEmployees.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please select at least one employee to mark'),
-          backgroundColor: Colors.orange,
-        ),
-      );
+      ToastHelper.success('Please select at least one employee to mark');
       return;
     }
 
@@ -1157,7 +1241,9 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Save Attendance'),
-        content: Text('Save attendance for ${selectedEmployees.length} selected employee(s)?'),
+        content: Text(
+          'Save attendance for ${selectedEmployees.length} selected employee(s)?',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -1182,12 +1268,24 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
     int failCount = 0;
 
     for (final employee in selectedEmployees) {
-      final checkIn = _bulkCheckInTimes[employee.id] ?? DateTime(date.year, date.month, date.day, 9, 0);
-      final checkOut = _bulkCheckOutTimes[employee.id] ?? DateTime(date.year, date.month, date.day, 18, 0);
+      final checkIn =
+          _bulkCheckInTimes[employee.id] ??
+          DateTime(date.year, date.month, date.day, 9, 0);
+      final checkOut =
+          _bulkCheckOutTimes[employee.id] ??
+          DateTime(date.year, date.month, date.day, 18, 0);
       final status = _bulkStatuses[employee.id] ?? AttendanceStatus.fullDay;
       final otHours = _bulkOvertimeHours[employee.id] ?? 0.0;
 
-      final success = await _saveSingleAttendance(employee, date, checkIn, checkOut, status, otHours, showMessage: false);
+      final success = await _saveSingleAttendance(
+        employee,
+        date,
+        checkIn,
+        checkOut,
+        status,
+        otHours,
+        showMessage: false,
+      );
       if (success) {
         successCount++;
       } else {
@@ -1197,16 +1295,12 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
 
     // Show summary message and switch to table tab
     if (!mounted) return;
-    
+
     if (successCount > 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Successfully marked $successCount employee(s)${failCount > 0 ? ', $failCount failed' : ''}'),
-          backgroundColor: failCount > 0 ? Colors.orange : Colors.green,
-          duration: const Duration(seconds: 2),
-        ),
+      ToastHelper.success(
+        'Successfully marked $successCount employee(s)${failCount > 0 ? ', $failCount failed' : ''}',
       );
-      
+
       // Switch to Attendance Table tab after successful save
       setState(() {
         _selectedTabIndex = 1;
@@ -1218,7 +1312,7 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
   bool? _areAllSelected(List<EmployeeModel> employees) {
     final attendanceList = ref.watch(attendanceListProvider);
     final selectedDate = DateTime.now();
-    
+
     // Filter out already marked employees
     final unmarkedEmployees = employees.where((emp) {
       return !attendanceList.attendanceRecords.any((record) {
@@ -1244,7 +1338,7 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
   void _toggleSelectAll(List<EmployeeModel> employees, bool? value) {
     final attendanceList = ref.read(attendanceListProvider);
     final selectedDate = DateTime.now();
-    
+
     setState(() {
       for (final employee in employees) {
         // Check if already marked
@@ -1283,11 +1377,8 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
 
     if (alreadyMarked) {
       if (showMessage) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Attendance already marked for ${employee.name} today'),
-            backgroundColor: Colors.orange,
-          ),
+        ToastHelper.success(
+          'Attendance already marked for ${employee.name} today',
         );
       }
       return false;
@@ -1296,12 +1387,7 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
     // Validate times
     if (checkOut.isBefore(checkIn)) {
       if (showMessage) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Check-out time must be after check-in time'),
-            backgroundColor: Colors.red,
-          ),
-        );
+        ToastHelper.error('Check-out time must be after check-in time');
       }
       return false;
     }
@@ -1314,12 +1400,7 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
 
     if (workingHours <= 0) {
       if (showMessage) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Working hours must be greater than 0'),
-            backgroundColor: Colors.red,
-          ),
-        );
+        ToastHelper.error('Working hours must be greater than 0');
       }
       return false;
     }
@@ -1370,7 +1451,7 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
 
     try {
       await AttendanceService.addAttendance(attendance);
-      
+
       // Clear stored values for this employee
       setState(() {
         _bulkCheckInTimes.remove(employee.id);
@@ -1379,35 +1460,24 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
         _bulkOvertimeHours.remove(employee.id);
         _selectedEmployees.remove(employee.id);
       });
-      
+
       // Reload attendance list
       ref.read(attendanceListProvider.notifier).loadAttendance();
-      
+
       if (!mounted) return true;
-      
+
       if (showMessage) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Attendance marked for ${employee.name}'),
-            backgroundColor: Colors.green,
-            duration: const Duration(seconds: 1),
-          ),
-        );
+        ToastHelper.success('Attendance marked for ${employee.name}');
       }
-      
+
       return true;
     } catch (e) {
       if (!mounted) return false;
-      
+
       if (showMessage) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to mark attendance for ${employee.name}'),
-            backgroundColor: Colors.red,
-          ),
-        );
+        ToastHelper.error('Failed to mark attendance for ${employee.name}');
       }
-      
+
       return false;
     }
   }
@@ -1442,114 +1512,333 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
     final screenWidth = MediaQuery.of(context).size.width;
     final isDesktop = screenWidth > 900;
 
-    // Only show records that have attendance marked (filter out employees without attendance)
-    final markedRecords = listState.attendanceRecords;
+    // Only show records that have attendance marked
+    var markedRecords = listState.attendanceRecords;
+
+    // Apply Filters
+    if (_startDate != null) {
+      markedRecords = markedRecords
+          .where(
+            (r) => r.date.isAfter(
+              _startDate!.subtract(const Duration(seconds: 1)),
+            ),
+          )
+          .toList();
+    }
+    if (_endDate != null) {
+      markedRecords = markedRecords
+          .where((r) => r.date.isBefore(_endDate!.add(const Duration(days: 1))))
+          .toList();
+    }
+    if (_selectedDepartment != null && _selectedDepartment != 'All') {
+      markedRecords = markedRecords.where((r) {
+        final emp = employeeState.employees.firstWhere(
+          (e) => e.id == r.employeeId,
+          orElse: () => employeeState.employees.isNotEmpty
+              ? employeeState.employees.first
+              : EmployeeModel(
+                  id: 'temp',
+                  firstName: 'N/A',
+                  lastName: 'N/A',
+                  employeeCode: 'N/A',
+                  mobileNo: '',
+                  position: 'N/A',
+                  department: 'N/A',
+                  salary: 0,
+                  createdAt: DateTime.now(),
+                  salaryOriginal: 0,
+                  salaryType: 'hourwise',
+                ),
+        );
+        return emp.department == _selectedDepartment;
+      }).toList();
+    }
+    if (_tableSearchQuery != '') {
+      final query = _tableSearchQuery.toLowerCase();
+      markedRecords = markedRecords.where((r) {
+        return (r.employeeName).toLowerCase().contains(query);
+      }).toList();
+    }
 
     return Column(
       children: [
-        // Header Container with Export and Refresh buttons
+        // Filter Header
         Container(
           padding: const EdgeInsets.all(16),
           color: cardColor,
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.end,
+          child: Column(
             children: [
-              // Export Button
-              OutlinedButton.icon(
-                onPressed: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Export feature coming soon')),
-                  );
-                },
-                icon: const Icon(Icons.download, size: 18),
-                label: const Text('Export'),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: AppColors.primary,
-                  side: const BorderSide(color: AppColors.primary),
-                ),
+              Row(
+                children: [
+                  const Expanded(
+                    child: Text(
+                      'Attendance Records',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  // Date Range Button
+                  OutlinedButton.icon(
+                    onPressed: () async {
+                      final picked = await showDateRangePicker(
+                        context: context,
+                        firstDate: DateTime(2020),
+                        lastDate: DateTime.now().add(const Duration(days: 1)),
+                        initialDateRange: _startDate != null && _endDate != null
+                            ? DateTimeRange(start: _startDate!, end: _endDate!)
+                            : null,
+                      );
+                      if (picked != null) {
+                        setState(() {
+                          _startDate = picked.start;
+                          _endDate = picked.end;
+                        });
+                      }
+                    },
+                    icon: const Icon(Icons.date_range, size: 18),
+                    label: Text(
+                      _startDate == null
+                          ? 'Select Dates'
+                          : '${DateFormat('dd/MM').format(_startDate!)} - ${DateFormat('dd/MM').format(_endDate!)}',
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  // Clear Filters
+                  if (_startDate != null ||
+                      _selectedDepartment != null ||
+                      _tableSearchQuery != '')
+                    IconButton(
+                      onPressed: () {
+                        setState(() {
+                          _startDate = null;
+                          _endDate = null;
+                          _selectedDepartment = null;
+                          _tableSearchQuery = '';
+                        });
+                      },
+                      icon: const Icon(
+                        Icons.filter_list_off,
+                        color: Colors.red,
+                      ),
+                      tooltip: 'Clear Filters',
+                    ),
+                ],
               ),
-              const SizedBox(width: 12),
-              // Refresh Button
-              OutlinedButton.icon(
-                onPressed: () {
-                  ref.read(attendanceListProvider.notifier).loadAttendance();
-                },
-                icon: const Icon(Icons.refresh, size: 18),
-                label: const Text('Refresh'),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: AppColors.primary,
-                  side: const BorderSide(color: AppColors.primary),
+              const SizedBox(height: 12),
+              if (isDesktop)
+                Row(
+                  children: [
+                    // Department Filter
+                    Expanded(
+                      flex: 2,
+                      child: _buildDepartmentDropdown(employeeState.employees),
+                    ),
+                    const SizedBox(width: 12),
+                    // Search Field
+                    Expanded(
+                      flex: 3,
+                      child: TextField(
+                        onChanged: (value) =>
+                            setState(() => _tableSearchQuery = value),
+                        decoration: InputDecoration(
+                          hintText: 'Search Employee...',
+                          prefixIcon: const Icon(Icons.search, size: 20),
+                          isDense: true,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    // Export Button
+                    SizedBox(
+                      height: 40,
+                      child: ElevatedButton.icon(
+                        onPressed: _isExporting
+                            ? null
+                            : () => _handleExport(
+                                markedRecords,
+                                employeeState.employees,
+                              ),
+                        icon: _isExporting
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
+                              )
+                            : const Icon(Icons.download, size: 18),
+                        label: Text(
+                          _isExporting ? 'Exporting...' : 'Export CSV',
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.primary,
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                )
+              else
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Row(
+                      children: [
+                        // Department Filter
+                        Expanded(
+                          child: _buildDepartmentDropdown(
+                            employeeState.employees,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        // Export Button
+                        Expanded(
+                          child: SizedBox(
+                            height: 40,
+                            child: ElevatedButton.icon(
+                              onPressed: _isExporting
+                                  ? null
+                                  : () => _handleExport(
+                                      markedRecords,
+                                      employeeState.employees,
+                                    ),
+                              icon: _isExporting
+                                  ? const SizedBox(
+                                      width: 16,
+                                      height: 16,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        color: Colors.white,
+                                      ),
+                                    )
+                                  : const Icon(Icons.download, size: 18),
+                              label: Text(
+                                _isExporting ? 'Exporting...' : 'Export CSV',
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: AppColors.primary,
+                                foregroundColor: Colors.white,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    // Search Field
+                    TextField(
+                      onChanged: (value) =>
+                          setState(() => _tableSearchQuery = value),
+                      decoration: InputDecoration(
+                        hintText: 'Search Employee...',
+                        prefixIcon: const Icon(Icons.search, size: 20),
+                        isDense: true,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-              ),
             ],
           ),
         ),
         // Content - Cards for mobile, Table for desktop
         Expanded(
-          child: listState.isLoading
-              ? const Center(child: AppLoader(size: 60))
+          child: employeeState.employees.isEmpty
+              ? _buildEmptyState(employeeState.isLoading)
               : markedRecords.isEmpty
-                  ? Center(
-                      child: Padding(
-                        padding: const EdgeInsets.all(24),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.table_chart_outlined, size: 64, color: Colors.grey[400]),
-                            const SizedBox(height: 16),
-                            Text(
-                              'No attendance records yet',
-                              style: TextStyle(fontSize: 16, color: Colors.grey[600]),
-                              textAlign: TextAlign.center,
-                            ),
-                            const SizedBox(height: 8),
-                            Text(
-                              'Mark attendance to see records here',
-                              style: TextStyle(fontSize: 14, color: Colors.grey[500]),
-                              textAlign: TextAlign.center,
-                            ),
-                          ],
-                        ),
-                      ),
-                    )
-                  : isDesktop
-                      ? SingleChildScrollView(
-                          scrollDirection: Axis.vertical,
-                          child: SingleChildScrollView(
-                            scrollDirection: Axis.horizontal,
-                            child: _buildDataTable(markedRecords, employeeState),
+              ? Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        if (listState.isLoading)
+                          const Padding(
+                            padding: EdgeInsets.only(bottom: 20),
+                            child: CircularProgressIndicator(),
                           ),
-                        )
-                      : ListView.builder(
-                          padding: const EdgeInsets.all(16),
-                          itemCount: markedRecords.length,
-                          itemBuilder: (context, index) {
-                            final record = markedRecords[index];
-                            // Find employee
-                            EmployeeModel? employee;
-                            try {
-                              employee = employeeState.employees.firstWhere(
-                                (e) => e.id == record.employeeId,
-                              );
-                            } catch (e) {
-                              // Employee not found, skip
-                              return const SizedBox.shrink();
-                            }
-                            return _buildAttendanceRecordCard(record, employee);
-                          },
+                        Icon(
+                          Icons.table_chart_outlined,
+                          size: 64,
+                          color: Colors.grey[400],
                         ),
+                        const SizedBox(height: 16),
+                        Text(
+                          'No attendance records yet',
+                          style: TextStyle(
+                            fontSize: 16,
+                            color: Colors.grey[600],
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Mark attendance to see records here',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Colors.grey[500],
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ],
+                    ),
+                  ),
+                )
+              : isDesktop
+              ? SingleChildScrollView(
+                  scrollDirection: Axis.vertical,
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: _buildDataTable(markedRecords, employeeState),
+                  ),
+                )
+              : ListView.builder(
+                  padding: const EdgeInsets.all(16),
+                  itemCount: markedRecords.length,
+                  itemBuilder: (context, index) {
+                    final record = markedRecords[index];
+                    // Find employee
+                    EmployeeModel? employee;
+                    try {
+                      employee = employeeState.employees.firstWhere(
+                        (e) => e.id == record.employeeId,
+                      );
+                    } catch (e) {
+                      // Employee not found, skip
+                      return const SizedBox.shrink();
+                    }
+                    return _buildAttendanceRecordCard(record, employee);
+                  },
+                ),
         ),
       ],
     );
   }
 
-  Widget _buildAttendanceRecordCard(AttendanceModel record, EmployeeModel employee) {
+  Widget _buildAttendanceRecordCard(
+    AttendanceModel record,
+    EmployeeModel employee,
+  ) {
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       elevation: 2,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -1585,17 +1874,17 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
                       const SizedBox(height: 2),
                       SelectableText(
                         employee.employeeCode,
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.grey[600],
-                        ),
+                        style: TextStyle(fontSize: 12, color: Colors.grey[600]),
                       ),
                     ],
                   ),
                 ),
                 // Date Badge
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
                     color: AppColors.primary.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(8),
@@ -1616,7 +1905,10 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
             Row(
               children: [
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
                     color: employee.employeeType == EmployeeType.hourly
                         ? Colors.blue.withValues(alpha: 0.1)
@@ -1642,7 +1934,9 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
                       ),
                       const SizedBox(width: 4),
                       Text(
-                        employee.employeeType == EmployeeType.hourly ? 'Hourly' : 'Daily',
+                        employee.employeeType == EmployeeType.hourly
+                            ? 'Hourly'
+                            : 'Daily',
                         style: TextStyle(
                           fontSize: 11,
                           fontWeight: FontWeight.bold,
@@ -1659,9 +1953,14 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
                 InkWell(
                   onTap: () => _toggleAttendanceStatus(record, employee),
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
                     decoration: BoxDecoration(
-                      color: _getStatusColor(record.attendanceStatus).withValues(alpha: 0.1),
+                      color: _getStatusColor(
+                        record.attendanceStatus,
+                      ).withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(
                         color: _getStatusColor(record.attendanceStatus),
@@ -1752,7 +2051,9 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
                 decoration: BoxDecoration(
                   color: Colors.orange.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.orange.withValues(alpha: 0.3)),
+                  border: Border.all(
+                    color: Colors.orange.withValues(alpha: 0.3),
+                  ),
                 ),
                 child: Row(
                   children: [
@@ -1784,7 +2085,9 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
               decoration: BoxDecoration(
                 color: AppColors.primary.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: AppColors.primary.withValues(alpha: 0.3)),
+                border: Border.all(
+                  color: AppColors.primary.withValues(alpha: 0.3),
+                ),
               ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -1880,16 +2183,16 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
         const SizedBox(height: 4),
         SelectableText(
           value,
-          style: const TextStyle(
-            fontSize: 14,
-            fontWeight: FontWeight.bold,
-          ),
+          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
         ),
       ],
     );
   }
 
-  Widget _buildDataTable(List<AttendanceModel> records, EmployeeState employeeState) {
+  Widget _buildDataTable(
+    List<AttendanceModel> records,
+    EmployeeState employeeState,
+  ) {
     // Safety check for empty employees
     if (employeeState.employees.isEmpty) {
       return const Center(
@@ -1899,23 +2202,17 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
         ),
       );
     }
-    
+
     return DataTable(
       headingRowColor: WidgetStateProperty.all(
         AppColors.primary.withValues(alpha: 0.1),
       ),
-      border: TableBorder.all(
-        color: Colors.grey.shade300,
-        width: 1,
-      ),
+      border: TableBorder.all(color: Colors.grey.shade300, width: 1),
       columnSpacing: 24,
       horizontalMargin: 16,
       columns: const [
         DataColumn(
-          label: Text(
-            'Date',
-            style: TextStyle(fontWeight: FontWeight.bold),
-          ),
+          label: Text('Date', style: TextStyle(fontWeight: FontWeight.bold)),
         ),
         DataColumn(
           label: Text(
@@ -1924,16 +2221,10 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
           ),
         ),
         DataColumn(
-          label: Text(
-            'Code',
-            style: TextStyle(fontWeight: FontWeight.bold),
-          ),
+          label: Text('Code', style: TextStyle(fontWeight: FontWeight.bold)),
         ),
         DataColumn(
-          label: Text(
-            'Type',
-            style: TextStyle(fontWeight: FontWeight.bold),
-          ),
+          label: Text('Type', style: TextStyle(fontWeight: FontWeight.bold)),
         ),
         DataColumn(
           label: Text(
@@ -1955,10 +2246,7 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
           numeric: true,
         ),
         DataColumn(
-          label: Text(
-            'Status',
-            style: TextStyle(fontWeight: FontWeight.bold),
-          ),
+          label: Text('Status', style: TextStyle(fontWeight: FontWeight.bold)),
         ),
         DataColumn(
           label: Text(
@@ -1968,10 +2256,7 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
           numeric: true,
         ),
         DataColumn(
-          label: Text(
-            'OT Hrs',
-            style: TextStyle(fontWeight: FontWeight.bold),
-          ),
+          label: Text('OT Hrs', style: TextStyle(fontWeight: FontWeight.bold)),
           numeric: true,
         ),
         DataColumn(
@@ -1989,10 +2274,7 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
           numeric: true,
         ),
         DataColumn(
-          label: Text(
-            'Actions',
-            style: TextStyle(fontWeight: FontWeight.bold),
-          ),
+          label: Text('Actions', style: TextStyle(fontWeight: FontWeight.bold)),
         ),
       ],
       rows: records.map((record) {
@@ -2004,21 +2286,35 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
           );
         } catch (e) {
           // Employee not found, skip this record or use default
-          return DataRow(cells: [
-            DataCell(Text(DateFormat('dd/MM/yy').format(record.date))),
-            DataCell(Text(record.employeeName)),
-            DataCell(Text('-')),
-            DataCell(Text('-')),
-            DataCell(Text(DateFormat('hh:mm a').format(record.checkIn))),
-            DataCell(Text(DateFormat('hh:mm a').format(record.checkOut))),
-            DataCell(Text(record.workingHours.toStringAsFixed(2))),
-            DataCell(Text('-')),
-            DataCell(Text('₹${record.workSalary.toStringAsFixed(0)}')),
-            DataCell(Text(record.overtimeHours > 0 ? record.overtimeHours.toStringAsFixed(2) : '-')),
-            DataCell(Text(record.overtimeSalary > 0 ? '₹${record.overtimeSalary.toStringAsFixed(0)}' : '-')),
-            DataCell(Text('₹${record.totalSalary.toStringAsFixed(0)}')),
-            DataCell(Text('-')),
-          ]);
+          return DataRow(
+            cells: [
+              DataCell(Text(DateFormat('dd/MM/yy').format(record.date))),
+              DataCell(Text(record.employeeName)),
+              DataCell(Text('-')),
+              DataCell(Text('-')),
+              DataCell(Text(DateFormat('hh:mm a').format(record.checkIn))),
+              DataCell(Text(DateFormat('hh:mm a').format(record.checkOut))),
+              DataCell(Text(record.workingHours.toStringAsFixed(2))),
+              DataCell(Text('-')),
+              DataCell(Text('₹${record.workSalary.toStringAsFixed(0)}')),
+              DataCell(
+                Text(
+                  record.overtimeHours > 0
+                      ? record.overtimeHours.toStringAsFixed(2)
+                      : '-',
+                ),
+              ),
+              DataCell(
+                Text(
+                  record.overtimeSalary > 0
+                      ? '₹${record.overtimeSalary.toStringAsFixed(0)}'
+                      : '-',
+                ),
+              ),
+              DataCell(Text('₹${record.totalSalary.toStringAsFixed(0)}')),
+              DataCell(Text('-')),
+            ],
+          );
         }
 
         // Employee is guaranteed to be non-null here
@@ -2034,16 +2330,11 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
             DataCell(
               SizedBox(
                 width: 150,
-                child: SelectableText(
-                  record.employeeName,
-                  maxLines: 1,
-                ),
+                child: SelectableText(record.employeeName, maxLines: 1),
               ),
             ),
             // Employee Code
-            DataCell(
-              SelectableText(employee.employeeCode),
-            ),
+            DataCell(SelectableText(employee.employeeCode)),
             // Employee Type
             DataCell(
               Container(
@@ -2073,7 +2364,9 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
                     ),
                     const SizedBox(width: 4),
                     Text(
-                      employee.employeeType == EmployeeType.hourly ? 'Hour' : 'Day',
+                      employee.employeeType == EmployeeType.hourly
+                          ? 'Hour'
+                          : 'Day',
                       style: TextStyle(
                         fontSize: 11,
                         fontWeight: FontWeight.bold,
@@ -2106,9 +2399,14 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
               InkWell(
                 onTap: () => _toggleAttendanceStatus(record, employee),
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
-                    color: _getStatusColor(record.attendanceStatus).withValues(alpha: 0.1),
+                    color: _getStatusColor(
+                      record.attendanceStatus,
+                    ).withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(
                       color: _getStatusColor(record.attendanceStatus),
@@ -2169,7 +2467,9 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
                     : '-',
                 style: TextStyle(
                   fontWeight: FontWeight.w600,
-                  color: record.overtimeSalary > 0 ? Colors.orange : Colors.grey,
+                  color: record.overtimeSalary > 0
+                      ? Colors.orange
+                      : Colors.grey,
                 ),
               ),
             ),
@@ -2231,7 +2531,10 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
     }
   }
 
-  Future<void> _toggleAttendanceStatus(AttendanceModel record, EmployeeModel employee) async {
+  Future<void> _toggleAttendanceStatus(
+    AttendanceModel record,
+    EmployeeModel employee,
+  ) async {
     // Show dialog to change status
     final newStatus = await showDialog<AttendanceStatus>(
       context: context,
@@ -2270,12 +2573,12 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
                   margin: const EdgeInsets.only(bottom: 8),
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: isSelected 
+                    color: isSelected
                         ? _getStatusColor(status).withValues(alpha: 0.1)
                         : Colors.grey.withValues(alpha: 0.05),
                     borderRadius: BorderRadius.circular(8),
                     border: Border.all(
-                      color: isSelected 
+                      color: isSelected
                           ? _getStatusColor(status)
                           : Colors.grey.shade300,
                       width: isSelected ? 2 : 1,
@@ -2305,8 +2608,8 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
                                 status == AttendanceStatus.fullDay
                                     ? 'Full day rate: ₹${employee.dailyRate?.toStringAsFixed(0) ?? "0"}'
                                     : status == AttendanceStatus.halfDay
-                                        ? 'Half day rate: ₹${((employee.dailyRate ?? 0) / 2).toStringAsFixed(0)}'
-                                        : 'No salary',
+                                    ? 'Half day rate: ₹${((employee.dailyRate ?? 0) / 2).toStringAsFixed(0)}'
+                                    : 'No salary',
                                 style: TextStyle(
                                   fontSize: 12,
                                   color: Colors.grey[600],
@@ -2421,7 +2724,10 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
                   // Employee Info
                   Text(
                     employee.name,
-                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                   Text(
                     employee.employeeCode,
@@ -2431,7 +2737,11 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
                   // Check-in Time
                   Text(
                     'Check-in Time',
-                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.grey[700]),
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.grey[700],
+                    ),
                   ),
                   const SizedBox(height: 8),
                   InkWell(
@@ -2449,7 +2759,9 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
                             picked.hour,
                             picked.minute,
                           );
-                          checkInController.text = DateFormat('hh:mm a').format(editCheckIn);
+                          checkInController.text = DateFormat(
+                            'hh:mm a',
+                          ).format(editCheckIn);
                         });
                       }
                     },
@@ -2461,7 +2773,10 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
                       ),
                       child: Row(
                         children: [
-                          const Icon(Icons.access_time, color: AppColors.primary),
+                          const Icon(
+                            Icons.access_time,
+                            color: AppColors.primary,
+                          ),
                           const SizedBox(width: 12),
                           Text(checkInController.text),
                         ],
@@ -2472,7 +2787,11 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
                   // Check-out Time
                   Text(
                     'Check-out Time',
-                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.grey[700]),
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.grey[700],
+                    ),
                   ),
                   const SizedBox(height: 8),
                   InkWell(
@@ -2490,7 +2809,9 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
                             picked.hour,
                             picked.minute,
                           );
-                          checkOutController.text = DateFormat('hh:mm a').format(editCheckOut);
+                          checkOutController.text = DateFormat(
+                            'hh:mm a',
+                          ).format(editCheckOut);
                         });
                       }
                     },
@@ -2502,7 +2823,10 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
                       ),
                       child: Row(
                         children: [
-                          const Icon(Icons.access_time, color: AppColors.primary),
+                          const Icon(
+                            Icons.access_time,
+                            color: AppColors.primary,
+                          ),
                           const SizedBox(width: 12),
                           Text(checkOutController.text),
                         ],
@@ -2514,14 +2838,23 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
                   if (employee.employeeType == EmployeeType.daily) ...[
                     Text(
                       'Status',
-                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.grey[700]),
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.grey[700],
+                      ),
                     ),
                     const SizedBox(height: 8),
                     DropdownButtonFormField<AttendanceStatus>(
                       initialValue: editStatus,
                       decoration: InputDecoration(
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 12,
+                        ),
                       ),
                       items: const [
                         DropdownMenuItem(
@@ -2544,15 +2877,24 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
                   // OT Hours
                   Text(
                     'Overtime Hours',
-                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.grey[700]),
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.grey[700],
+                    ),
                   ),
                   const SizedBox(height: 8),
                   TextFormField(
                     controller: otHoursController,
                     keyboardType: TextInputType.number,
                     decoration: InputDecoration(
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 12,
+                      ),
                       hintText: '0',
                     ),
                   ),
@@ -2586,7 +2928,10 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
                       ),
                       child: const Text(
                         'Save Changes',
-                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                     ),
                   ),
@@ -2654,18 +2999,13 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
 
     // Save updated record
     await AttendanceService.updateAttendance(updatedRecord);
-    
+
     // Reload attendance list
     ref.read(attendanceListProvider.notifier).loadAttendance();
-    
+
     if (!mounted) return;
-    
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Attendance updated successfully'),
-        backgroundColor: Colors.green,
-      ),
-    );
+
+    ToastHelper.success('Attendance updated successfully');
   }
 
   void _deleteAttendance(AttendanceModel record) {
@@ -2685,14 +3025,11 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
             onPressed: () {
               // TODO: Implement delete functionality
               Navigator.pop(context);
-              ref.read(attendanceListProvider.notifier).deleteAttendance(record.id);
-              
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Attendance record deleted'),
-                  backgroundColor: Colors.red,
-                ),
-              );
+              ref
+                  .read(attendanceListProvider.notifier)
+                  .deleteAttendance(record.id);
+
+              ToastHelper.error('Attendance record deleted');
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.red,
@@ -2703,5 +3040,203 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
         ],
       ),
     );
+  }
+
+  Widget _buildEmptyState(bool isLoading) {
+    final theme = Theme.of(context);
+
+    return Center(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            // Loading Indicator (Subtle)
+            if (isLoading)
+              const Padding(
+                padding: EdgeInsets.only(bottom: 24),
+                child: SizedBox(
+                  width: 40,
+                  height: 40,
+                  child: CircularProgressIndicator(strokeWidth: 3),
+                ),
+              ),
+
+            // Illustration/Icon
+            Container(
+              padding: const EdgeInsets.all(30),
+              decoration: BoxDecoration(
+                color: AppColors.primary.withValues(alpha: 0.1),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.people_alt_outlined,
+                size: 80,
+                color: AppColors.primary,
+              ),
+            ),
+            const SizedBox(height: 32),
+
+            // Message
+            Text(
+              'No Employees Found',
+              style: TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+                color: theme.textTheme.headlineSmall?.color,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 16),
+
+            // Description
+            Text(
+              'Add employees manually or import using CSV to start managing attendance.',
+              style: TextStyle(
+                fontSize: 16,
+                color: theme.textTheme.bodyMedium?.color?.withValues(
+                  alpha: 0.7,
+                ),
+                height: 1.5,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 40),
+
+            // Action Buttons
+            Wrap(
+              spacing: 16,
+              runSpacing: 16,
+              alignment: WrapAlignment.center,
+              children: [
+                _buildActionCard(
+                  title: 'Add Employee',
+                  subtitle: 'Register manually',
+                  icon: Icons.person_add_outlined,
+                  onTap: () {
+                    // Navigate to employee screen or show add dialog
+                    // For now, just show a message or use navigator
+                    Navigator.pushNamed(context, '/employees');
+                  },
+                ),
+                _buildActionCard(
+                  title: 'Import CSV',
+                  subtitle: 'Bulk upload employees',
+                  icon: Icons.upload_file_outlined,
+                  onTap: () {
+                    Navigator.pushNamed(context, '/employees');
+                    // In a real app, we might open the CSV picker directly here
+                  },
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildActionCard({
+    required String title,
+    required String subtitle,
+    required IconData icon,
+    required VoidCallback onTap,
+  }) {
+    final theme = Theme.of(context);
+
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        width: 180,
+        padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
+        decoration: BoxDecoration(
+          color: theme.brightness == Brightness.dark
+              ? theme.cardColor
+              : Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: theme.dividerColor),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.05),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Column(
+          children: [
+            Icon(icon, color: AppColors.primary, size: 28),
+            const SizedBox(height: 12),
+            Text(
+              title,
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              subtitle,
+              style: TextStyle(color: theme.textTheme.bodySmall?.color),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDepartmentDropdown(List<EmployeeModel> employees) {
+    final departments = [
+      'All',
+      ...employees.map((e) => e.department).toSet().toList(),
+    ];
+
+    return DropdownButtonFormField<String>(
+      value: _selectedDepartment ?? 'All',
+      decoration: InputDecoration(
+        labelText: 'Department',
+        isDense: true,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+      ),
+      items: departments
+          .map(
+            (dept) => DropdownMenuItem(
+              value: dept,
+              child: Text(dept, style: const TextStyle(fontSize: 13)),
+            ),
+          )
+          .toList(),
+      onChanged: (value) {
+        setState(() {
+          _selectedDepartment = value == 'All' ? null : value;
+        });
+      },
+    );
+  }
+
+  Future<void> _handleExport(
+    List<AttendanceModel> records,
+    List<EmployeeModel> employees,
+  ) async {
+    ToastHelper.show('No attendance records available to export.');
+
+    setState(() => _isExporting = true);
+
+    // Small delay to show "Preparing..." state
+    await Future.delayed(const Duration(milliseconds: 500));
+
+    final success = await AttendanceExportService.exportAttendanceToCSV(
+      records: records,
+      employees: employees,
+    );
+
+    if (mounted) {
+      setState(() => _isExporting = false);
+
+      if (success) {
+        ToastHelper.success('Attendance CSV exported successfully');
+      } else {
+        ToastHelper.error('Failed to export attendance file.');
+      }
+    }
   }
 }

@@ -1,18 +1,22 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:file_picker/file_picker.dart';
-import 'dart:io';
+import 'package:file_saver/file_saver.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'dart:typed_data';
+import 'dart:convert';
 import 'dart:developer' as developer;
 import '../providers/employee_provider.dart';
 import '../providers/settings_provider.dart';
+import '../providers/department_provider.dart';
+import '../providers/designation_provider.dart';
 import '../models/employee_model.dart';
-import '../models/csv_employee_preview.dart';
 import '../services/csv_import_service.dart';
 import '../services/employee_service.dart';
 import '../utills/app_colors.dart';
 import '../utills/app_spacing.dart';
-import '../widgets/loader.dart';
 import '../widgets/csv_preview_dialog.dart';
+import '../widgets/toast.dart';
 
 class EmployeesScreen extends ConsumerStatefulWidget {
   const EmployeesScreen({super.key});
@@ -42,11 +46,21 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
     setState(() {
       _editingEmployeeId = employee.id;
       _editControllers['name'] = TextEditingController(text: employee.name);
-      _editControllers['code'] = TextEditingController(text: employee.employeeCode);
-      _editControllers['mobile'] = TextEditingController(text: employee.mobileNo);
-      _editControllers['position'] = TextEditingController(text: employee.position);
-      _editControllers['department'] = TextEditingController(text: employee.department);
-      _editControllers['salary'] = TextEditingController(text: employee.salary.toString());
+      _editControllers['code'] = TextEditingController(
+        text: employee.employeeCode,
+      );
+      _editControllers['mobile'] = TextEditingController(
+        text: employee.mobileNo,
+      );
+      _editControllers['position'] = TextEditingController(
+        text: employee.position,
+      );
+      _editControllers['department'] = TextEditingController(
+        text: employee.department,
+      );
+      _editControllers['salary'] = TextEditingController(
+        text: employee.salary.toString(),
+      );
     });
   }
 
@@ -61,15 +75,25 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
   }
 
   void _saveEditing(EmployeeModel originalEmployee) {
-    final newSalary = double.tryParse(_editControllers['salary']!.text) ?? originalEmployee.salary;
-    
+    final newSalary =
+        double.tryParse(_editControllers['salary']!.text) ??
+        originalEmployee.salary;
+
+    // Split name in case it was edited as a single string field (if applicable)
+    // Actually, in the desktop table view, it might be a single 'name' field
+    final name = _editControllers['name']!.text;
+    final nameParts = name.trim().split(' ');
+    final firstName = nameParts[0];
+    final lastName = nameParts.length > 1 ? nameParts.sublist(1).join(' ') : '';
+
     // Get settings and convert salary
     final settings = ref.read(settingsProvider);
     final conversion = EmployeeService.convertSalary(newSalary, settings);
-    
+
     final updatedEmployee = EmployeeModel(
       id: originalEmployee.id,
-      name: _editControllers['name']!.text,
+      firstName: firstName,
+      lastName: lastName,
       employeeCode: _editControllers['code']!.text,
       mobileNo: _editControllers['mobile']!.text,
       position: _editControllers['position']!.text,
@@ -85,16 +109,11 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
       overtimeRate: originalEmployee.overtimeRate,
       overtimeSlots: originalEmployee.overtimeSlots,
     );
-    
+
     ref.read(employeeProvider.notifier).updateEmployee(updatedEmployee);
     _cancelEditing();
-    
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Employee updated successfully'),
-        backgroundColor: Colors.green,
-      ),
-    );
+
+    ToastHelper.success('Employee updated successfully');
   }
 
   @override
@@ -103,12 +122,11 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
     final horizontalPadding = AppSpacing.getHorizontalPadding(context);
     final screenWidth = MediaQuery.of(context).size.width;
     final isDesktop = screenWidth > 800;
-    
+
     // Theme-adaptive colors
     final theme = Theme.of(context);
     final backgroundColor = theme.scaffoldBackgroundColor;
     final cardColor = theme.cardColor;
-    final textColor = theme.textTheme.bodyLarge?.color ?? Colors.black;
     final subtitleColor = theme.textTheme.bodySmall?.color ?? Colors.grey;
 
     // Filter employees based on search query
@@ -126,169 +144,176 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
     if (isDesktop) {
       return Scaffold(
         backgroundColor: backgroundColor,
-        body: employeeState.isLoading
-            ? const Center(child: AppLoader(size: 50))
-            : employeeState.employees.isEmpty
-                ? _buildEmptyState(context)
-                : Column(
-                    children: [
-                      // Header with search and buttons
-                      Container(
-                        padding: const EdgeInsets.all(20),
-                        color: cardColor,
-                        child: Column(
+        body: employeeState.employees.isEmpty
+            ? _buildEmptyState(context, isLoading: employeeState.isLoading)
+            : Column(
+                children: [
+                  // Header with search and buttons
+                  Container(
+                    padding: const EdgeInsets.all(20),
+                    color: cardColor,
+                    child: Column(
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                // Search Bar
-                                Expanded(
-                                  flex: 2,
-                                  child: TextField(
-                                    controller: _searchController,
-                                    decoration: InputDecoration(
-                                      hintText: 'Search employees by name, code, mobile, position, or department...',
-                                      prefixIcon: const Icon(Icons.search),
-                                      suffixIcon: _searchQuery.isNotEmpty
-                                          ? IconButton(
-                                              icon: const Icon(Icons.clear),
-                                              onPressed: () {
-                                                setState(() {
-                                                  _searchController.clear();
-                                                  _searchQuery = '';
-                                                });
-                                              },
-                                            )
-                                          : null,
-                                      border: OutlineInputBorder(
-                                        borderRadius: BorderRadius.circular(8),
-                                      ),
-                                      contentPadding: const EdgeInsets.symmetric(
-                                        horizontal: 16,
-                                        vertical: 12,
-                                      ),
-                                    ),
-                                    onChanged: (value) {
-                                      setState(() {
-                                        _searchQuery = value;
-                                      });
-                                    },
+                            // Search Bar
+                            Expanded(
+                              flex: 2,
+                              child: TextField(
+                                controller: _searchController,
+                                decoration: InputDecoration(
+                                  hintText:
+                                      'Search employees by name, code, mobile, position, or department...',
+                                  prefixIcon: const Icon(Icons.search),
+                                  suffixIcon: _searchQuery.isNotEmpty
+                                      ? IconButton(
+                                          icon: const Icon(Icons.clear),
+                                          onPressed: () {
+                                            setState(() {
+                                              _searchController.clear();
+                                              _searchQuery = '';
+                                            });
+                                          },
+                                        )
+                                      : null,
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  contentPadding: const EdgeInsets.symmetric(
+                                    horizontal: 16,
+                                    vertical: 12,
                                   ),
                                 ),
-                                const SizedBox(width: 16),
-                                // Action Buttons
-                                Row(
-                                  children: [
-                                    ElevatedButton.icon(
-                                      onPressed: () => _showAddEmployeeForm(context),
-                                      icon: const Icon(Icons.add, size: 20),
-                                      label: const Text('Add Employee'),
-                                      style: ElevatedButton.styleFrom(
-                                        backgroundColor: AppColors.primary,
-                                        foregroundColor: Colors.white,
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 24,
-                                          vertical: 16,
-                                        ),
-                                        shape: RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.circular(8),
-                                        ),
-                                      ),
-                                    ),
-                                    const SizedBox(width: 12),
-                                    OutlinedButton.icon(
-                                      onPressed: () => _pickAndImportCSV(context),
-                                      icon: const Icon(Icons.upload_file, size: 20),
-                                      label: const Text('Import CSV'),
-                                      style: OutlinedButton.styleFrom(
-                                        foregroundColor: Colors.green,
-                                        side: const BorderSide(color: Colors.green),
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 24,
-                                          vertical: 16,
-                                        ),
-                                        shape: RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.circular(8),
-                                        ),
-                                      ),
-                                    ),
-                                    const SizedBox(width: 12),
-                                    IconButton(
-                                      onPressed: () => _downloadCSVTemplate(context),
-                                      icon: const Icon(Icons.download),
-                                      tooltip: 'Download CSV Template',
-                                      style: IconButton.styleFrom(
-                                        foregroundColor: Colors.orange,
-                                        side: const BorderSide(color: Colors.orange),
-                                        padding: const EdgeInsets.all(16),
-                                        shape: RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.circular(8),
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ],
+                                onChanged: (value) {
+                                  setState(() {
+                                    _searchQuery = value;
+                                  });
+                                },
+                              ),
                             ),
-                            const SizedBox(height: 12),
-                            // Results count
+                            const SizedBox(width: 16),
+                            // Action Buttons
                             Row(
                               children: [
-                                Icon(Icons.people, color: AppColors.primary, size: 20),
-                                const SizedBox(width: 8),
-                                Text(
-                                  _searchQuery.isEmpty
-                                      ? '${employeeState.employees.length} total employees'
-                                      : 'Found ${filteredEmployees.length} of ${employeeState.employees.length} employees',
-                                  style: TextStyle(
-                                    fontSize: 14,
-                                    color: subtitleColor,
-                                    fontWeight: FontWeight.w500,
+                                ElevatedButton.icon(
+                                  onPressed: () =>
+                                      _showAddEmployeeForm(context),
+                                  icon: const Icon(Icons.add, size: 20),
+                                  label: const Text('Add Employee'),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: AppColors.primary,
+                                    foregroundColor: Colors.white,
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 24,
+                                      vertical: 16,
+                                    ),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                OutlinedButton.icon(
+                                  onPressed: () => _pickAndImportCSV(context),
+                                  icon: const Icon(Icons.upload_file, size: 20),
+                                  label: const Text('Import CSV'),
+                                  style: OutlinedButton.styleFrom(
+                                    foregroundColor: Colors.green,
+                                    side: const BorderSide(color: Colors.green),
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 24,
+                                      vertical: 16,
+                                    ),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                IconButton(
+                                  onPressed: () =>
+                                      _downloadCSVTemplate(context),
+                                  icon: const Icon(Icons.download),
+                                  tooltip: 'Download CSV Template',
+                                  style: IconButton.styleFrom(
+                                    foregroundColor: Colors.orange,
+                                    side: const BorderSide(
+                                      color: Colors.orange,
+                                    ),
+                                    padding: const EdgeInsets.all(16),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
                                   ),
                                 ),
                               ],
                             ),
                           ],
                         ),
-                      ),
-                      // Table
-                      Expanded(
-                        child: filteredEmployees.isEmpty
-                            ? Center(
-                                child: Column(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Icon(
-                                      Icons.search_off,
-                                      size: 64,
-                                      color: Colors.grey[400],
-                                    ),
-                                    const SizedBox(height: 16),
-                                    Text(
-                                      'No employees found',
-                                      style: TextStyle(
-                                        fontSize: 18,
-                                        color: Colors.grey[600],
-                                        fontWeight: FontWeight.w500,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 8),
-                                    Text(
-                                      'Try adjusting your search',
-                                      style: TextStyle(
-                                        fontSize: 14,
-                                        color: Colors.grey[500],
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              )
-                            : SingleChildScrollView(
-                                child: _buildDesktopTable(filteredEmployees),
+                        const SizedBox(height: 12),
+                        // Results count
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.people,
+                              color: AppColors.primary,
+                              size: 20,
+                            ),
+                            const SizedBox(width: 8),
+                            Text(
+                              _searchQuery.isEmpty
+                                  ? '${employeeState.employees.length} total employees'
+                                  : 'Found ${filteredEmployees.length} of ${employeeState.employees.length} employees',
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: subtitleColor,
+                                fontWeight: FontWeight.w500,
                               ),
-                      ),
-                    ],
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
                   ),
+                  // Table
+                  Expanded(
+                    child: filteredEmployees.isEmpty
+                        ? Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(
+                                  Icons.search_off,
+                                  size: 64,
+                                  color: Colors.grey[400],
+                                ),
+                                const SizedBox(height: 16),
+                                Text(
+                                  'No employees found',
+                                  style: TextStyle(
+                                    fontSize: 18,
+                                    color: Colors.grey[600],
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  'Try adjusting your search',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    color: Colors.grey[500],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          )
+                        : SingleChildScrollView(
+                            child: _buildDesktopTable(filteredEmployees),
+                          ),
+                  ),
+                ],
+              ),
       );
     }
 
@@ -348,100 +373,100 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
           ),
         ],
       ),
-      body: employeeState.isLoading
-          ? const Center(child: AppLoader(size: 50))
-          : employeeState.employees.isEmpty
-              ? _buildEmptyState(context)
-              : Column(
-                  children: [
-                    // Search Bar
-                    Padding(
-                      padding: EdgeInsets.all(horizontalPadding),
-                      child: TextField(
-                        controller: _searchController,
-                        decoration: InputDecoration(
-                          hintText: 'Search employees...',
-                          prefixIcon: const Icon(Icons.search),
-                          suffixIcon: _searchQuery.isNotEmpty
-                              ? IconButton(
-                                  icon: const Icon(Icons.clear),
-                                  onPressed: () {
-                                    setState(() {
-                                      _searchController.clear();
-                                      _searchQuery = '';
-                                    });
-                                  },
-                                )
-                              : null,
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 12,
-                          ),
-                        ),
-                        onChanged: (value) {
-                          setState(() {
-                            _searchQuery = value;
-                          });
-                        },
-                      ),
-                    ),
-                    // Results count
-                    if (_searchQuery.isNotEmpty)
-                      Padding(
-                        padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
-                        child: Row(
-                          children: [
-                            Icon(Icons.people, color: AppColors.primary, size: 18),
-                            const SizedBox(width: 8),
-                            Text(
-                              'Found ${filteredEmployees.length} of ${employeeState.employees.length} employees',
-                              style: TextStyle(
-                                fontSize: 13,
-                                color: subtitleColor,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    const SizedBox(height: 8),
-                    // Cards for mobile view
-                    Expanded(
-                      child: filteredEmployees.isEmpty
-                          ? Center(
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(
-                                    Icons.search_off,
-                                    size: 64,
-                                    color: Colors.grey[400],
-                                  ),
-                                  const SizedBox(height: 16),
-                                  Text(
-                                    'No employees found',
-                                    style: TextStyle(
-                                      fontSize: 18,
-                                      color: Colors.grey[600],
-                                      fontWeight: FontWeight.w500,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            )
-                          : ListView.builder(
-                              padding: EdgeInsets.all(horizontalPadding),
-                              itemCount: filteredEmployees.length,
-                              itemBuilder: (context, index) {
-                                return _buildMobileCard(filteredEmployees[index]);
+      body: employeeState.employees.isEmpty
+          ? _buildEmptyState(context, isLoading: employeeState.isLoading)
+          : Column(
+              children: [
+                // Search Bar
+                Padding(
+                  padding: EdgeInsets.all(horizontalPadding),
+                  child: TextField(
+                    controller: _searchController,
+                    decoration: InputDecoration(
+                      hintText: 'Search employees...',
+                      prefixIcon: const Icon(Icons.search),
+                      suffixIcon: _searchQuery.isNotEmpty
+                          ? IconButton(
+                              icon: const Icon(Icons.clear),
+                              onPressed: () {
+                                setState(() {
+                                  _searchController.clear();
+                                  _searchQuery = '';
+                                });
                               },
-                            ),
+                            )
+                          : null,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 12,
+                      ),
                     ),
-                  ],
+                    onChanged: (value) {
+                      setState(() {
+                        _searchQuery = value;
+                      });
+                    },
+                  ),
                 ),
+                // Results count
+                if (_searchQuery.isNotEmpty)
+                  Padding(
+                    padding: EdgeInsets.symmetric(
+                      horizontal: horizontalPadding,
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.people, color: AppColors.primary, size: 18),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Found ${filteredEmployees.length} of ${employeeState.employees.length} employees',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: subtitleColor,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                const SizedBox(height: 8),
+                // Cards for mobile view
+                Expanded(
+                  child: filteredEmployees.isEmpty
+                      ? Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                Icons.search_off,
+                                size: 64,
+                                color: Colors.grey[400],
+                              ),
+                              const SizedBox(height: 16),
+                              Text(
+                                'No employees found',
+                                style: TextStyle(
+                                  fontSize: 18,
+                                  color: Colors.grey[600],
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ],
+                          ),
+                        )
+                      : ListView.builder(
+                          padding: EdgeInsets.all(horizontalPadding),
+                          itemCount: filteredEmployees.length,
+                          itemBuilder: (context, index) {
+                            return _buildMobileCard(filteredEmployees[index]);
+                          },
+                        ),
+                ),
+              ],
+            ),
     );
   }
 
@@ -449,7 +474,7 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
     final theme = Theme.of(context);
     final cardColor = theme.cardColor;
     final dividerColor = theme.dividerColor;
-    
+
     return Container(
       width: double.infinity,
       color: cardColor,
@@ -475,71 +500,50 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
           DataColumn(
             label: Text(
               'Employee ID',
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 14,
-              ),
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
             ),
           ),
           DataColumn(
             label: Text(
               'Name',
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 14,
-              ),
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
             ),
           ),
           DataColumn(
             label: Text(
               'Mobile',
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 14,
-              ),
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
             ),
           ),
           DataColumn(
             label: Text(
               'Position',
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 14,
-              ),
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
             ),
           ),
           DataColumn(
             label: Text(
               'Department',
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 14,
-              ),
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
             ),
           ),
           DataColumn(
             label: Text(
               'Salary',
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 14,
-              ),
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
             ),
             numeric: true,
           ),
           DataColumn(
             label: Text(
               'Actions',
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 14,
-              ),
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
             ),
           ),
         ],
         rows: employees.map((employee) {
           final isEditing = _editingEmployeeId == employee.id;
-          
+
           return DataRow(
             cells: [
               // Employee ID
@@ -552,13 +556,19 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
                           style: const TextStyle(fontSize: 13),
                           decoration: const InputDecoration(
                             isDense: true,
-                            contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                            contentPadding: EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 8,
+                            ),
                             border: OutlineInputBorder(),
                           ),
                         ),
                       )
                     : Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 6,
+                        ),
                         decoration: BoxDecoration(
                           color: AppColors.primary.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(6),
@@ -597,7 +607,10 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
                               style: const TextStyle(fontSize: 14),
                               decoration: const InputDecoration(
                                 isDense: true,
-                                contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                                contentPadding: EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 8,
+                                ),
                                 border: OutlineInputBorder(),
                               ),
                             )
@@ -623,7 +636,10 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
                           keyboardType: TextInputType.phone,
                           decoration: const InputDecoration(
                             isDense: true,
-                            contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                            contentPadding: EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 8,
+                            ),
                             border: OutlineInputBorder(),
                           ),
                         ),
@@ -649,13 +665,19 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
                           style: const TextStyle(fontSize: 13),
                           decoration: const InputDecoration(
                             isDense: true,
-                            contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                            contentPadding: EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 8,
+                            ),
                             border: OutlineInputBorder(),
                           ),
                         ),
                       )
                     : Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 6,
+                        ),
                         decoration: BoxDecoration(
                           color: Colors.blue.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(6),
@@ -683,13 +705,19 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
                           style: const TextStyle(fontSize: 13),
                           decoration: const InputDecoration(
                             isDense: true,
-                            contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                            contentPadding: EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 8,
+                            ),
                             border: OutlineInputBorder(),
                           ),
                         ),
                       )
                     : Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 6,
+                        ),
                         decoration: BoxDecoration(
                           color: Colors.green.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(6),
@@ -718,7 +746,10 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
                           keyboardType: TextInputType.number,
                           decoration: const InputDecoration(
                             isDense: true,
-                            contentPadding: EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                            contentPadding: EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 8,
+                            ),
                             border: OutlineInputBorder(),
                             prefixText: '₹',
                           ),
@@ -745,7 +776,9 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
                             onPressed: () => _saveEditing(employee),
                             tooltip: 'Save',
                             style: IconButton.styleFrom(
-                              backgroundColor: Colors.green.withValues(alpha: 0.1),
+                              backgroundColor: Colors.green.withValues(
+                                alpha: 0.1,
+                              ),
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(6),
                               ),
@@ -758,7 +791,9 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
                             onPressed: _cancelEditing,
                             tooltip: 'Cancel',
                             style: IconButton.styleFrom(
-                              backgroundColor: Colors.grey.withValues(alpha: 0.1),
+                              backgroundColor: Colors.grey.withValues(
+                                alpha: 0.1,
+                              ),
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(6),
                               ),
@@ -775,7 +810,9 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
                             onPressed: () => _startEditing(employee),
                             tooltip: 'Edit',
                             style: IconButton.styleFrom(
-                              backgroundColor: Colors.blue.withValues(alpha: 0.1),
+                              backgroundColor: Colors.blue.withValues(
+                                alpha: 0.1,
+                              ),
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(6),
                               ),
@@ -788,7 +825,9 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
                             onPressed: () => _confirmDelete(context, employee),
                             tooltip: 'Delete',
                             style: IconButton.styleFrom(
-                              backgroundColor: Colors.red.withValues(alpha: 0.1),
+                              backgroundColor: Colors.red.withValues(
+                                alpha: 0.1,
+                              ),
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(6),
                               ),
@@ -808,9 +847,7 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       elevation: 2,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: InkWell(
         onTap: () => _showEditEmployeeDialog(context, employee),
         borderRadius: BorderRadius.circular(12),
@@ -976,141 +1013,121 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
         Expanded(
           child: SelectableText(
             value,
-            style: const TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-            ),
+            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
           ),
         ),
       ],
     );
   }
 
-  Widget _buildEmptyState(BuildContext context) {
-    final screenWidth = MediaQuery.of(context).size.width;
-    final isDesktop = screenWidth > 800;
-    final horizontalPadding = AppSpacing.getHorizontalPadding(context);
-    
+  Widget _buildEmptyState(BuildContext context, {bool isLoading = false}) {
+    final theme = Theme.of(context);
+    final isDesktop = MediaQuery.of(context).size.width > 800;
+
     return Center(
-      child: SingleChildScrollView(
-        padding: EdgeInsets.symmetric(horizontal: horizontalPadding, vertical: 24),
+      child: Container(
+        constraints: const BoxConstraints(maxWidth: 500),
+        padding: const EdgeInsets.all(32),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(
-              Icons.people_outline,
-              size: 80,
-              color: Colors.grey[400],
-            ),
-            const SizedBox(height: 16),
-            Text(
-              'No employees yet',
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    color: Colors.grey[600],
-                  ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Add employees manually or import from CSV',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: Colors.grey[500],
-                  ),
-              textAlign: TextAlign.center,
+            // Illustration/Icon
+            Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: AppColors.primary.withValues(alpha: 0.1),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.group_add_outlined,
+                size: 64,
+                color: AppColors.primary,
+              ),
             ),
             const SizedBox(height: 32),
-            // Action Buttons - Responsive layout
+            // Title
+            const Text(
+              'No Employees Found',
+              style: TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+                letterSpacing: -0.5,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 12),
+            // Description
+            Text(
+              'Add employees manually or import using CSV to start managing attendance.',
+              style: TextStyle(
+                fontSize: 16,
+                color: theme.textTheme.bodySmall?.color?.withValues(alpha: 0.7),
+                height: 1.5,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 40),
+            // Actions
             if (isDesktop)
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  ElevatedButton.icon(
-                    onPressed: () => _showAddEmployeeForm(context),
-                    icon: const Icon(Icons.person_add, size: 20),
-                    label: const Text('Add Employee'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.primary,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 32,
-                        vertical: 16,
-                      ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                    ),
-                  ),
+                  _buildAddButton(context),
                   const SizedBox(width: 16),
-                  OutlinedButton.icon(
-                    onPressed: () => _pickAndImportCSV(context),
-                    icon: const Icon(Icons.upload_file, size: 20),
-                    label: const Text('Import CSV'),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: Colors.green,
-                      side: const BorderSide(color: Colors.green, width: 2),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 32,
-                        vertical: 16,
-                      ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                    ),
-                  ),
+                  _buildImportButton(context),
                 ],
               )
             else
-              // Mobile: Stack buttons vertically
               Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  ElevatedButton.icon(
-                    onPressed: () => _showAddEmployeeForm(context),
-                    icon: const Icon(Icons.person_add, size: 20),
-                    label: const Text('Add Employee'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.primary,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 24,
-                        vertical: 16,
-                      ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                    ),
-                  ),
+                  _buildAddButton(context),
                   const SizedBox(height: 12),
-                  OutlinedButton.icon(
-                    onPressed: () => _pickAndImportCSV(context),
-                    icon: const Icon(Icons.upload_file, size: 20),
-                    label: const Text('Import CSV'),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: Colors.green,
-                      side: const BorderSide(color: Colors.green, width: 2),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 24,
-                        vertical: 16,
-                      ),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                    ),
-                  ),
+                  _buildImportButton(context),
                 ],
               ),
-            const SizedBox(height: 16),
-            // Download Template Link
-            TextButton.icon(
-              onPressed: () => _downloadCSVTemplate(context),
-              icon: const Icon(Icons.download, size: 18),
-              label: const Text('Download CSV Template'),
-              style: TextButton.styleFrom(
-                foregroundColor: Colors.orange,
+            if (isLoading) ...[
+              const SizedBox(height: 32),
+              const SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  valueColor: AlwaysStoppedAnimation<Color>(AppColors.primary),
+                ),
               ),
-            ),
+            ],
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildAddButton(BuildContext context) {
+    return ElevatedButton.icon(
+      onPressed: () => _showAddEmployeeForm(context),
+      icon: const Icon(Icons.add, size: 20),
+      label: const Text('Add Employee'),
+      style: ElevatedButton.styleFrom(
+        backgroundColor: AppColors.primary,
+        foregroundColor: Colors.white,
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        elevation: 0,
+      ),
+    );
+  }
+
+  Widget _buildImportButton(BuildContext context) {
+    return OutlinedButton.icon(
+      onPressed: () => _pickAndImportCSV(context),
+      icon: const Icon(Icons.upload_file_outlined, size: 20),
+      label: const Text('Import CSV'),
+      style: OutlinedButton.styleFrom(
+        foregroundColor: AppColors.primary,
+        side: const BorderSide(color: AppColors.primary, width: 1.5),
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       ),
     );
   }
@@ -1119,10 +1136,14 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
     final nameController = TextEditingController();
     final codeController = TextEditingController();
     final mobileController = TextEditingController();
-    final positionController = TextEditingController();
-    final departmentController = TextEditingController();
     final salaryController = TextEditingController();
     final formKey = GlobalKey<FormState>();
+
+    final departments = ref.read(departmentProvider).departments;
+    final allDesignations = ref.read(designationProvider).designations;
+
+    String? selectedDepartmentId;
+    String? selectedDesignationId;
 
     showModalBottomSheet(
       context: context,
@@ -1130,160 +1151,198 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      builder: (context) => Padding(
-        padding: EdgeInsets.only(
-          bottom: MediaQuery.of(context).viewInsets.bottom,
-        ),
-        child: Container(
-          padding: const EdgeInsets.all(24),
-          child: Form(
-            key: formKey,
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Container(
-                    width: 40,
-                    height: 4,
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      color: Colors.grey[300],
-                      borderRadius: BorderRadius.circular(2),
+      builder: (context) => StatefulBuilder(
+        builder: (context, setModalState) => Padding(
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.of(context).viewInsets.bottom,
+          ),
+          child: Container(
+            padding: const EdgeInsets.all(24),
+            child: Form(
+              key: formKey,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Container(
+                      width: 40,
+                      height: 4,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: Colors.grey[300],
+                        borderRadius: BorderRadius.circular(2),
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 20),
-                  Text(
-                    'Add New Employee',
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 24),
-                  TextFormField(
-                    controller: codeController,
-                    decoration: const InputDecoration(
-                      labelText: 'Employee ID',
-                      prefixIcon: Icon(Icons.badge),
-                      border: OutlineInputBorder(),
+                    const SizedBox(height: 20),
+                    Text(
+                      'Add New Employee',
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                      textAlign: TextAlign.center,
                     ),
-                    validator: (value) {
-                      if (value == null || value.isEmpty) {
-                        return 'Please enter employee ID';
-                      }
-                      return null;
-                    },
-                  ),
-                  const SizedBox(height: 16),
-                  TextFormField(
-                    controller: nameController,
-                    decoration: const InputDecoration(
-                      labelText: 'Employee Name',
-                      prefixIcon: Icon(Icons.person),
-                      border: OutlineInputBorder(),
+                    const SizedBox(height: 24),
+                    TextFormField(
+                      controller: codeController,
+                      decoration: const InputDecoration(
+                        labelText: 'Employee ID',
+                        prefixIcon: Icon(Icons.badge),
+                        border: OutlineInputBorder(),
+                      ),
+                      validator: (value) {
+                        if (value == null || value.isEmpty) {
+                          return 'Please enter employee ID';
+                        }
+                        return null;
+                      },
                     ),
-                    validator: (value) {
-                      if (value == null || value.isEmpty) {
-                        return 'Please enter employee name';
-                      }
-                      return null;
-                    },
-                  ),
-                  const SizedBox(height: 16),
-                  TextFormField(
-                    controller: mobileController,
-                    decoration: const InputDecoration(
-                      labelText: 'Mobile Number',
-                      prefixIcon: Icon(Icons.phone),
-                      border: OutlineInputBorder(),
+                    const SizedBox(height: 16),
+                    TextFormField(
+                      controller: nameController,
+                      decoration: const InputDecoration(
+                        labelText: 'Employee Name',
+                        prefixIcon: Icon(Icons.person),
+                        border: OutlineInputBorder(),
+                      ),
+                      validator: (value) {
+                        if (value == null || value.isEmpty) {
+                          return 'Please enter employee name';
+                        }
+                        return null;
+                      },
                     ),
-                    keyboardType: TextInputType.phone,
-                    validator: (value) {
-                      if (value == null || value.isEmpty) {
-                        return 'Please enter mobile number';
-                      }
-                      if (value.length != 10) {
-                        return 'Mobile number must be 10 digits';
-                      }
-                      return null;
-                    },
-                  ),
-                  const SizedBox(height: 16),
-                  TextFormField(
-                    controller: positionController,
-                    decoration: const InputDecoration(
-                      labelText: 'Position',
-                      prefixIcon: Icon(Icons.work),
-                      border: OutlineInputBorder(),
+                    const SizedBox(height: 16),
+                    TextFormField(
+                      controller: mobileController,
+                      decoration: const InputDecoration(
+                        labelText: 'Mobile Number',
+                        prefixIcon: Icon(Icons.phone),
+                        border: OutlineInputBorder(),
+                      ),
+                      keyboardType: TextInputType.phone,
+                      validator: (value) {
+                        if (value == null || value.isEmpty) {
+                          return 'Please enter mobile number';
+                        }
+                        if (value.length != 10) {
+                          return 'Mobile number must be 10 digits';
+                        }
+                        return null;
+                      },
                     ),
-                    validator: (value) {
-                      if (value == null || value.isEmpty) {
-                        return 'Please enter position';
-                      }
-                      return null;
-                    },
-                  ),
-                  const SizedBox(height: 16),
-                  TextFormField(
-                    controller: departmentController,
-                    decoration: const InputDecoration(
-                      labelText: 'Department',
-                      prefixIcon: Icon(Icons.business),
-                      border: OutlineInputBorder(),
-                    ),
-                    validator: (value) {
-                      if (value == null || value.isEmpty) {
-                        return 'Please enter department';
-                      }
-                      return null;
-                    },
-                  ),
-                  const SizedBox(height: 16),
-                  TextFormField(
-                    controller: salaryController,
-                    decoration: const InputDecoration(
-                      labelText: 'Monthly Salary',
-                      prefixIcon: Icon(Icons.currency_rupee),
-                      border: OutlineInputBorder(),
-                      helperText: 'Enter monthly salary amount',
-                    ),
-                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                    validator: (value) {
-                      if (value == null || value.isEmpty) {
-                        return 'Please enter salary';
-                      }
-                      if (double.tryParse(value) == null) {
-                        return 'Please enter valid number';
-                      }
-                      if (double.parse(value) <= 0) {
-                        return 'Salary must be greater than 0';
-                      }
-                      return null;
-                    },
-                  ),
-                  const SizedBox(height: 24),
-                  ElevatedButton(
-                    onPressed: () {
-                      if (formKey.currentState!.validate()) {
-                        _addEmployeeManually(
-                          context,
-                          nameController.text,
-                          codeController.text,
-                          mobileController.text,
-                          positionController.text,
-                          departmentController.text,
-                          double.parse(salaryController.text),
+                    const SizedBox(height: 16),
+                    // Department Dropdown
+                    DropdownButtonFormField<String>(
+                      value: selectedDepartmentId,
+                      decoration: const InputDecoration(
+                        labelText: 'Department',
+                        prefixIcon: Icon(Icons.business),
+                        border: OutlineInputBorder(),
+                      ),
+                      items: departments.map((dept) {
+                        return DropdownMenuItem(
+                          value: dept.id,
+                          child: Text(dept.departmentName),
                         );
-                      }
-                    },
-                    style: ElevatedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      }).toList(),
+                      onChanged: (value) {
+                        setModalState(() {
+                          selectedDepartmentId = value;
+                          selectedDesignationId = null; // reset designation
+                        });
+                      },
+                      validator: (value) =>
+                          value == null ? 'Please select a department' : null,
                     ),
-                    child: const Text('Add Employee'),
-                  ),
-                  const SizedBox(height: 12),
-                ],
+                    const SizedBox(height: 16),
+                    // Designation Dropdown (filtered by selected department)
+                    DropdownButtonFormField<String>(
+                      value: selectedDesignationId,
+                      decoration: const InputDecoration(
+                        labelText: 'Designation / Position',
+                        prefixIcon: Icon(Icons.work),
+                        border: OutlineInputBorder(),
+                      ),
+                      items: allDesignations
+                          .where(
+                            (d) =>
+                                selectedDepartmentId == null ||
+                                d.departmentId == selectedDepartmentId,
+                          )
+                          .map((desig) {
+                            return DropdownMenuItem(
+                              value: desig.id,
+                              child: Text(desig.designationName),
+                            );
+                          })
+                          .toList(),
+                      onChanged: (value) {
+                        setModalState(() {
+                          selectedDesignationId = value;
+                        });
+                      },
+                      validator: (value) =>
+                          value == null ? 'Please select a designation' : null,
+                    ),
+                    const SizedBox(height: 16),
+                    TextFormField(
+                      controller: salaryController,
+                      decoration: const InputDecoration(
+                        labelText: 'Monthly Salary',
+                        prefixIcon: Icon(Icons.currency_rupee),
+                        border: OutlineInputBorder(),
+                        helperText: 'Enter monthly salary amount',
+                      ),
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
+                      validator: (value) {
+                        if (value == null || value.isEmpty) {
+                          return 'Please enter salary';
+                        }
+                        if (double.tryParse(value) == null) {
+                          return 'Please enter valid number';
+                        }
+                        if (double.parse(value) <= 0) {
+                          return 'Salary must be greater than 0';
+                        }
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 24),
+                    ElevatedButton(
+                      onPressed: () {
+                        if (formKey.currentState!.validate()) {
+                          final dept = departments.firstWhere(
+                            (d) => d.id == selectedDepartmentId,
+                          );
+                          final desig = allDesignations.firstWhere(
+                            (d) => d.id == selectedDesignationId,
+                          );
+                          _addEmployeeManually(
+                            context,
+                            nameController.text,
+                            codeController.text,
+                            mobileController.text,
+                            desig.designationName,
+                            dept.departmentName,
+                            double.parse(salaryController.text),
+                            selectedDepartmentId!,
+                            selectedDesignationId!,
+                          );
+                        }
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                      ),
+                      child: const Text('Add Employee'),
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+                ),
               ),
             ),
           ),
@@ -1294,283 +1353,40 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
 
   Future<void> _pickAndImportCSV(BuildContext context) async {
     developer.log('=== CSV IMPORT STARTED ===', name: 'EmployeesScreen');
-    
-    // Store navigator and scaffold messenger before any async operations
-    final navigator = Navigator.of(context);
-    final scaffoldMessenger = ScaffoldMessenger.of(context);
-    
-    try {
-      developer.log('Opening file picker...', name: 'EmployeesScreen');
-      
-      final result = await FilePicker.platform.pickFiles(
-        type: FileType.custom,
-        allowedExtensions: ['csv'],
-        allowMultiple: false,
-        withData: true,
-      );
 
-      if (result == null || result.files.isEmpty) {
-        developer.log('User cancelled file selection', name: 'EmployeesScreen');
-        return;
-      }
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['csv'],
+      allowMultiple: false,
+      withData: true,
+    );
 
-      final platformFile = result.files.single;
-      developer.log('File selected: ${platformFile.name}', name: 'EmployeesScreen');
-      developer.log('File size: ${platformFile.size} bytes', name: 'EmployeesScreen');
-      developer.log('Has bytes: ${platformFile.bytes != null}', name: 'EmployeesScreen');
+    if (result == null || result.files.isEmpty) {
+      developer.log('User cancelled file selection', name: 'EmployeesScreen');
+      return;
+    }
 
-      // Validate file type
-      if (!platformFile.name.toLowerCase().endsWith('.csv')) {
-        developer.log('ERROR: File is not a CSV file: ${platformFile.name}', name: 'EmployeesScreen');
-        if (!mounted) return;
-        
-        scaffoldMessenger.showSnackBar(
-          SnackBar(
-            content: Text('Please select a CSV file (.csv), not ${platformFile.name.split('.').last}'),
-            backgroundColor: Colors.red,
-            duration: const Duration(seconds: 4),
-          ),
-        );
-        return;
-      }
+    final platformFile = result.files.single;
 
-      // Validate file data
-      if (platformFile.bytes == null && platformFile.path == null) {
-        developer.log('ERROR: No bytes or path available', name: 'EmployeesScreen');
-        if (!mounted) return;
-        
-        scaffoldMessenger.showSnackBar(
-          const SnackBar(
-            content: Text('Unable to read the selected file. Please try again.'),
-            backgroundColor: Colors.red,
-          ),
-        );
-        return;
-      }
-
-      // Show loading snackbar instead of dialog
+    // Validate file type
+    if (!platformFile.name.toLowerCase().endsWith('.csv')) {
       if (!mounted) return;
-      scaffoldMessenger.showSnackBar(
-        SnackBar(
-          content: Row(
-            children: [
-              const SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Text('Processing ${platformFile.name}...'),
-              ),
-            ],
-          ),
-          duration: const Duration(minutes: 1),
-        ),
-      );
+      ToastHelper.error('Please select a CSV file (.csv)');
+      return;
+    }
 
-      // Read file content
-      String content;
-      if (platformFile.bytes != null) {
-        developer.log('Reading file from bytes...', name: 'EmployeesScreen');
-        content = String.fromCharCodes(platformFile.bytes!);
-      } else if (platformFile.path != null) {
-        developer.log('Reading file from path...', name: 'EmployeesScreen');
-        final file = File(platformFile.path!);
-        content = await file.readAsString();
-      } else {
-        throw Exception('Unable to read file content');
-      }
+    if (!mounted) return;
 
-      developer.log('Content length: ${content.length} characters', name: 'EmployeesScreen');
+    // Open preview dialog immediately
+    final resultData = await showDialog<List<EmployeeModel>>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => CsvPreviewDialog(file: platformFile),
+    );
 
-      // Validate CSV format
-      if (!CsvImportService.validateCSVFormat(content)) {
-        developer.log('CSV validation failed', name: 'EmployeesScreen');
-        if (!mounted) return;
-        
-        scaffoldMessenger.hideCurrentSnackBar();
-        scaffoldMessenger.showSnackBar(
-          const SnackBar(
-            content: Text('Invalid CSV format. Please download the template and use the correct format.'),
-            backgroundColor: Colors.red,
-            duration: Duration(seconds: 5),
-          ),
-        );
-        return;
-      }
-
-      // Parse CSV
-      developer.log('Parsing CSV...', name: 'EmployeesScreen');
-      final settings = ref.read(settingsProvider);
-      final previews = await CsvImportService.parseCSV(content, settings);
-      developer.log('Parsed ${previews.length} employees', name: 'EmployeesScreen');
-
-      if (previews.isEmpty) {
-        developer.log('No employees found in CSV', name: 'EmployeesScreen');
-        if (!mounted) return;
-        
-        scaffoldMessenger.hideCurrentSnackBar();
-        scaffoldMessenger.showSnackBar(
-          const SnackBar(
-            content: Text('No employee data found in CSV file.'),
-            backgroundColor: Colors.orange,
-          ),
-        );
-        return;
-      }
-
-      // Convert previews to employees with default values
-      final previewList = previews;
-
-      // Check for duplicates
-      final existingEmployees = ref.read(employeeProvider).employees;
-      
-      // Separate new and duplicate previews
-      final newPreviews = <CsvEmployeePreview>[];
-      final duplicatePreviews = <CsvEmployeePreview>[];
-      
-      for (final preview in previewList) {
-        final isDuplicate = existingEmployees.any(
-          (e) => e.employeeCode.toLowerCase() == preview.employeeCode.toLowerCase(),
-        );
-        if (isDuplicate) {
-          duplicatePreviews.add(preview);
-        } else {
-          newPreviews.add(preview);
-        }
-      }
-      
-      developer.log('Found ${newPreviews.length} new, ${duplicatePreviews.length} duplicates', name: 'EmployeesScreen');
-
-      // Hide loading snackbar
-      scaffoldMessenger.hideCurrentSnackBar();
-
-      // Check if there are new employees to import
-      if (newPreviews.isEmpty) {
-        developer.log('No new employees to import', name: 'EmployeesScreen');
-        if (!mounted) return;
-        
-        scaffoldMessenger.showSnackBar(
-          SnackBar(
-            content: Text('All ${previewList.length} employees already exist in the system.'),
-            backgroundColor: Colors.orange,
-          ),
-        );
-        return;
-      }
-
-      // Show preview dialog - use a new context from navigator
-      if (!mounted) return;
-      final shouldImport = await showDialog<bool>(
-        context: navigator.context,
-        barrierDismissible: false,
-        builder: (dialogContext) => CsvPreviewDialog(
-          previews: newPreviews,
-          duplicates: duplicatePreviews,
-        ),
-      );
-
-      if (shouldImport != true) {
-        developer.log('Import cancelled by user', name: 'EmployeesScreen');
-        return;
-      }
-
-      // Convert previews to employees
-      final employees = newPreviews.map((preview) => preview.toEmployeeModel()).toList();
-
-      // Show importing snackbar
-      if (!mounted) return;
-      scaffoldMessenger.showSnackBar(
-        SnackBar(
-          content: Row(
-            children: [
-              const SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                ),
-              ),
-              const SizedBox(width: 16),
-              Text('Importing ${employees.length} employees...'),
-            ],
-          ),
-          duration: const Duration(minutes: 1),
-        ),
-      );
-
+    if (resultData != null && resultData.isNotEmpty) {
       // Import employees
-      developer.log('Importing ${employees.length} employees...', name: 'EmployeesScreen');
-      await ref.read(employeeProvider.notifier).importEmployees(employees);
-      developer.log('Import completed successfully', name: 'EmployeesScreen');
-
-      // Hide importing snackbar
-      scaffoldMessenger.hideCurrentSnackBar();
-
-      // Show success dialog
-      if (!mounted) return;
-      await showDialog(
-        context: navigator.context,
-        builder: (dialogContext) => AlertDialog(
-          title: Row(
-            children: const [
-              Icon(Icons.check_circle, color: Colors.green, size: 28),
-              SizedBox(width: 12),
-              Text('Import Successful'),
-            ],
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                '✅ ${employees.length} employees imported successfully!',
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.green,
-                ),
-              ),
-              if (duplicatePreviews.isNotEmpty) ...[
-                const SizedBox(height: 8),
-                Text(
-                  '⏭️  ${duplicatePreviews.length} duplicates were skipped',
-                  style: const TextStyle(
-                    fontSize: 14,
-                    color: Colors.orange,
-                  ),
-                ),
-              ],
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext),
-              child: const Text('OK'),
-            ),
-          ],
-        ),
-      );
-      
-    } catch (e, stackTrace) {
-      developer.log('Import failed: $e', name: 'EmployeesScreen');
-      developer.log('Stack trace: $stackTrace', name: 'EmployeesScreen');
-      
-      if (!mounted) return;
-      
-      scaffoldMessenger.hideCurrentSnackBar();
-      scaffoldMessenger.showSnackBar(
-        SnackBar(
-          content: Text('Import failed: ${e.toString()}'),
-          backgroundColor: Colors.red,
-          duration: const Duration(seconds: 5),
-        ),
-      );
+      await ref.read(employeeProvider.notifier).importEmployees(resultData);
     }
   }
 
@@ -1582,9 +1398,17 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
     String position,
     String department,
     double salary,
+    String departmentId,
+    String designationId,
   ) {
-    final id = DateTime.now().millisecondsSinceEpoch.toString() +
+    final id =
+        DateTime.now().millisecondsSinceEpoch.toString() +
         code.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '');
+
+    // Split name into first and last name
+    final nameParts = name.trim().split(' ');
+    final firstName = nameParts[0];
+    final lastName = nameParts.length > 1 ? nameParts.sublist(1).join(' ') : '';
 
     // Get settings and convert salary
     final settings = ref.read(settingsProvider);
@@ -1592,11 +1416,14 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
 
     final employee = EmployeeModel(
       id: id,
-      name: name,
+      firstName: firstName,
+      lastName: lastName,
       employeeCode: code,
       mobileNo: mobileNo,
       position: position,
       department: department,
+      departmentId: int.tryParse(departmentId),
+      designationId: int.tryParse(designationId),
       salary: salary,
       salaryOriginal: salary,
       salaryType: conversion['salaryType'] as String,
@@ -1607,146 +1434,225 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
 
     ref.read(employeeProvider.notifier).addEmployee(employee);
     Navigator.pop(context);
-    
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('Employee $name added successfully'),
-        backgroundColor: Colors.green,
-      ),
-    );
+
+    ToastHelper.success('Employee $firstName $lastName added successfully');
   }
 
   void _showEditEmployeeDialog(BuildContext context, EmployeeModel employee) {
-    final nameController = TextEditingController(text: employee.name);
+    final firstNameController = TextEditingController(text: employee.firstName);
+    final lastNameController = TextEditingController(text: employee.lastName);
     final codeController = TextEditingController(text: employee.employeeCode);
     final mobileController = TextEditingController(text: employee.mobileNo);
-    final positionController = TextEditingController(text: employee.position);
-    final departmentController = TextEditingController(text: employee.department);
-    final salaryController = TextEditingController(text: employee.salaryOriginal.toString());
+    final salaryController = TextEditingController(
+      text: employee.salaryOriginal.toString(),
+    );
     final formKey = GlobalKey<FormState>();
+
+    final departments = ref.read(departmentProvider).departments;
+    final allDesignations = ref.read(designationProvider).designations;
+
+    // Try to match existing values to dropdown entries (by name)
+    String? selectedDepartmentId = departments
+        .cast<dynamic>()
+        .firstWhere(
+          (d) => d.departmentName == employee.department,
+          orElse: () => null,
+        )
+        ?.id;
+    String? selectedDesignationId = allDesignations
+        .cast<dynamic>()
+        .firstWhere(
+          (d) => d.designationName == employee.position,
+          orElse: () => null,
+        )
+        ?.id;
 
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Edit Employee'),
-        content: SingleChildScrollView(
-          child: Form(
-            key: formKey,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextFormField(
-                  controller: nameController,
-                  decoration: const InputDecoration(
-                    labelText: 'Employee Name',
-                    border: OutlineInputBorder(),
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Edit Employee'),
+          content: SingleChildScrollView(
+            child: Form(
+              key: formKey,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextFormField(
+                    controller: firstNameController,
+                    decoration: const InputDecoration(
+                      labelText: 'First Name',
+                      border: OutlineInputBorder(),
+                    ),
+                    validator: (value) =>
+                        value?.isEmpty ?? true ? 'Required' : null,
                   ),
-                  validator: (value) => value?.isEmpty ?? true ? 'Required' : null,
-                ),
-                const SizedBox(height: 12),
-                TextFormField(
-                  controller: codeController,
-                  decoration: const InputDecoration(
-                    labelText: 'Employee Code',
-                    border: OutlineInputBorder(),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: lastNameController,
+                    decoration: const InputDecoration(
+                      labelText: 'Last Name',
+                      border: OutlineInputBorder(),
+                    ),
+                    validator: (value) =>
+                        value?.isEmpty ?? true ? 'Required' : null,
                   ),
-                  validator: (value) => value?.isEmpty ?? true ? 'Required' : null,
-                ),
-                const SizedBox(height: 12),
-                TextFormField(
-                  controller: mobileController,
-                  decoration: const InputDecoration(
-                    labelText: 'Mobile Number',
-                    border: OutlineInputBorder(),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: codeController,
+                    decoration: const InputDecoration(
+                      labelText: 'Employee Code',
+                      border: OutlineInputBorder(),
+                    ),
+                    validator: (value) =>
+                        value?.isEmpty ?? true ? 'Required' : null,
                   ),
-                  keyboardType: TextInputType.phone,
-                  validator: (value) => value?.isEmpty ?? true ? 'Required' : null,
-                ),
-                const SizedBox(height: 12),
-                TextFormField(
-                  controller: positionController,
-                  decoration: const InputDecoration(
-                    labelText: 'Position',
-                    border: OutlineInputBorder(),
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: mobileController,
+                    decoration: const InputDecoration(
+                      labelText: 'Mobile Number',
+                      border: OutlineInputBorder(),
+                    ),
+                    keyboardType: TextInputType.phone,
+                    validator: (value) =>
+                        value?.isEmpty ?? true ? 'Required' : null,
                   ),
-                  validator: (value) => value?.isEmpty ?? true ? 'Required' : null,
-                ),
-                const SizedBox(height: 12),
-                TextFormField(
-                  controller: departmentController,
-                  decoration: const InputDecoration(
-                    labelText: 'Department',
-                    border: OutlineInputBorder(),
+                  const SizedBox(height: 12),
+                  // Department Dropdown
+                  DropdownButtonFormField<String>(
+                    value: selectedDepartmentId,
+                    decoration: const InputDecoration(
+                      labelText: 'Department',
+                      prefixIcon: Icon(Icons.business),
+                      border: OutlineInputBorder(),
+                    ),
+                    items: departments.map((dept) {
+                      return DropdownMenuItem(
+                        value: dept.id,
+                        child: Text(dept.departmentName),
+                      );
+                    }).toList(),
+                    onChanged: (value) {
+                      setDialogState(() {
+                        selectedDepartmentId = value;
+                        selectedDesignationId = null;
+                      });
+                    },
+                    validator: (value) =>
+                        value == null ? 'Please select a department' : null,
                   ),
-                  validator: (value) => value?.isEmpty ?? true ? 'Required' : null,
-                ),
-                const SizedBox(height: 12),
-                TextFormField(
-                  controller: salaryController,
-                  decoration: const InputDecoration(
-                    labelText: 'Monthly Salary',
-                    border: OutlineInputBorder(),
-                    helperText: 'Enter monthly salary amount',
+                  const SizedBox(height: 12),
+                  // Designation Dropdown (filtered by selected department)
+                  DropdownButtonFormField<String>(
+                    value: selectedDesignationId,
+                    decoration: const InputDecoration(
+                      labelText: 'Designation / Position',
+                      prefixIcon: Icon(Icons.work),
+                      border: OutlineInputBorder(),
+                    ),
+                    items: allDesignations
+                        .where(
+                          (d) =>
+                              selectedDepartmentId == null ||
+                              d.departmentId == selectedDepartmentId,
+                        )
+                        .map((desig) {
+                          return DropdownMenuItem(
+                            value: desig.id,
+                            child: Text(desig.designationName),
+                          );
+                        })
+                        .toList(),
+                    onChanged: (value) {
+                      setDialogState(() {
+                        selectedDesignationId = value;
+                      });
+                    },
+                    validator: (value) =>
+                        value == null ? 'Please select a designation' : null,
                   ),
-                  keyboardType: TextInputType.number,
-                  validator: (value) {
-                    if (value?.isEmpty ?? true) return 'Required';
-                    if (double.tryParse(value!) == null) return 'Invalid number';
-                    if (double.parse(value) <= 0) return 'Must be greater than 0';
-                    return null;
-                  },
-                ),
-              ],
+                  const SizedBox(height: 12),
+                  TextFormField(
+                    controller: salaryController,
+                    decoration: const InputDecoration(
+                      labelText: 'Monthly Salary',
+                      border: OutlineInputBorder(),
+                      helperText: 'Enter monthly salary amount',
+                    ),
+                    keyboardType: TextInputType.number,
+                    validator: (value) {
+                      if (value?.isEmpty ?? true) return 'Required';
+                      if (double.tryParse(value!) == null)
+                        return 'Invalid number';
+                      if (double.parse(value) <= 0)
+                        return 'Must be greater than 0';
+                      return null;
+                    },
+                  ),
+                ],
+              ),
             ),
           ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                if (formKey.currentState!.validate()) {
+                  final newSalary = double.parse(salaryController.text);
+                  final dept = departments.firstWhere(
+                    (d) => d.id == selectedDepartmentId,
+                  );
+                  final desig = allDesignations.firstWhere(
+                    (d) => d.id == selectedDesignationId,
+                  );
+
+                  // Get settings and convert salary
+                  final settings = ref.read(settingsProvider);
+                  final conversion = EmployeeService.convertSalary(
+                    newSalary,
+                    settings,
+                  );
+
+                  final updatedEmployee = EmployeeModel(
+                    id: employee.id,
+                    firstName: firstNameController.text,
+                    lastName: lastNameController.text,
+                    employeeCode: codeController.text,
+                    mobileNo: mobileController.text,
+                    position: desig.designationName,
+                    department: dept.departmentName,
+                    salary: newSalary,
+                    salaryOriginal: newSalary,
+                    salaryType: conversion['salaryType'] as String,
+                    hourlyRate: conversion['hourlyRate'] as double?,
+                    dailyRate: conversion['dailyRate'] as double?,
+                    createdAt: employee.createdAt,
+                    employeeType: employee.employeeType,
+                    overtimeType: employee.overtimeType,
+                    overtimeRate: employee.overtimeRate,
+                    overtimeSlots: employee.overtimeSlots,
+                  );
+
+                  ref
+                      .read(employeeProvider.notifier)
+                      .updateEmployee(updatedEmployee);
+                  Navigator.pop(context);
+
+                  ToastHelper.success('Employee updated successfully');
+                }
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+              ),
+              child: const Text('Update'),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              if (formKey.currentState!.validate()) {
-                final newSalary = double.parse(salaryController.text);
-                
-                // Get settings and convert salary
-                final settings = ref.read(settingsProvider);
-                final conversion = EmployeeService.convertSalary(newSalary, settings);
-                
-                final updatedEmployee = EmployeeModel(
-                  id: employee.id,
-                  name: nameController.text,
-                  employeeCode: codeController.text,
-                  mobileNo: mobileController.text,
-                  position: positionController.text,
-                  department: departmentController.text,
-                  salary: newSalary,
-                  salaryOriginal: newSalary,
-                  salaryType: conversion['salaryType'] as String,
-                  hourlyRate: conversion['hourlyRate'] as double?,
-                  dailyRate: conversion['dailyRate'] as double?,
-                  createdAt: employee.createdAt,
-                  employeeType: employee.employeeType,
-                  overtimeType: employee.overtimeType,
-                  overtimeRate: employee.overtimeRate,
-                  overtimeSlots: employee.overtimeSlots,
-                );
-                
-                ref.read(employeeProvider.notifier).updateEmployee(updatedEmployee);
-                Navigator.pop(context);
-                
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Employee updated successfully'),
-                    backgroundColor: Colors.green,
-                  ),
-                );
-              }
-            },
-            child: const Text('Update'),
-          ),
-        ],
       ),
     );
   }
@@ -1766,13 +1672,8 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
             onPressed: () {
               ref.read(employeeProvider.notifier).deleteEmployee(employee.id);
               Navigator.pop(context);
-              
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text('${employee.name} deleted successfully'),
-                  backgroundColor: Colors.red,
-                ),
-              );
+
+              ToastHelper.error('${employee.name} deleted successfully');
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.red,
@@ -1786,47 +1687,30 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
   }
 
   Future<void> _downloadCSVTemplate(BuildContext context) async {
-    final scaffoldMessenger = ScaffoldMessenger.of(context);
     final navigator = Navigator.of(context);
-    
+
     try {
       final template = CsvImportService.generateSampleCSV();
-      
-      // Use FilePicker to let user choose save location
-      final result = await FilePicker.platform.saveFile(
-        dialogTitle: 'Save CSV Template',
-        fileName: 'employee_template.csv',
-        type: FileType.custom,
-        allowedExtensions: ['csv'],
+      final Uint8List bytes = Uint8List.fromList(utf8.encode(template));
+      const fileName = 'employee_template';
+
+      developer.log(
+        'Downloading CSV Template - Web: $kIsWeb',
+        name: 'EmployeesScreen',
       );
 
-      if (result != null) {
-        // Write the file
-        final file = File(result);
-        await file.writeAsString(template);
-        
-        scaffoldMessenger.showSnackBar(
-          SnackBar(
-            content: Row(
-              children: const [
-                Icon(Icons.check_circle, color: Colors.white),
-                SizedBox(width: 12),
-                Expanded(
-                  child: Text('CSV template saved successfully!'),
-                ),
-              ],
-            ),
-            backgroundColor: Colors.green,
-            duration: const Duration(seconds: 3),
-          ),
-        );
-      } else {
-        // User cancelled the save dialog
-        developer.log('User cancelled template download', name: 'EmployeesScreen');
-      }
+      // Use FileSaver for robust cross-platform saving
+      await FileSaver.instance.saveFile(
+        name: fileName,
+        bytes: bytes,
+        ext: 'csv',
+        mimeType: MimeType.csv,
+      );
+
+      ToastHelper.success('CSV template download started!');
     } catch (e) {
       developer.log('Error downloading template: $e', name: 'EmployeesScreen');
-      
+
       // Fallback: Show the template in a dialog for manual copy
       if (!mounted) return;
       _showTemplateDialog(navigator.context);
@@ -1835,7 +1719,7 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
 
   void _showTemplateDialog(BuildContext context) {
     final template = CsvImportService.generateSampleCSV();
-    
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -1860,10 +1744,7 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
                 ),
                 child: const Text(
                   '📋 Copy this template and save as .csv file',
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 14,
-                  ),
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
                 ),
               ),
               const SizedBox(height: 16),
@@ -1876,10 +1757,7 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
                 ),
                 child: SelectableText(
                   template,
-                  style: const TextStyle(
-                    fontFamily: 'monospace',
-                    fontSize: 12,
-                  ),
+                  style: const TextStyle(fontFamily: 'monospace', fontSize: 12),
                 ),
               ),
               const SizedBox(height: 16),
@@ -1888,14 +1766,20 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
                 decoration: BoxDecoration(
                   color: Colors.orange.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.orange.withValues(alpha: 0.3)),
+                  border: Border.all(
+                    color: Colors.orange.withValues(alpha: 0.3),
+                  ),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Row(
                       children: const [
-                        Icon(Icons.info_outline, color: Colors.orange, size: 20),
+                        Icon(
+                          Icons.info_outline,
+                          color: Colors.orange,
+                          size: 20,
+                        ),
                         SizedBox(width: 8),
                         Text(
                           'Instructions:',
@@ -1914,10 +1798,7 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
                       '4. Add your employee data\n'
                       '5. Save as CSV file (.csv)\n'
                       '6. Import using "Import CSV" button',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.grey[700],
-                      ),
+                      style: TextStyle(fontSize: 12, color: Colors.grey[700]),
                     ),
                   ],
                 ),
@@ -1942,5 +1823,4 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
       ),
     );
   }
-
 }

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../providers/owner_provider.dart';
+import '../providers/auth_provider.dart';
 import '../routes/app_routes.dart';
 import '../utills/app_assets.dart';
 import '../utills/app_spacing.dart';
@@ -16,6 +16,7 @@ class RegisterScreen extends ConsumerStatefulWidget {
 class _RegisterScreenState extends ConsumerState<RegisterScreen> {
   late GlobalKey<FormState> formKey;
   bool isPasswordVisible = false;
+  bool isConfirmPasswordVisible = false;
 
   @override
   void initState() {
@@ -27,11 +28,16 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     if (formKey.currentState!.validate()) {
       FocusScope.of(context).unfocus();
 
-      final success = await ref.read(ownerProvider.notifier).registerOwner();
+      final authNotifier = ref.read(authProvider.notifier);
 
-      if (success && mounted) {
-        // Navigate to company registration screen
-        Navigator.pushNamed(context, AppRoutes.companyRegister);
+      await authNotifier.register();
+
+      final authState = ref.read(authProvider);
+
+      if (authState.isLoggedIn && mounted) {
+        // Navigate to company registration screen and replace current route
+        // so user cannot go back to an empty register form after account creation
+        Navigator.pushReplacementNamed(context, AppRoutes.companyRegister);
       }
     }
   }
@@ -41,7 +47,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     final screenWidth = MediaQuery.of(context).size.width;
     final screenHeight = MediaQuery.of(context).size.height;
     final padding = MediaQuery.of(context).padding;
-    final ownerState = ref.watch(ownerProvider);
+    final authState = ref.watch(authProvider);
     final isDesktop = screenWidth > 900;
 
     return Scaffold(
@@ -51,16 +57,11 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
           GestureDetector(
             onTap: () => FocusScope.of(context).unfocus(),
             child: isDesktop
-                ? _buildDesktopLayout(context, ownerState)
-                : _buildMobileLayout(
-                    context,
-                    screenHeight,
-                    padding,
-                    ownerState,
-                  ),
+                ? _buildDesktopLayout(context, authState)
+                : _buildMobileLayout(context, screenHeight, padding, authState),
           ),
           // Full screen loader
-          if (ownerState.isLoading)
+          if (authState.isLoading)
             Container(
               color: Colors.black.withValues(alpha: 0.5),
               child: const Center(child: AppLoader(size: 80)),
@@ -74,7 +75,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     BuildContext context,
     double screenHeight,
     EdgeInsets padding,
-    dynamic ownerState,
+    dynamic authState,
   ) {
     return SafeArea(
       child: Center(
@@ -114,7 +115,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                     textAlign: TextAlign.center,
                   ),
                   SizedBox(height: screenHeight * 0.06),
-                  ..._buildFormFields(context, screenHeight),
+                  ..._buildFormFields(context, screenHeight, authState),
                 ],
               ),
             ),
@@ -124,7 +125,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     );
   }
 
-  Widget _buildDesktopLayout(BuildContext context, dynamic ownerState) {
+  Widget _buildDesktopLayout(BuildContext context, dynamic authState) {
     return Row(
       children: [
         // Left side - White background with logo and app name
@@ -204,6 +205,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
                         ..._buildFormFields(
                           context,
                           MediaQuery.of(context).size.height,
+                          authState,
                         ),
                       ],
                     ),
@@ -217,12 +219,16 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
     );
   }
 
-  List<Widget> _buildFormFields(BuildContext context, double screenHeight) {
+  List<Widget> _buildFormFields(
+    BuildContext context,
+    double screenHeight,
+    dynamic authState,
+  ) {
     return [
       // Owner Name Field
       TextFormField(
         onChanged: (value) =>
-            ref.read(ownerProvider.notifier).setOwnerName(value),
+            ref.read(authProvider.notifier).setOwnerName(value),
         decoration: const InputDecoration(
           labelText: 'Owner Name *',
           prefixIcon: Icon(Icons.person),
@@ -243,8 +249,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
 
       // Mobile Number Field
       TextFormField(
-        onChanged: (value) =>
-            ref.read(ownerProvider.notifier).setMobileNumber(value),
+        onChanged: (value) => ref.read(authProvider.notifier).setPhone(value),
         decoration: const InputDecoration(
           labelText: 'Mobile Number *',
           prefixIcon: Icon(Icons.phone),
@@ -271,7 +276,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
 
       // Email Field (Optional)
       TextFormField(
-        onChanged: (value) => ref.read(ownerProvider.notifier).setEmail(value),
+        onChanged: (value) => ref.read(authProvider.notifier).setEmail(value),
         decoration: const InputDecoration(
           labelText: 'Email (Optional)',
           prefixIcon: Icon(Icons.email),
@@ -293,7 +298,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
       // Password Field
       TextFormField(
         onChanged: (value) =>
-            ref.read(ownerProvider.notifier).setPassword(value),
+            ref.read(authProvider.notifier).setPassword(value),
         decoration: InputDecoration(
           labelText: 'Password *',
           prefixIcon: const Icon(Icons.lock),
@@ -319,11 +324,44 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
           return null;
         },
       ),
+      SizedBox(height: screenHeight * 0.02),
+
+      // Confirm Password Field
+      TextFormField(
+        onChanged: (value) =>
+            ref.read(authProvider.notifier).setConfirmPassword(value),
+        decoration: InputDecoration(
+          labelText: 'Confirm Password *',
+          prefixIcon: const Icon(Icons.lock_outline),
+          suffixIcon: IconButton(
+            icon: Icon(
+              isConfirmPasswordVisible
+                  ? Icons.visibility
+                  : Icons.visibility_off,
+            ),
+            onPressed: () => setState(() {
+              isConfirmPasswordVisible = !isConfirmPasswordVisible;
+            }),
+          ),
+          border: const OutlineInputBorder(),
+        ),
+        obscureText: !isConfirmPasswordVisible,
+        textInputAction: TextInputAction.done,
+        validator: (value) {
+          if (value == null || value.isEmpty) {
+            return 'Please confirm password';
+          }
+          if (value != authState.password) {
+            return 'Passwords do not match';
+          }
+          return null;
+        },
+      ),
       SizedBox(height: screenHeight * 0.04),
 
       // Continue Button
       ElevatedButton(
-        onPressed: ref.watch(ownerProvider).isLoading ? null : _handleRegister,
+        onPressed: authState.isLoading ? null : _handleRegister,
         child: const Padding(
           padding: EdgeInsets.symmetric(vertical: 12.0),
           child: Text('Continue to Company Details'),

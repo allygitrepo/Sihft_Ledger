@@ -43,23 +43,29 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         children: [
           Text(
             'Overview',
-            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
+            style: Theme.of(
+              context,
+            ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 16),
 
           // Statistics Cards - Responsive Grid
-          _buildStatsGrid(context, employeeState, payrollState, todayAttendanceCount, deviceType),
+          _buildStatsGrid(
+            context,
+            employeeState,
+            payrollState,
+            todayAttendanceCount,
+            deviceType,
+          ),
 
           const SizedBox(height: 24),
 
           // Quick Actions
           Text(
             'Quick Actions',
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
+            style: Theme.of(
+              context,
+            ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 12),
           _buildActionCard(
@@ -69,6 +75,24 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             icon: Icons.group_add,
             onTap: () {
               Navigator.pushNamed(context, AppRoutes.employees);
+            },
+          ),
+          _buildActionCard(
+            context: context,
+            title: 'Manage Departments',
+            subtitle: 'Configure company departments',
+            icon: Icons.business,
+            onTap: () {
+              Navigator.pushNamed(context, AppRoutes.departments);
+            },
+          ),
+          _buildActionCard(
+            context: context,
+            title: 'Manage Designations',
+            subtitle: 'Set up employee roles',
+            icon: Icons.badge,
+            onTap: () {
+              Navigator.pushNamed(context, AppRoutes.designations);
             },
           ),
           _buildActionCard(
@@ -191,16 +215,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             Text(
               data.value,
               style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.bold,
-                    color: data.color,
-                  ),
+                fontWeight: FontWeight.bold,
+                color: data.color,
+              ),
             ),
             const SizedBox(height: 4),
             Text(
               data.title,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Colors.grey[600],
-                  ),
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: Colors.grey[600]),
             ),
           ],
         ),
@@ -228,10 +252,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           ),
           child: Icon(icon, color: AppColors.primary),
         ),
-        title: Text(
-          title,
-          style: const TextStyle(fontWeight: FontWeight.w600),
-        ),
+        title: Text(title, style: const TextStyle(fontWeight: FontWeight.w600)),
         subtitle: Text(subtitle),
         trailing: const Icon(Icons.arrow_forward_ios, size: 16),
         onTap: onTap,

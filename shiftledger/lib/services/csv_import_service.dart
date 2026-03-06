@@ -11,7 +11,7 @@ class CsvImportService {
     SettingsModel settings,
   ) async {
     developer.log('CSV IMPORT START', name: 'CsvImportService');
-    
+
     final List<CsvEmployeePreview> previews = [];
     final lines = const LineSplitter().convert(csvContent);
 
@@ -25,7 +25,7 @@ class CsvImportService {
 
     final header = lines[0].toLowerCase();
     final requiredColumns = ['id', 'name', 'position', 'department', 'salary'];
-    
+
     for (final column in requiredColumns) {
       if (!header.contains(column)) {
         throw Exception('CSV header must contain "$column" column');
@@ -34,7 +34,7 @@ class CsvImportService {
 
     for (int i = 1; i < lines.length; i++) {
       final line = lines[i].trim();
-      
+
       if (line.isEmpty || line.replaceAll(',', '').trim().isEmpty) {
         continue;
       }
@@ -63,15 +63,17 @@ class CsvImportService {
 
     // Support both 5 columns (no mobile) and 6 columns (with mobile)
     if (parts.length < 5) {
-      throw Exception('Line must have at least 5 columns: Employee ID, Name, Position, Department, Salary');
+      throw Exception(
+        'Line must have at least 5 columns: Employee ID, Name, Position, Department, Salary',
+      );
     }
 
     final employeeCode = parts[0];
     final name = parts[1];
-    
+
     // Check if we have 6 columns (with mobile) or 5 columns (without mobile)
     String mobileNo, position, department, salaryString;
-    
+
     if (parts.length >= 6) {
       // 6 columns: ID, Name, Mobile, Position, Department, Salary
       mobileNo = parts[2];
@@ -91,14 +93,27 @@ class CsvImportService {
     if (position.isEmpty) throw Exception('Position cannot be empty');
     if (department.isEmpty) throw Exception('Department cannot be empty');
 
+    // Split name into first and last name
+    final nameParts = name.split(' ');
+    final firstName = nameParts[0];
+    final lastName = nameParts.length > 1 ? nameParts.sublist(1).join(' ') : '';
+
     // Clean salary string - remove currency symbols, commas, spaces
     final cleanedSalary = salaryString
-        .replaceAll(RegExp(r'[₹$,\s]'), '') // Remove currency symbols, commas, spaces
-        .replaceAll(RegExp(r'[^\d.]'), ''); // Keep only digits and decimal point
+        .replaceAll(
+          RegExp(r'[₹$,\s]'),
+          '',
+        ) // Remove currency symbols, commas, spaces
+        .replaceAll(
+          RegExp(r'[^\d.]'),
+          '',
+        ); // Keep only digits and decimal point
 
     final salary = double.tryParse(cleanedSalary);
     if (salary == null) {
-      throw Exception('Invalid salary value "$salaryString". Must be a number (e.g., 50000 or 50,000)');
+      throw Exception(
+        'Invalid salary value "$salaryString". Must be a number (e.g., 50000 or 50,000)',
+      );
     }
 
     if (salary <= 0) {
@@ -110,13 +125,14 @@ class CsvImportService {
 
     return CsvEmployeePreview(
       employeeCode: employeeCode,
-      name: name,
+      firstName: firstName,
+      lastName: lastName,
       mobileNo: mobileNo,
       position: position,
       department: department,
       salary: salary,
-      employeeType: settings.defaultSalaryType == DefaultSalaryType.hourwise 
-          ? EmployeeType.hourly 
+      employeeType: settings.defaultSalaryType == DefaultSalaryType.hourwise
+          ? EmployeeType.hourly
           : EmployeeType.daily,
       hourlyRate: conversion['hourlyRate'] as double?,
       dailyRate: conversion['dailyRate'] as double?,
@@ -126,12 +142,18 @@ class CsvImportService {
   static bool validateCSVFormat(String csvContent) {
     try {
       final lines = const LineSplitter().convert(csvContent);
-      
+
       if (lines.isEmpty) return false;
 
       final header = lines[0].toLowerCase();
-      final requiredColumns = ['id', 'name', 'position', 'department', 'salary'];
-      
+      final requiredColumns = [
+        'id',
+        'name',
+        'position',
+        'department',
+        'salary',
+      ];
+
       for (final column in requiredColumns) {
         if (!header.contains(column)) return false;
       }

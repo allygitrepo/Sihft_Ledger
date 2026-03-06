@@ -14,14 +14,17 @@ class PayrollConfigurationScreen extends ConsumerWidget {
     final settingsNotifier = ref.read(settingsProvider.notifier);
     final horizontalPadding = AppSpacing.getHorizontalPadding(context);
     final screenWidth = MediaQuery.of(context).size.width;
-    final isDesktop = screenWidth > 900;
+    final isDesktop = screenWidth > 800;
 
     return Scaffold(
       appBar: isDesktop
           ? null
           : AppBar(
               title: const Text('Payroll Configuration'),
-              centerTitle: true,
+              leading: IconButton(
+                icon: const Icon(Icons.arrow_back),
+                onPressed: () => Navigator.of(context).pop(),
+              ),
             ),
       body: ListView(
         padding: EdgeInsets.all(horizontalPadding),
@@ -42,9 +45,8 @@ class PayrollConfigurationScreen extends ConsumerWidget {
                       Expanded(
                         child: Text(
                           'Payroll Settings',
-                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                fontWeight: FontWeight.bold,
-                              ),
+                          style: Theme.of(context).textTheme.titleMedium
+                              ?.copyWith(fontWeight: FontWeight.bold),
                         ),
                       ),
                     ],
@@ -59,32 +61,38 @@ class PayrollConfigurationScreen extends ConsumerWidget {
             ),
           ),
           const SizedBox(height: 20),
-          
+
           // Attendance Type
           Text(
             'Attendance Tracking',
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
+            style: Theme.of(
+              context,
+            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 12),
           Card(
             child: ListTile(
               leading: const Icon(Icons.calendar_today),
               title: const Text('Attendance Type'),
-              subtitle: Text(_getAttendanceTypeLabel(payrollSettings.attendanceType)),
+              subtitle: Text(
+                _getAttendanceTypeLabel(payrollSettings.attendanceType),
+              ),
               trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-              onTap: () => _showAttendanceTypeDialog(context, settingsNotifier, payrollSettings),
+              onTap: () => _showAttendanceTypeDialog(
+                context,
+                settingsNotifier,
+                payrollSettings,
+              ),
             ),
           ),
           const SizedBox(height: 20),
-          
+
           // Overtime Settings
           Text(
             'Overtime Settings',
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
+            style: Theme.of(
+              context,
+            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 12),
           Card(
@@ -93,18 +101,23 @@ class PayrollConfigurationScreen extends ConsumerWidget {
               title: const Text('Overtime Multiplier'),
               subtitle: Text('${payrollSettings.overtimeMultiplier}x'),
               trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-              onTap: () => _showOvertimeMultiplierDialog(context, settingsNotifier, payrollSettings),
+              onTap: () => _showOvertimeMultiplierDialog(
+                context,
+                settingsNotifier,
+                payrollSettings,
+              ),
             ),
           ),
           const SizedBox(height: 20),
-          
+
           // Working Hours
-          if (payrollSettings.attendanceType == PayrollAttendanceType.hourly) ...[
+          if (payrollSettings.attendanceType ==
+              PayrollAttendanceType.hourly) ...[
             Text(
               'Working Hours',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 12),
             Card(
@@ -113,18 +126,22 @@ class PayrollConfigurationScreen extends ConsumerWidget {
                 title: const Text('Minimum Hours per Day'),
                 subtitle: Text('${payrollSettings.minimumHours} hours'),
                 trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-                onTap: () => _showMinimumHoursDialog(context, settingsNotifier, payrollSettings),
+                onTap: () => _showMinimumHoursDialog(
+                  context,
+                  settingsNotifier,
+                  payrollSettings,
+                ),
               ),
             ),
             const SizedBox(height: 20),
           ],
-          
+
           // Salary Cycle
           Text(
             'Salary Cycle',
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
+            style: Theme.of(
+              context,
+            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 12),
           Card(
@@ -133,7 +150,11 @@ class PayrollConfigurationScreen extends ConsumerWidget {
               title: const Text('Salary Cycle'),
               subtitle: Text(_getSalaryCycleLabel(payrollSettings.salaryCycle)),
               trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-              onTap: () => _showSalaryCycleDialog(context, settingsNotifier, payrollSettings),
+              onTap: () => _showSalaryCycleDialog(
+                context,
+                settingsNotifier,
+                payrollSettings,
+              ),
             ),
           ),
         ],
@@ -280,7 +301,9 @@ class PayrollConfigurationScreen extends ConsumerWidget {
           children: [
             TextField(
               controller: controller,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
               decoration: const InputDecoration(
                 labelText: 'Hours (1.0 - 24.0)',
                 hintText: '8',

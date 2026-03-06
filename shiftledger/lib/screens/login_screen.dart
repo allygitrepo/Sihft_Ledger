@@ -1,12 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../services/owner_service.dart';
+import '../providers/auth_provider.dart';
 import '../routes/app_routes.dart';
 import '../utills/app_assets.dart';
 import '../utills/app_spacing.dart';
 import '../widgets/loader.dart';
-import '../widgets/toast.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -18,10 +16,6 @@ class LoginScreen extends ConsumerStatefulWidget {
 class _LoginScreenState extends ConsumerState<LoginScreen> {
   late GlobalKey<FormState> formKey;
   bool isPasswordVisible = false;
-  bool isLoading = false;
-
-  String mobileNumber = '';
-  String password = '';
 
   @override
   void initState() {
@@ -33,34 +27,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     if (formKey.currentState!.validate()) {
       FocusScope.of(context).unfocus();
 
-      setState(() => isLoading = true);
+      final authNotifier = ref.read(authProvider.notifier);
 
-      // Check if owner exists
-      final hasOwner = await OwnerService.hasOwner();
+      await authNotifier.login();
 
-      if (!hasOwner) {
-        setState(() => isLoading = false);
-        ToastHelper.error('No account found. Please register first.');
-        return;
-      }
+      final authState = ref.read(authProvider);
 
-      // Validate credentials
-      final isValid = await OwnerService.validateLogin(mobileNumber, password);
-
-      if (isValid) {
-        // Save login state
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setBool('is_logged_in', true);
-
-        setState(() => isLoading = false);
-
-        if (mounted) {
-          ToastHelper.success('Login successful');
-          Navigator.pushReplacementNamed(context, AppRoutes.dashboard);
-        }
-      } else {
-        setState(() => isLoading = false);
-        ToastHelper.error('Invalid mobile number or password');
+      if (authState.isLoggedIn && mounted) {
+        Navigator.pushReplacementNamed(context, AppRoutes.dashboard);
       }
     }
   }
@@ -72,6 +46,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     final padding = MediaQuery.of(context).padding;
     final isDesktop = screenWidth > 900;
 
+    final authState = ref.watch(authProvider);
+
     return Scaffold(
       resizeToAvoidBottomInset: true,
       body: Stack(
@@ -79,11 +55,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
           GestureDetector(
             onTap: () => FocusScope.of(context).unfocus(),
             child: isDesktop
-                ? _buildDesktopLayout(context)
-                : _buildMobileLayout(context, screenHeight, padding),
+                ? _buildDesktopLayout(context, authState)
+                : _buildMobileLayout(context, screenHeight, padding, authState),
           ),
           // Full screen loader
-          if (isLoading)
+          if (authState.isLoading)
             Container(
               color: Colors.black.withValues(alpha: 0.5),
               child: const Center(child: AppLoader(size: 80)),
@@ -97,6 +73,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     BuildContext context,
     double screenHeight,
     EdgeInsets padding,
+    dynamic authState,
   ) {
     return SafeArea(
       child: Center(
@@ -135,7 +112,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     textAlign: TextAlign.center,
                   ),
                   SizedBox(height: screenHeight * 0.06),
-                  ..._buildFormFields(context, screenHeight),
+                  ..._buildFormFields(context, screenHeight, authState),
                 ],
               ),
             ),
@@ -145,7 +122,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     );
   }
 
-  Widget _buildDesktopLayout(BuildContext context) {
+  Widget _buildDesktopLayout(BuildContext context, dynamic authState) {
     return Row(
       children: [
         // Left side - White background with logo and app name
@@ -225,6 +202,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         ..._buildFormFields(
                           context,
                           MediaQuery.of(context).size.height,
+                          authState,
                         ),
                       ],
                     ),
@@ -238,11 +216,15 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     );
   }
 
-  List<Widget> _buildFormFields(BuildContext context, double screenHeight) {
+  List<Widget> _buildFormFields(
+    BuildContext context,
+    double screenHeight,
+    dynamic authState,
+  ) {
     return [
       // Mobile Number Field
       TextFormField(
-        onChanged: (value) => mobileNumber = value.trim(),
+        onChanged: (value) => ref.read(authProvider.notifier).setPhone(value),
         decoration: const InputDecoration(
           labelText: 'Mobile Number',
           prefixIcon: Icon(Icons.phone),
@@ -269,7 +251,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
       // Password Field
       TextFormField(
-        onChanged: (value) => password = value,
+        onChanged: (value) =>
+            ref.read(authProvider.notifier).setPassword(value),
         decoration: InputDecoration(
           labelText: 'Password',
           prefixIcon: const Icon(Icons.lock),
@@ -299,7 +282,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
       // Login Button
       ElevatedButton(
-        onPressed: isLoading ? null : _handleLogin,
+        onPressed: authState.isLoading ? null : _handleLogin,
         child: const Padding(
           padding: EdgeInsets.symmetric(vertical: 12.0),
           child: Text('Login'),

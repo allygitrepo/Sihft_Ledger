@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:file_picker/file_picker.dart';
@@ -7,6 +8,7 @@ import '../routes/app_routes.dart';
 import '../utills/app_assets.dart';
 import '../utills/app_spacing.dart';
 import '../widgets/loader.dart';
+import '../widgets/toast.dart';
 
 class CompanyRegisterScreen extends ConsumerStatefulWidget {
   const CompanyRegisterScreen({super.key});
@@ -40,17 +42,28 @@ class _CompanyRegisterScreenState extends ConsumerState<CompanyRegisterScreen> {
       final result = await FilePicker.platform.pickFiles(
         type: FileType.image,
         allowMultiple: false,
+        withData: true, // Always load bytes so we never need .path
       );
 
-      if (result != null && result.files.single.path != null) {
-        final file = File(result.files.single.path!);
+      if (result == null || result.files.isEmpty) return;
+
+      final pickedFile = result.files.single;
+
+      if (!kIsWeb && pickedFile.path != null) {
+        // Native desktop/mobile: use File path
+        final file = File(pickedFile.path!);
         await ref.read(companyProvider.notifier).setCompanyPhoto(file);
+      } else if (pickedFile.bytes != null) {
+        // Web or when path is unavailable: use bytes
+        await ref
+            .read(companyProvider.notifier)
+            .setCompanyPhotoFromBytes(pickedFile.bytes!, pickedFile.name);
+      } else {
+        if (mounted) ToastHelper.error('Could not read the selected image.');
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Failed to pick image: $e')));
+        ToastHelper.error('Failed to pick image: $e');
       }
     }
   }
@@ -86,13 +99,17 @@ class _CompanyRegisterScreenState extends ConsumerState<CompanyRegisterScreen> {
       body: Stack(
         children: [
           GestureDetector(
+            behavior: HitTestBehavior.translucent,
             onTap: () => FocusScope.of(context).unfocus(),
             child: isDesktop
                 ? _buildDesktopLayout(context, companyState)
                 : _buildMobileLayout(
                     context,
+
                     screenHeight,
+
                     padding,
+
                     companyState,
                   ),
           ),
@@ -109,8 +126,11 @@ class _CompanyRegisterScreenState extends ConsumerState<CompanyRegisterScreen> {
 
   Widget _buildMobileLayout(
     BuildContext context,
+
     double screenHeight,
+
     EdgeInsets padding,
+
     dynamic companyState,
   ) {
     return SafeArea(
@@ -145,9 +165,10 @@ class _CompanyRegisterScreenState extends ConsumerState<CompanyRegisterScreen> {
                   SizedBox(height: screenHeight * 0.01),
                   Text(
                     'Step 2 of 2',
-                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
+                    style: Theme.of(
+                      context,
+                    ).textTheme.bodyLarge?.copyWith(color: Colors.grey[600]),
+
                     textAlign: TextAlign.center,
                   ),
                   SizedBox(height: screenHeight * 0.06),
@@ -263,45 +284,57 @@ class _CompanyRegisterScreenState extends ConsumerState<CompanyRegisterScreen> {
     return [
       // Company Photo Upload
       Center(
-        child: GestureDetector(
-          onTap: _pickImage,
-          child: Container(
-            width: 120,
-            height: 120,
-            decoration: BoxDecoration(
-              color: Theme.of(context).primaryColor.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: Theme.of(context).primaryColor,
-                width: 2,
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: _pickImage,
+            borderRadius: BorderRadius.circular(12),
+            child: Container(
+              width: 120,
+              height: 120,
+              decoration: BoxDecoration(
+                color: Theme.of(context).primaryColor.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: Theme.of(context).primaryColor,
+                  width: 2,
+                ),
               ),
-            ),
-            child: companyState.photoFile != null
-                ? ClipRRect(
-                    borderRadius: BorderRadius.circular(10),
-                    child: Image.file(
-                      companyState.photoFile!,
-                      fit: BoxFit.cover,
-                    ),
-                  )
-                : Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        Icons.add_photo_alternate,
-                        size: 40,
-                        color: Theme.of(context).primaryColor,
+              child: companyState.photoFile != null
+                  ? ClipRRect(
+                      borderRadius: BorderRadius.circular(10),
+                      child: Image.file(
+                        companyState.photoFile!,
+                        fit: BoxFit.cover,
                       ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Company Logo',
-                        style: TextStyle(
+                    )
+                  : companyState.photoBytes != null
+                  ? ClipRRect(
+                      borderRadius: BorderRadius.circular(10),
+                      child: Image.memory(
+                        companyState.photoBytes!,
+                        fit: BoxFit.cover,
+                      ),
+                    )
+                  : Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.add_photo_alternate,
+                          size: 40,
                           color: Theme.of(context).primaryColor,
-                          fontSize: 12,
                         ),
-                      ),
-                    ],
-                  ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Company Logo',
+                          style: TextStyle(
+                            color: Theme.of(context).primaryColor,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                    ),
+            ),
           ),
         ),
       ),
