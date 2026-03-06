@@ -1,28 +1,31 @@
 const express = require("express");
 const sequelize = require("./config/db");
+const cors = require("cors");
 require("dotenv").config();
 const routes = require("./modules/Routes");
 const app = express();
 
-app.use(express.json());
+app.use(cors());
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 
 // PostgreSQL connect test
 (async () => {
     try {
+        console.time("DB Connection");
         await sequelize.authenticate();
+        console.timeEnd("DB Connection");
         console.log("Database connected!");
+
+        console.time("DB Sync");
+        await sequelize.sync({ alter: true });
+        console.timeEnd("DB Sync");
+        console.log("Tables synced!");
     } catch (err) {
         console.error("DB error:", err);
     }
 })();
-
-// creates table if not exists
-sequelize
-    .sync({ alter: true })   // Use alter instead of force to avoid dropping tables
-    .then(() => console.log("Tables synced!"))
-    .catch((err) => console.log("Error syncing DB:", err));
-
 
 app.use("/shiftledger", routes);
 app.get("/", (req, res) => {
