@@ -68,54 +68,86 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 12),
-          _buildActionCard(
-            context: context,
-            title: 'Manage Employees',
-            subtitle: 'Add, edit, or import employees',
-            icon: Icons.group_add,
-            onTap: () {
-              Navigator.pushNamed(context, AppRoutes.employees);
-            },
-          ),
-          _buildActionCard(
-            context: context,
-            title: 'Manage Departments',
-            subtitle: 'Configure company departments',
-            icon: Icons.business,
-            onTap: () {
-              Navigator.pushNamed(context, AppRoutes.departments);
-            },
-          ),
-          _buildActionCard(
-            context: context,
-            title: 'Manage Designations',
-            subtitle: 'Set up employee roles',
-            icon: Icons.badge,
-            onTap: () {
-              Navigator.pushNamed(context, AppRoutes.designations);
-            },
-          ),
-          _buildActionCard(
-            context: context,
-            title: 'Mark Attendance',
-            subtitle: 'Record daily attendance',
-            icon: Icons.how_to_reg,
-            onTap: () {
-              Navigator.pushNamed(context, AppRoutes.attendance);
-            },
-          ),
-          _buildActionCard(
-            context: context,
-            title: 'Generate Payroll',
-            subtitle: 'Calculate salaries for the period',
-            icon: Icons.calculate,
-            onTap: () {
-              Navigator.pushNamed(context, AppRoutes.payroll);
-            },
-          ),
+          _buildQuickActions(context, deviceType),
         ],
       ),
     );
+  }
+
+  Widget _buildQuickActions(BuildContext context, DeviceScreenType deviceType) {
+    final actions = [
+      _ActionData(
+        title: 'Manage Employees',
+        subtitle: 'Add, edit, or import employees',
+        icon: Icons.group_add,
+        onTap: () => Navigator.pushNamed(context, AppRoutes.employees),
+      ),
+      _ActionData(
+        title: 'Manage Departments',
+        subtitle: 'Configure company departments',
+        icon: Icons.business,
+        onTap: () => Navigator.pushNamed(context, AppRoutes.departments),
+      ),
+      _ActionData(
+        title: 'Manage Designations',
+        subtitle: 'Set up employee roles',
+        icon: Icons.badge,
+        onTap: () => Navigator.pushNamed(context, AppRoutes.designations),
+      ),
+      _ActionData(
+        title: 'Mark Attendance',
+        subtitle: 'Record daily attendance',
+        icon: Icons.how_to_reg,
+        onTap: () => Navigator.pushNamed(context, AppRoutes.attendance),
+      ),
+      _ActionData(
+        title: 'Generate Payroll',
+        subtitle: 'Calculate salaries for the period',
+        icon: Icons.calculate,
+        onTap: () => Navigator.pushNamed(context, AppRoutes.payroll),
+      ),
+    ];
+
+    if (deviceType == DeviceScreenType.mobile) {
+      return Column(
+        children: actions
+            .map(
+              (a) => _buildActionCard(
+                context: context,
+                title: a.title,
+                subtitle: a.subtitle,
+                icon: a.icon,
+                onTap: a.onTap,
+                isFullWidth: true,
+              ),
+            )
+            .toList(),
+      );
+    } else {
+      return GridView.builder(
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: deviceType == DeviceScreenType.tablet ? 3 : 5,
+          crossAxisSpacing: 16,
+          mainAxisSpacing: 16,
+          childAspectRatio: 1.0, // Square shape
+        ),
+        itemCount: actions.length,
+        itemBuilder: (context, index) {
+          final a = actions[index];
+          return _buildActionCard(
+            context: context,
+            title: a.title,
+            subtitle: a.subtitle,
+            icon: a.icon,
+            onTap: a.onTap,
+            isFullWidth: false,
+            isSquare: true,
+          );
+        },
+      );
+    }
   }
 
   Widget _buildStatsGrid(
@@ -238,10 +270,61 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     required String subtitle,
     required IconData icon,
     required VoidCallback onTap,
+    bool isFullWidth = true,
+    bool isSquare = false,
   }) {
+    if (isSquare) {
+      return Card(
+        elevation: 1,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(16),
+          child: Padding(
+            padding: const EdgeInsets.all(12.0),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: AppColors.primary.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(icon, color: AppColors.primary, size: 32),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  title,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  subtitle,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: Theme.of(context).textTheme.bodySmall?.color,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
     return Card(
       elevation: 1,
-      margin: const EdgeInsets.only(bottom: 12),
+      margin: isFullWidth ? const EdgeInsets.only(bottom: 12) : EdgeInsets.zero,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: ListTile(
         leading: Container(
@@ -252,9 +335,19 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           ),
           child: Icon(icon, color: AppColors.primary),
         ),
-        title: Text(title, style: const TextStyle(fontWeight: FontWeight.w600)),
-        subtitle: Text(subtitle),
-        trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+        title: Text(
+          title,
+          style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+        subtitle: Text(
+          subtitle,
+          style: const TextStyle(fontSize: 12),
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+        trailing: const Icon(Icons.arrow_forward_ios, size: 14),
         onTap: onTap,
       ),
     );
@@ -268,6 +361,20 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     }
     return amount.toStringAsFixed(2);
   }
+}
+
+class _ActionData {
+  final String title;
+  final String subtitle;
+  final IconData icon;
+  final VoidCallback onTap;
+
+  _ActionData({
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+    required this.onTap,
+  });
 }
 
 class _StatData {
