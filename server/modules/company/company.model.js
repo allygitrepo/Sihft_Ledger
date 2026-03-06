@@ -16,7 +16,7 @@ const Company = sequelize.define("Companies",
         company_name: { type: DataTypes.STRING, allowNull: false },
         industry_type: { type: DataTypes.STRING, allowNull: false },
         address: { type: DataTypes.TEXT, allowNull: true },
-        company_logo: { type: DataTypes.STRING, allowNull: true },
+        company_logo: { type: DataTypes.TEXT, allowNull: true },
         status: { type: DataTypes.BOOLEAN, defaultValue: true }
     },
     {
