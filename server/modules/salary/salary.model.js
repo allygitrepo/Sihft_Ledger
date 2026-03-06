@@ -1,33 +1,42 @@
 const { DataTypes } = require("sequelize");
 const sequelize = require("../../config/db");
-const Employee = require("../employee/employee.model");
+const Company = require("../company/company.model");
 
-const Salary = sequelize.define("Salaries",
+const Salary = sequelize.define("SalaryConfiguration",
     {
         id: { type: DataTypes.INTEGER, primaryKey: true, autoIncrement: true },
-        employee_id: {
+        company_id: {
             type: DataTypes.INTEGER,
             allowNull: false,
             references: {
-                model: Employee,
+                model: Company,
                 key: 'id'
             }
         },
-        month: { type: DataTypes.STRING, allowNull: false }, // e.g. "2025-03"
-        total_days: { type: DataTypes.INTEGER, defaultValue: 0 },
-        present_days: { type: DataTypes.INTEGER, defaultValue: 0 },
-        absent_days: { type: DataTypes.INTEGER, defaultValue: 0 },
-        overtime_hours: { type: DataTypes.DECIMAL(10, 2), defaultValue: 0.00 },
-        basic_pay: { type: DataTypes.DECIMAL(10, 2), allowNull: false },
-        overtime_pay: { type: DataTypes.DECIMAL(10, 2), defaultValue: 0.00 },
-        bonus: { type: DataTypes.DECIMAL(10, 2), defaultValue: 0.00 },
-        deductions: { type: DataTypes.DECIMAL(10, 2), defaultValue: 0.00 },
-        net_pay: { type: DataTypes.DECIMAL(10, 2), allowNull: false },
-        payment_status: { type: DataTypes.ENUM('Unpaid', 'Paid'), defaultValue: 'Unpaid' },
+        salary_calculation_method: { 
+            type: DataTypes.ENUM('Hour-wise', 'Day-wise'), 
+            allowNull: false,
+            defaultValue: 'Hour-wise'
+        },
+        hours_per_day: { 
+            type: DataTypes.DECIMAL(4, 2), 
+            allowNull: false, 
+            defaultValue: 8.0 
+        },
+        days_per_month: { 
+            type: DataTypes.INTEGER, 
+            allowNull: false, 
+            defaultValue: 26 
+        },
+        salary_input_type: { 
+            type: DataTypes.ENUM('Monthly', 'Daily', 'Hourly'), 
+            allowNull: false,
+            defaultValue: 'Monthly'
+        },
         status: { type: DataTypes.BOOLEAN, defaultValue: true }
     },
     {
-        tableName: "calculated_salaries",
+        tableName: "salary_configurations",
         timestamps: true,
         createdAt: 'created_at',
         updatedAt: 'updated_at'
