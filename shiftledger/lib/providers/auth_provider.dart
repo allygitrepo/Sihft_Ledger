@@ -1,7 +1,15 @@
-import 'package:flutter_riverpod/legacy.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:riverpod/riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../widgets/toast.dart';
 import '../services/api_service.dart';
+import 'company_provider.dart';
+import 'employee_provider.dart';
+import 'attendance_provider.dart';
+import 'payroll_provider.dart';
+import 'navigation_provider.dart';
+import 'setup_provider.dart';
+import '../services/setup_service.dart';
 
 // Auth state model
 class AuthState {
@@ -56,12 +64,14 @@ class AuthState {
   }
 }
 
-class AuthNotifier extends StateNotifier<AuthState> {
+class AuthNotifier extends Notifier<AuthState> {
   static const String _isLoggedInKey = 'is_logged_in';
   static const String _tokenKey = 'auth_token';
 
-  AuthNotifier() : super(const AuthState()) {
+  @override
+  AuthState build() {
     _checkLoginStatus();
+    return const AuthState();
   }
 
   Future<void> _checkLoginStatus() async {
@@ -214,19 +224,34 @@ class AuthNotifier extends StateNotifier<AuthState> {
 
   Future<void> logout() async {
     final prefs = await SharedPreferences.getInstance();
+
+    // Clear local state first
     await prefs.remove(_isLoggedInKey);
     await prefs.remove(_tokenKey);
     await prefs.remove('user_name');
     await prefs.remove('user_phone');
     await prefs.remove('user_email');
+    await prefs.remove('owner_name');
 
-    state = const AuthState(
-      isInitialized: true,
-    ); // Reset to initial state but keep initialized
+    // Reset setup status
+    await SetupService.resetSetup();
+
+    // Invalidate and reset all relevant providers
+    ref.invalidate(companyProvider);
+    ref.invalidate(employeeProvider);
+    ref.invalidate(attendanceListProvider);
+    ref.invalidate(payrollProvider);
+    ref.invalidate(navigationProvider);
+    ref.invalidate(setupProvider);
+
+    // Reset auth state
+    state = const AuthState(isInitialized: true);
+
+    ToastHelper.success('Logged out successfully');
   }
 }
 
 // Provider for authentication management
-final authProvider = StateNotifierProvider<AuthNotifier, AuthState>((ref) {
+final authProvider = NotifierProvider<AuthNotifier, AuthState>(() {
   return AuthNotifier();
 });
