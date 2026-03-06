@@ -132,7 +132,7 @@ class _DepartmentsScreenState extends ConsumerState<DepartmentsScreen> {
           ),
           const SizedBox(width: 16),
           ElevatedButton.icon(
-            onPressed: () => _showDepartmentDialog(context),
+            onPressed: () => _showDepartmentBottomSheet(context),
             icon: const Icon(Icons.add),
             label: const Text('Add Department'),
             style: ElevatedButton.styleFrom(
@@ -201,7 +201,8 @@ class _DepartmentsScreenState extends ConsumerState<DepartmentsScreen> {
                 'Created: ${DateFormat('dd MMM yyyy').format(dept.createdAt)}',
               ),
               trailing: _buildStatusBadge(dept.status),
-              onTap: () => _showDepartmentDialog(context, department: dept),
+              onTap: () =>
+                  _showDepartmentBottomSheet(context, department: dept),
             ),
           );
         },
@@ -301,7 +302,7 @@ class _DepartmentsScreenState extends ConsumerState<DepartmentsScreen> {
                                   color: Colors.blue,
                                 ),
                                 tooltip: 'Edit',
-                                onPressed: () => _showDepartmentDialog(
+                                onPressed: () => _showDepartmentBottomSheet(
                                   context,
                                   department: dept,
                                 ),
@@ -373,7 +374,7 @@ class _DepartmentsScreenState extends ConsumerState<DepartmentsScreen> {
     );
   }
 
-  Future<void> _showDepartmentDialog(
+  Future<void> _showDepartmentBottomSheet(
     BuildContext context, {
     DepartmentModel? department,
   }) async {
@@ -383,103 +384,182 @@ class _DepartmentsScreenState extends ConsumerState<DepartmentsScreen> {
     );
     bool status = department?.status ?? true;
 
-    await showDialog(
+    await showModalBottomSheet(
       context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
       builder: (context) {
         return StatefulBuilder(
-          builder: (context, setState) {
-            return AlertDialog(
-              title: Text(isEditing ? 'Edit Department' : 'Add Department'),
-              content: SizedBox(
-                width: 400,
+          builder: (context, setSheetState) {
+            return Padding(
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.of(context).viewInsets.bottom,
+              ),
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Theme.of(context).cardColor,
+                  borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(24),
+                  ),
+                ),
+                padding: const EdgeInsets.fromLTRB(24, 12, 24, 32),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    TextField(
-                      controller: nameController,
-                      decoration: const InputDecoration(
-                        labelText: 'Department Name',
-                        border: OutlineInputBorder(),
-                        prefixIcon: Icon(Icons.business),
+                    // Handle bar
+                    Container(
+                      width: 40,
+                      height: 4,
+                      margin: const EdgeInsets.only(bottom: 24),
+                      decoration: BoxDecoration(
+                        color: Colors.grey[300],
+                        borderRadius: BorderRadius.circular(2),
                       ),
                     ),
-                    const SizedBox(height: 24),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        const Text(
-                          'Status',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w500,
+                        Text(
+                          isEditing ? 'Edit Department' : 'Add Department',
+                          style: const TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
                           ),
                         ),
-                        Switch(
-                          value: status,
-                          onChanged: (value) {
-                            setState(() {
-                              status = value;
-                            });
-                          },
-                          activeTrackColor: Colors.green,
+                        IconButton(
+                          onPressed: () => Navigator.pop(context),
+                          icon: const Icon(Icons.close),
                         ),
                       ],
+                    ),
+                    const SizedBox(height: 24),
+                    TextField(
+                      controller: nameController,
+                      decoration: InputDecoration(
+                        labelText: 'Department Name',
+                        hintText: 'e.g. Finance, IT, HR',
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        prefixIcon: const Icon(Icons.business_outlined),
+                        filled: true,
+                        fillColor: Colors.grey.withValues(alpha: 0.05),
+                      ),
+                      autofocus: true,
+                    ),
+                    const SizedBox(height: 20),
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.grey.withValues(alpha: 0.05),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'Active Status',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              Text(
+                                status
+                                    ? 'This department will be visible'
+                                    : 'This department will be hidden',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.grey[600],
+                                ),
+                              ),
+                            ],
+                          ),
+                          Switch(
+                            value: status,
+                            onChanged: (value) {
+                              setSheetState(() {
+                                status = value;
+                              });
+                            },
+                            activeTrackColor: AppColors.primary.withValues(
+                              alpha: 0.5,
+                            ),
+                            activeColor: AppColors.primary,
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 32),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 54,
+                      child: ElevatedButton(
+                        onPressed: () async {
+                          if (nameController.text.trim().isEmpty) {
+                            ToastHelper.error(
+                              'Department name cannot be empty',
+                            );
+                            return;
+                          }
+
+                          final notifier = ref.read(
+                            departmentProvider.notifier,
+                          );
+                          bool success;
+
+                          if (isEditing) {
+                            final updated = department.copyWith(
+                              departmentName: nameController.text.trim(),
+                              status: status,
+                              updatedAt: DateTime.now(),
+                            );
+                            success = await notifier.updateDepartment(updated);
+                          } else {
+                            success = await notifier.addDepartment(
+                              nameController.text.trim(),
+                            );
+                          }
+
+                          if (context.mounted) {
+                            if (success) {
+                              ToastHelper.success(
+                                isEditing
+                                    ? 'Department updated'
+                                    : 'Department added',
+                              );
+                              Navigator.pop(context);
+                            } else {
+                              final error =
+                                  ref.read(departmentProvider).error ??
+                                  'An error occurred';
+                              ToastHelper.error(error);
+                            }
+                          }
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.primary,
+                          foregroundColor: Colors.white,
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        child: Text(
+                          isEditing ? 'Save Changes' : 'Add Department',
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
                     ),
                   ],
                 ),
               ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text(
-                    'Cancel',
-                    style: TextStyle(color: Colors.grey),
-                  ),
-                ),
-                ElevatedButton(
-                  onPressed: () async {
-                    if (nameController.text.trim().isEmpty) {
-                      ToastHelper.error('Department name cannot be empty');
-                      return;
-                    }
-
-                    final notifier = ref.read(departmentProvider.notifier);
-                    bool success;
-
-                    if (isEditing) {
-                      final updated = department.copyWith(
-                        departmentName: nameController.text.trim(),
-                        status: status,
-                        updatedAt: DateTime.now(),
-                      );
-                      success = await notifier.updateDepartment(updated);
-                    } else {
-                      success = await notifier.addDepartment(
-                        nameController.text.trim(),
-                      );
-                    }
-
-                    if (context.mounted) {
-                      if (success) {
-                        ToastHelper.success(
-                          isEditing ? 'Department updated' : 'Department added',
-                        );
-                        Navigator.pop(context);
-                      } else {
-                        final error =
-                            ref.read(departmentProvider).error ??
-                            'An error occurred';
-                        ToastHelper.error(error);
-                      }
-                    }
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primary,
-                    foregroundColor: Colors.white,
-                  ),
-                  child: Text(isEditing ? 'Save Changes' : 'Add Department'),
-                ),
-              ],
             );
           },
         );
