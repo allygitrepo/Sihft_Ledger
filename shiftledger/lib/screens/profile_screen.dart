@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../providers/owner_provider.dart';
+import '../providers/auth_provider.dart';
 import '../providers/company_provider.dart';
 import '../routes/app_routes.dart';
 import '../utills/app_spacing.dart';
@@ -11,7 +11,7 @@ class ProfileScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final ownerState = ref.watch(ownerProvider);
+    final authState = ref.watch(authProvider);
     final companyState = ref.watch(companyProvider);
     final screenWidth = MediaQuery.of(context).size.width;
     final isDesktop = screenWidth > 900;
@@ -33,14 +33,16 @@ class ProfileScreen extends ConsumerWidget {
             ),
             const SizedBox(height: 12),
             Text(
-              ownerState.owner?.ownerName ?? 'User',
+              authState.userData?['owner_name'] ?? 'User',
               style: Theme.of(
                 context,
               ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 4),
             Text(
-              ownerState.owner?.email ?? ownerState.owner?.mobileNumber ?? '',
+              authState.userData?['email'] ??
+                  authState.userData?['phone'] ??
+                  '',
               style: Theme.of(
                 context,
               ).textTheme.bodyMedium?.copyWith(color: Colors.grey[600]),
@@ -53,7 +55,7 @@ class ProfileScreen extends ConsumerWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Expanded(
-                        child: _buildPersonalInfoCard(context, ownerState),
+                        child: _buildPersonalInfoCard(context, authState),
                       ),
                       const SizedBox(width: 24),
                       Expanded(
@@ -63,7 +65,7 @@ class ProfileScreen extends ConsumerWidget {
                   )
                 : Column(
                     children: [
-                      _buildPersonalInfoCard(context, ownerState),
+                      _buildPersonalInfoCard(context, authState),
                       const SizedBox(height: 16),
                       _buildCompanyInfoCard(context, companyState),
                     ],
@@ -93,8 +95,8 @@ class ProfileScreen extends ConsumerWidget {
                   Expanded(
                     child: ElevatedButton.icon(
                       onPressed: () async {
-                        // Clear owner and company data
-                        await ref.read(ownerProvider.notifier).clearOwner();
+                        // Clear auth and company data
+                        await ref.read(authProvider.notifier).logout();
                         await ref.read(companyProvider.notifier).clearCompany();
 
                         if (context.mounted) {
@@ -124,7 +126,7 @@ class ProfileScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildPersonalInfoCard(BuildContext context, OwnerState ownerState) {
+  Widget _buildPersonalInfoCard(BuildContext context, AuthState authState) {
     return Card(
       elevation: 2,
       child: Padding(
@@ -153,21 +155,21 @@ class ProfileScreen extends ConsumerWidget {
               context,
               icon: Icons.person,
               label: 'Full Name',
-              value: ownerState.owner?.ownerName ?? 'N/A',
+              value: authState.userData?['owner_name'] ?? 'N/A',
             ),
             const Divider(height: 24),
             _buildInfoRow(
               context,
               icon: Icons.phone,
               label: 'Mobile Number',
-              value: ownerState.owner?.mobileNumber ?? 'N/A',
+              value: authState.userData?['phone'] ?? 'N/A',
             ),
             const Divider(height: 24),
             _buildInfoRow(
               context,
               icon: Icons.email,
               label: 'Email Address',
-              value: ownerState.owner?.email ?? 'N/A',
+              value: authState.userData?['email'] ?? 'N/A',
             ),
           ],
         ),
