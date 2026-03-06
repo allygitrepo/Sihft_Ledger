@@ -7,29 +7,54 @@ const usercontroller = {
 
     register: async (req, res) => {
         try {
+            console.time("Register Process");
             const { owner_name, phone, email, password } = req.body;
 
             if (!owner_name || !phone || !password) {
                 return res.status(400).json({ message: "All fields are required" });
             }
+
+            // Normalize email: empty strings should be null to avoid UNIQUE constraint conflicts
+            const normalizedEmail = (email && email.trim() !== "") ? email.trim() : null;
+
             const userExists = await User.findOne({ where: { phone } });
 
             if (userExists) {
-                return res.status(400).json({ message: "User already exists" });
+                return res.status(400).json({ message: "User with this phone number already exists" });
             }
 
+            console.time("Bcrypt Hash");
             const hashPass = await bcrypt.hash(password, 10);
+            console.timeEnd("Bcrypt Hash");
+
+            console.time("User Create");
             const user = await User.create({
                 owner_name,
                 phone,
-                email,
+                email: normalizedEmail,
                 password: hashPass
             });
+            console.timeEnd("User Create");
 
-            return res.status(201).json({ message: "User registered successfully", user });
+            // Generate token specifically for immediate login after registration
+            const token = jwt.sign(
+                { id: user.id },
+                process.env.JWT_SECRET,
+                { expiresIn: process.env.JWT_EXPIRES_IN }
+            );
+
+            console.timeEnd("Register Process");
+            return res.status(201).json({
+                message: "User registered successfully",
+                user,
+                token
+            });
         } catch (error) {
-            console.log(error);
-            return res.status(500).json({ message: "Internal server error" });
+            console.error("Register Error:", error);
+            return res.status(500).json({
+                message: "Internal server error",
+                details: error.message
+            });
         }
     },
 
