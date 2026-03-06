@@ -2,12 +2,13 @@ import 'employee_model.dart';
 
 class CsvEmployeePreview {
   final String employeeCode;
-  final String name;
+  final String firstName;
+  final String lastName;
   final String mobileNo;
   final String position;
   final String department;
   final double salary;
-  
+
   // Configurable fields
   EmployeeType employeeType;
   double? hourlyRate;
@@ -19,7 +20,8 @@ class CsvEmployeePreview {
 
   CsvEmployeePreview({
     required this.employeeCode,
-    required this.name,
+    required this.firstName,
+    required this.lastName,
     required this.mobileNo,
     required this.position,
     required this.department,
@@ -36,7 +38,8 @@ class CsvEmployeePreview {
   EmployeeModel toEmployeeModel() {
     return EmployeeModel(
       id: DateTime.now().millisecondsSinceEpoch.toString() + employeeCode,
-      name: name,
+      firstName: firstName,
+      lastName: lastName,
       employeeCode: employeeCode,
       mobileNo: mobileNo,
       position: position,
@@ -56,7 +59,8 @@ class CsvEmployeePreview {
 
   CsvEmployeePreview copyWith({
     String? employeeCode,
-    String? name,
+    String? firstName,
+    String? lastName,
     String? mobileNo,
     String? position,
     String? department,
@@ -71,7 +75,8 @@ class CsvEmployeePreview {
   }) {
     return CsvEmployeePreview(
       employeeCode: employeeCode ?? this.employeeCode,
-      name: name ?? this.name,
+      firstName: firstName ?? this.firstName,
+      lastName: lastName ?? this.lastName,
       mobileNo: mobileNo ?? this.mobileNo,
       position: position ?? this.position,
       department: department ?? this.department,
