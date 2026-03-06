@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -7,6 +6,9 @@ import '../models/company_model.dart';
 import '../services/company_service.dart';
 import '../services/setup_service.dart';
 import '../widgets/toast.dart';
+import '../services/api_service.dart';
+import '../providers/auth_provider.dart';
+import '../utills/image_converter.dart';
 
 // Company state model
 class CompanyState {
@@ -54,14 +56,65 @@ class CompanyState {
 }
 
 class CompanyNotifier extends StateNotifier<CompanyState> {
-  CompanyNotifier() : super(const CompanyState()) {
+  final Ref ref;
+  CompanyNotifier(this.ref) : super(const CompanyState()) {
     _loadCompany();
   }
 
   Future<void> _loadCompany() async {
     final company = await CompanyService.loadCompany();
     if (company != null) {
-      state = state.copyWith(company: company);
+      // Decode image for preview if available
+      Uint8List? decodedBytes;
+      if (company.companyPhoto != null) {
+        decodedBytes = ImageConverter.fromBase64(company.companyPhoto);
+      }
+      state = state.copyWith(company: company, photoBytes: decodedBytes);
+
+      // If ID is missing, try to sync with backend
+      if (company.id == null) {
+        syncCompanyWithBackend();
+      }
+    }
+  }
+
+  /// Sync company data with backend to ensure ID is present
+  Future<void> syncCompanyWithBackend() async {
+    print('Starting company sync...');
+    try {
+      final token = ref.read(authProvider).token;
+      if (token == null) {
+        print('Sync aborted: Token is null');
+        return;
+      }
+
+      final response = await ApiService.getCompanies(token);
+      print('Sync response: ${response['success']}');
+      if (response['success'] == true) {
+        final List<dynamic> companies = response['companies'] ?? [];
+        print('Found ${companies.length} companies on backend');
+        if (companies.isNotEmpty) {
+          // Take the first company (assuming 1 owner = 1 company for now)
+          final data = companies.first;
+          print('Backend Company ID: ${data['id']}');
+          final updatedCompany = CompanyModel(
+            id: data['id']?.toString(),
+            companyName: data['company_name'] ?? state.companyName,
+            industryType: data['industry_type'] ?? state.industryType,
+            address: data['address'],
+            companyPhoto: data['company_logo'] ?? state.companyPhoto,
+            createdAt: data['created_at'] != null
+                ? DateTime.parse(data['created_at'])
+                : DateTime.now(),
+          );
+
+          await CompanyService.saveCompany(updatedCompany);
+          state = state.copyWith(company: updatedCompany);
+          print('Company state updated with ID: ${updatedCompany.id}');
+        }
+      }
+    } catch (e) {
+      print('Failed to sync company: $e');
     }
   }
 
@@ -84,10 +137,15 @@ class CompanyNotifier extends StateNotifier<CompanyState> {
       // Read file as bytes
       final bytes = await file.readAsBytes();
 
-      // Convert to base64
-      final base64String = 'data:image/png;base64,${base64Encode(bytes)}';
+      // Convert to base64 using utility
+      final extension = file.path.split('.').last;
+      final base64String = ImageConverter.toBase64(bytes, extension);
 
-      state = state.copyWith(companyPhoto: base64String, photoFile: file);
+      state = state.copyWith(
+        companyPhoto: base64String,
+        photoFile: file,
+        photoBytes: bytes,
+      );
 
       ToastHelper.success('Photo uploaded successfully');
     } catch (e) {
@@ -101,12 +159,9 @@ class CompanyNotifier extends StateNotifier<CompanyState> {
     String filename,
   ) async {
     try {
-      // Convert to base64
-      final ext = filename.split('.').last.toLowerCase();
-      final mimeType = ext == 'jpg' || ext == 'jpeg'
-          ? 'image/jpeg'
-          : 'image/png';
-      final base64String = 'data:$mimeType;base64,${base64Encode(bytes)}';
+      // Convert to base64 using utility
+      final extension = filename.split('.').last;
+      final base64String = ImageConverter.toBase64(bytes, extension);
 
       state = state.copyWith(companyPhoto: base64String, photoBytes: bytes);
 
@@ -135,24 +190,51 @@ class CompanyNotifier extends StateNotifier<CompanyState> {
     state = state.copyWith(isLoading: true);
 
     try {
-      final company = CompanyModel(
+      final token = ref.read(authProvider).token;
+      if (token == null) {
+        state = state.copyWith(isLoading: false);
+        ToastHelper.error('Authentication token missing. Please login again.');
+        return false;
+      }
+
+      final response = await ApiService.registerCompany(
         companyName: state.companyName,
         industryType: state.industryType,
-        address: state.address?.isEmpty == true ? null : state.address,
+        address: state.address,
         companyPhoto: state.companyPhoto,
-        createdAt: DateTime.now(),
+        token: token,
       );
 
-      // Save company data
-      await CompanyService.saveCompany(company);
+      if (response['success'] == true) {
+        final companyData = response['company'];
+        final companyId = companyData != null
+            ? companyData['id']?.toString()
+            : null;
 
-      // Initialize default settings and complete setup
-      await SetupService.finalizeSetup();
+        final company = CompanyModel(
+          id: companyId,
+          companyName: state.companyName,
+          industryType: state.industryType,
+          address: state.address?.isEmpty == true ? null : state.address,
+          companyPhoto: state.companyPhoto,
+          createdAt: DateTime.now(),
+        );
 
-      state = state.copyWith(isLoading: false, company: company);
+        // Save company data locally as well
+        await CompanyService.saveCompany(company);
 
-      ToastHelper.success('Company registered successfully');
-      return true;
+        // Initialize default settings and complete setup
+        await SetupService.finalizeSetup();
+
+        state = state.copyWith(isLoading: false, company: company);
+
+        ToastHelper.success('Company registered successfully');
+        return true;
+      } else {
+        state = state.copyWith(isLoading: false);
+        ToastHelper.error(response['message'] ?? 'Failed to register company');
+        return false;
+      }
     } catch (e) {
       state = state.copyWith(isLoading: false);
       ToastHelper.error('Failed to register company: $e');
@@ -171,5 +253,5 @@ class CompanyNotifier extends StateNotifier<CompanyState> {
 final companyProvider = StateNotifierProvider<CompanyNotifier, CompanyState>((
   ref,
 ) {
-  return CompanyNotifier();
+  return CompanyNotifier(ref);
 });

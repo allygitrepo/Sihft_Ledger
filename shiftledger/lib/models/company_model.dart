@@ -1,4 +1,5 @@
 class CompanyModel {
+  final String? id; // Backend ID
   final String companyName;
   final String industryType;
   final String? address;
@@ -6,6 +7,7 @@ class CompanyModel {
   final DateTime createdAt;
 
   const CompanyModel({
+    this.id,
     required this.companyName,
     required this.industryType,
     this.address,
@@ -15,6 +17,7 @@ class CompanyModel {
 
   Map<String, dynamic> toJson() {
     return {
+      'id': id,
       'companyName': companyName,
       'industryType': industryType,
       'address': address,
@@ -25,6 +28,7 @@ class CompanyModel {
 
   factory CompanyModel.fromJson(Map<String, dynamic> json) {
     return CompanyModel(
+      id: json['id']?.toString(),
       companyName: json['companyName'] as String,
       industryType: json['industryType'] as String,
       address: json['address'] as String?,
@@ -34,6 +38,7 @@ class CompanyModel {
   }
 
   CompanyModel copyWith({
+    String? id,
     String? companyName,
     String? industryType,
     String? address,
@@ -41,6 +46,7 @@ class CompanyModel {
     DateTime? createdAt,
   }) {
     return CompanyModel(
+      id: id ?? this.id,
       companyName: companyName ?? this.companyName,
       industryType: industryType ?? this.industryType,
       address: address ?? this.address,
