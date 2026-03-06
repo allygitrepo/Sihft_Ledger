@@ -151,7 +151,7 @@ class _DesignationsScreenState extends ConsumerState<DesignationsScreen> {
                 ToastHelper.error('Please create a department first');
                 return;
               }
-              _showDesignationDialog(context, departments);
+              _showDesignationBottomSheet(context, departments);
             },
             icon: const Icon(Icons.add),
             label: const Text('Add Designation'),
@@ -233,7 +233,7 @@ class _DesignationsScreenState extends ConsumerState<DesignationsScreen> {
                 '${dept.departmentName}\nCreated: ${DateFormat('dd MMM yyyy').format(desig.createdAt)}',
               ),
               trailing: _buildStatusBadge(desig.status),
-              onTap: () => _showDesignationDialog(
+              onTap: () => _showDesignationBottomSheet(
                 context,
                 departments,
                 designation: desig,
@@ -355,7 +355,7 @@ class _DesignationsScreenState extends ConsumerState<DesignationsScreen> {
                                   color: Colors.blue,
                                 ),
                                 tooltip: 'Edit',
-                                onPressed: () => _showDesignationDialog(
+                                onPressed: () => _showDesignationBottomSheet(
                                   context,
                                   departments,
                                   designation: desig,
@@ -428,7 +428,7 @@ class _DesignationsScreenState extends ConsumerState<DesignationsScreen> {
     );
   }
 
-  Future<void> _showDesignationDialog(
+  Future<void> _showDesignationBottomSheet(
     BuildContext context,
     List<DepartmentModel> departments, {
     DesignationModel? designation,
@@ -442,24 +442,65 @@ class _DesignationsScreenState extends ConsumerState<DesignationsScreen> {
         (departments.isNotEmpty ? departments.first.id : null);
     bool status = designation?.status ?? true;
 
-    await showDialog(
+    await showModalBottomSheet(
       context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
       builder: (context) {
         return StatefulBuilder(
-          builder: (context, setState) {
-            return AlertDialog(
-              title: Text(isEditing ? 'Edit Designation' : 'Add Designation'),
-              content: SizedBox(
-                width: 400,
+          builder: (context, setSheetState) {
+            return Padding(
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.of(context).viewInsets.bottom,
+              ),
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Theme.of(context).cardColor,
+                  borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(24),
+                  ),
+                ),
+                padding: const EdgeInsets.fromLTRB(24, 12, 24, 32),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
+                    // Handle bar
+                    Container(
+                      width: 40,
+                      height: 4,
+                      margin: const EdgeInsets.only(bottom: 24),
+                      decoration: BoxDecoration(
+                        color: Colors.grey[300],
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          isEditing ? 'Edit Designation' : 'Add Designation',
+                          style: const TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        IconButton(
+                          onPressed: () => Navigator.pop(context),
+                          icon: const Icon(Icons.close),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 24),
                     DropdownButtonFormField<String>(
                       value: selectedDepartmentId,
-                      decoration: const InputDecoration(
+                      decoration: InputDecoration(
                         labelText: 'Department',
-                        border: OutlineInputBorder(),
-                        prefixIcon: Icon(Icons.business),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        prefixIcon: const Icon(Icons.business_outlined),
+                        filled: true,
+                        fillColor: Colors.grey.withValues(alpha: 0.05),
                       ),
                       items: departments.map((dept) {
                         return DropdownMenuItem(
@@ -468,7 +509,7 @@ class _DesignationsScreenState extends ConsumerState<DesignationsScreen> {
                         );
                       }).toList(),
                       onChanged: (value) {
-                        setState(() {
+                        setSheetState(() {
                           selectedDepartmentId = value;
                         });
                       },
@@ -476,97 +517,136 @@ class _DesignationsScreenState extends ConsumerState<DesignationsScreen> {
                     const SizedBox(height: 16),
                     TextField(
                       controller: nameController,
-                      decoration: const InputDecoration(
+                      decoration: InputDecoration(
                         labelText: 'Designation Name',
-                        border: OutlineInputBorder(),
-                        prefixIcon: Icon(Icons.badge),
+                        hintText: 'e.g. Manager, Senior Dev, HR Lead',
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        prefixIcon: const Icon(Icons.badge_outlined),
+                        filled: true,
+                        fillColor: Colors.grey.withValues(alpha: 0.05),
                       ),
                     ),
-                    const SizedBox(height: 24),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text(
-                          'Status',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w500,
+                    const SizedBox(height: 20),
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.grey.withValues(alpha: 0.05),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'Active Status',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              Text(
+                                status
+                                    ? 'This designation will be visible'
+                                    : 'This designation will be hidden',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.grey[600],
+                                ),
+                              ),
+                            ],
+                          ),
+                          Switch(
+                            value: status,
+                            onChanged: (value) {
+                              setSheetState(() {
+                                status = value;
+                              });
+                            },
+                            activeTrackColor: AppColors.primary.withValues(
+                              alpha: 0.5,
+                            ),
+                            activeColor: AppColors.primary,
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 32),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 54,
+                      child: ElevatedButton(
+                        onPressed: () async {
+                          if (nameController.text.trim().isEmpty) {
+                            ToastHelper.error(
+                              'Designation name cannot be empty',
+                            );
+                            return;
+                          }
+                          if (selectedDepartmentId == null) {
+                            ToastHelper.error('Please select a department');
+                            return;
+                          }
+
+                          final notifier = ref.read(
+                            designationProvider.notifier,
+                          );
+                          bool success;
+
+                          if (isEditing) {
+                            final updated = designation.copyWith(
+                              departmentId: selectedDepartmentId,
+                              designationName: nameController.text.trim(),
+                              status: status,
+                              updatedAt: DateTime.now(),
+                            );
+                            success = await notifier.updateDesignation(updated);
+                          } else {
+                            success = await notifier.addDesignation(
+                              departmentId: selectedDepartmentId!,
+                              designationName: nameController.text.trim(),
+                            );
+                          }
+
+                          if (context.mounted) {
+                            if (success) {
+                              ToastHelper.success(
+                                isEditing
+                                    ? 'Designation updated'
+                                    : 'Designation added',
+                              );
+                              Navigator.pop(context);
+                            } else {
+                              final error =
+                                  ref.read(designationProvider).error ??
+                                  'An error occurred';
+                              ToastHelper.error(error);
+                            }
+                          }
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.primary,
+                          foregroundColor: Colors.white,
+                          elevation: 0,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
                           ),
                         ),
-                        Switch(
-                          value: status,
-                          onChanged: (value) {
-                            setState(() {
-                              status = value;
-                            });
-                          },
-                          activeTrackColor: Colors.green,
+                        child: Text(
+                          isEditing ? 'Save Changes' : 'Add Designation',
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
-                      ],
+                      ),
                     ),
                   ],
                 ),
               ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text(
-                    'Cancel',
-                    style: TextStyle(color: Colors.grey),
-                  ),
-                ),
-                ElevatedButton(
-                  onPressed: () async {
-                    if (nameController.text.trim().isEmpty) {
-                      ToastHelper.error('Designation name cannot be empty');
-                      return;
-                    }
-                    if (selectedDepartmentId == null) {
-                      ToastHelper.error('Please select a department');
-                      return;
-                    }
-
-                    final notifier = ref.read(designationProvider.notifier);
-                    bool success;
-
-                    if (isEditing) {
-                      final updated = designation.copyWith(
-                        departmentId: selectedDepartmentId,
-                        designationName: nameController.text.trim(),
-                        status: status,
-                        updatedAt: DateTime.now(),
-                      );
-                      success = await notifier.updateDesignation(updated);
-                    } else {
-                      success = await notifier.addDesignation(
-                        departmentId: selectedDepartmentId!,
-                        designationName: nameController.text.trim(),
-                      );
-                    }
-
-                    if (context.mounted) {
-                      if (success) {
-                        ToastHelper.success(
-                          isEditing
-                              ? 'Designation updated'
-                              : 'Designation added',
-                        );
-                        Navigator.pop(context);
-                      } else {
-                        final error =
-                            ref.read(designationProvider).error ??
-                            'An error occurred';
-                        ToastHelper.error(error);
-                      }
-                    }
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primary,
-                    foregroundColor: Colors.white,
-                  ),
-                  child: Text(isEditing ? 'Save Changes' : 'Add Designation'),
-                ),
-              ],
             );
           },
         );
