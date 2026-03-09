@@ -86,7 +86,7 @@ class SettingsModel {
       breakMinutes: 60,
       overtimeEnabled: true,
       defaultOvertimeType: OvertimeType.hourwise,
-      defaultOvertimeRate: 100.0,
+      defaultOvertimeRate: 0.0, // Changed from 100.0 - will be loaded from backend
       overtimeSlots: const [
         OvertimeSlot(startHour: 0, endHour: 2, rate: 100),
         OvertimeSlot(startHour: 2, endHour: 5, rate: 150),
@@ -146,7 +146,7 @@ class SettingsModel {
         orElse: () => OvertimeType.hourwise,
       ),
       defaultOvertimeRate: (json['defaultOvertimeRate'] as num?)?.toDouble() ?? 
-                          (json['overtimeRate'] as num?)?.toDouble() ?? 100.0,
+                          (json['overtimeRate'] as num?)?.toDouble() ?? 0.0,
       overtimeSlots: (json['overtimeSlots'] as List<dynamic>?)
               ?.map((s) => OvertimeSlot.fromJson(s as Map<String, dynamic>))
               .toList() ??
