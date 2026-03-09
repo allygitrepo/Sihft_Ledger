@@ -59,16 +59,16 @@ class CompanyState {
 class CompanyNotifier extends StateNotifier<CompanyState> {
   final Ref ref;
   CompanyNotifier(this.ref) : super(const CompanyState()) {
-    _loadCompany();
+    _checkAndLoadCompany();
   }
 
-  Future<void> _loadCompany() async {
+  Future<void> _checkAndLoadCompany() async {
     final company = await CompanyService.loadCompany();
     if (company != null) {
       // Decode image for preview if available
       Uint8List? decodedBytes;
       if (company.companyPhoto != null) {
-        decodedBytes = ImageConverter.fromBase64(company.companyPhoto);
+        decodedBytes = ImageConverter.fromBase64(company.companyPhoto!);
       }
       state = state.copyWith(company: company, photoBytes: decodedBytes);
 
@@ -254,11 +254,25 @@ class CompanyNotifier extends StateNotifier<CompanyState> {
     await CompanyService.clearCompany();
     state = const CompanyState();
   }
+
+  CompanyState get currentState => state;
 }
 
 // Provider for company management
 final companyProvider = StateNotifierProvider<CompanyNotifier, CompanyState>((
   ref,
 ) {
-  return CompanyNotifier(ref);
+  final notifier = CompanyNotifier(ref);
+
+  // Watch for token changes to trigger sync if company is missing
+  ref.listen(authProvider, (previous, next) {
+    if (next.token != null && next.token != previous?.token) {
+      if (notifier.currentState.company == null ||
+          notifier.currentState.company?.id == null) {
+        notifier.syncCompanyWithBackend();
+      }
+    }
+  });
+
+  return notifier;
 });
