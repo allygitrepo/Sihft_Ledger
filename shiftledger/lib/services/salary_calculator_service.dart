@@ -36,7 +36,7 @@ class SalaryCalculatorService {
     required double fixedHoursPerDay,
   }) {
     if (workingHours <= 0 || dailyRate <= 0) return 0.0;
-    
+
     if (workingHours <= fixedHoursPerDay) {
       // Proportional calculation for partial day
       return (workingHours / fixedHoursPerDay) * dailyRate;
@@ -73,14 +73,14 @@ class SalaryCalculatorService {
     required List<OvertimeSlot> overtimeSlots,
   }) {
     if (overtimeHours <= 0 || overtimeSlots.isEmpty) return 0.0;
-    
+
     // Find the slot that matches the overtime hours
     for (final slot in overtimeSlots) {
       if (overtimeHours >= slot.startHour && overtimeHours < slot.endHour) {
         return slot.rate;
       }
     }
-    
+
     // If no slot matches, use the last slot's rate
     return overtimeSlots.last.rate;
   }
@@ -91,41 +91,68 @@ class SalaryCalculatorService {
     required double workingHours,
     required SettingsModel settings,
   }) {
-    if (employee.salaryType == 'hourwise') {
+    // Determine if we should use hour-wise or day-wise calculation
+    // Priority: employee.salaryType > settings.defaultSalaryType
+    final useHourwise = employee.salaryType == 'hourwise';
+    
+    if (useHourwise) {
       // Hour-wise calculation
+      double effectiveHourlyRate = employee.hourlyRate ?? 0.0;
+      
+      // If hourlyRate is not set or is 0, calculate it from monthly salary
+      if (effectiveHourlyRate <= 0 && employee.salary > 0) {
+        final totalHoursPerMonth = settings.workingDaysPerMonth * settings.fixedHoursPerDay;
+        effectiveHourlyRate = employee.salary / totalHoursPerMonth;
+      }
+      
       return calculateHourlyWorkSalary(
         workingHours: workingHours,
-        hourlyRate: employee.hourlyRate ?? 0.0,
+        hourlyRate: effectiveHourlyRate,
       );
     } else {
       // Day-wise calculation
+      double effectiveDailyRate = employee.dailyRate ?? 0.0;
+      
+      // If dailyRate is not set or is 0, calculate it from monthly salary
+      if (effectiveDailyRate <= 0 && employee.salary > 0) {
+        effectiveDailyRate = employee.salary / settings.workingDaysPerMonth;
+      }
+      
       return calculateDailyWorkSalary(
         workingHours: workingHours,
-        dailyRate: employee.dailyRate ?? 0.0,
+        dailyRate: effectiveDailyRate,
         fixedHoursPerDay: settings.fixedHoursPerDay,
       );
     }
   }
 
   /// Calculate overtime salary based on employee overtime type
+  /// Falls back to [settingsOvertimeRate] if the employee has no individual rate set (rate == 0).
   static double calculateOvertimeSalary({
     required EmployeeModel employee,
     required double overtimeHours,
+    double settingsOvertimeRate = 0.0, // fallback from org settings
   }) {
     if (overtimeHours <= 0) return 0.0;
-    
+
     if (employee.overtimeType == OvertimeType.hourwise) {
-      // Hour-wise overtime
+      // Use employee's own rate if set, otherwise use the org-wide setting
+      final effectiveRate = employee.overtimeRate > 0
+          ? employee.overtimeRate
+          : settingsOvertimeRate;
       return calculateHourwiseOvertimeSalary(
         overtimeHours: overtimeHours,
-        overtimeRate: employee.overtimeRate,
+        overtimeRate: effectiveRate,
       );
-    } else {
+    } else if (employee.overtimeType == OvertimeType.slotwise) {
       // Slot-wise overtime
       return calculateSlotwiseOvertimeSalary(
         overtimeHours: overtimeHours,
         overtimeSlots: employee.overtimeSlots,
       );
+    } else {
+      // OvertimeType.none — no overtime
+      return 0.0;
     }
   }
 
@@ -149,25 +176,26 @@ class SalaryCalculatorService {
       workingHours: workingHours,
       settings: settings,
     );
-    
+
     // Calculate overtime hours
     final overtimeHours = calculateOvertimeHours(
       workingHours: workingHours,
       fixedHoursPerDay: settings.fixedHoursPerDay,
     );
-    
-    // Calculate overtime salary
+
+    // Calculate overtime salary, passing the org-level setting as fallback
     final overtimeSalary = calculateOvertimeSalary(
       employee: employee,
       overtimeHours: overtimeHours,
+      settingsOvertimeRate: settings.defaultOvertimeRate,
     );
-    
+
     // Calculate total salary
     final totalSalary = calculateTotalSalary(
       workSalary: workSalary,
       overtimeSalary: overtimeSalary,
     );
-    
+
     return {
       'workingHours': workingHours,
       'workSalary': workSalary,
@@ -221,12 +249,12 @@ class SalaryCalculatorService {
           record.attendanceStatus.toString().contains('halfDay')) {
         daysPresent++;
       }
-      
+
       // Sum up working hours
       if (record.workingHours != null) {
         totalHours += record.workingHours as double;
       }
-      
+
       // Add overtime hours to total hours
       if (record.overtimeHours != null) {
         totalHours += record.overtimeHours as double;
