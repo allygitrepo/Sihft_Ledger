@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/employee_model.dart';
-import '../providers/settings_provider.dart';
+import '../providers/overtime_provider.dart';
 import '../utills/app_spacing.dart';
 import '../utills/app_colors.dart';
 import '../widgets/toast.dart';
@@ -20,14 +20,8 @@ class _OvertimeSlotsScreenState extends ConsumerState<OvertimeSlotsScreen> {
   @override
   void initState() {
     super.initState();
-    final settings = ref.read(settingsProvider);
-
-    // Always start with saved slots, or create one default slot if empty
-    if (settings.overtimeSlots.isEmpty) {
-      slots = [OvertimeSlot(startHour: 0, endHour: 2, rate: 100.0)];
-    } else {
-      slots = List.from(settings.overtimeSlots);
-    }
+    final overtimeState = ref.read(overtimeProvider);
+    slots = List.from(overtimeState.slots);
   }
 
   void _addSlot() {
@@ -42,7 +36,18 @@ class _OvertimeSlotsScreenState extends ConsumerState<OvertimeSlotsScreen> {
     });
   }
 
-  void _removeSlot(int index) {
+  void _removeSlot(int index) async {
+    final slot = slots[index];
+    if (slot.id != null) {
+      final success = await ref
+          .read(overtimeProvider.notifier)
+          .deleteSlot(slot.id!);
+      if (!success) {
+        ToastHelper.error('Failed to delete slot from server');
+        return;
+      }
+    }
+
     setState(() {
       slots.removeAt(index);
     });
@@ -69,27 +74,69 @@ class _OvertimeSlotsScreenState extends ConsumerState<OvertimeSlotsScreen> {
       }
     }
 
-    final settings = ref.read(settingsProvider);
-    final updatedSettings = settings.copyWith(overtimeSlots: slots);
+    final success = await ref.read(overtimeProvider.notifier).saveSlots(slots);
 
-    await ref.read(settingsProvider.notifier).updateSettings(updatedSettings);
-
-    if (mounted) {
+    if (mounted && success) {
       ToastHelper.success('Overtime slots saved successfully');
       Navigator.pop(context);
+    } else if (mounted) {
+      ToastHelper.error('Failed to save overtime slots');
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final overtimeState = ref.watch(overtimeProvider);
     final screenWidth = MediaQuery.of(context).size.width;
     final isDesktop = screenWidth > 900;
+
+    // Clean up local init logic as ref.listen is valid here if it's a ConsumerWidget build
+    ref.listen<OvertimeState>(overtimeProvider, (prev, next) {
+      if (prev?.isLoading == true && !next.isLoading && slots.isEmpty) {
+        setState(() {
+          slots = List.from(next.slots);
+          if (slots.isEmpty) {
+            slots = [const OvertimeSlot(startHour: 0, endHour: 2, rate: 100.0)];
+          }
+        });
+      }
+    });
+
+    // Also handle case where it was already loaded but we just opened the screen
+    if (!overtimeState.isLoading &&
+        overtimeState.slots.isNotEmpty &&
+        slots.isEmpty) {
+      Future.microtask(() {
+        if (mounted) {
+          setState(() {
+            slots = List.from(overtimeState.slots);
+          });
+        }
+      });
+    } else if (!overtimeState.isLoading &&
+        overtimeState.slots.isEmpty &&
+        slots.isEmpty) {
+      // Only if truly empty after load
+      slots = [const OvertimeSlot(startHour: 0, endHour: 2, rate: 100.0)];
+    }
 
     return Scaffold(
       appBar: isDesktop
           ? null
-          : AppBar(title: const Text('Overtime Slots'), centerTitle: true),
-      body: isDesktop
+          : AppBar(
+              title: const Text('Overtime Slots'),
+              centerTitle: true,
+              actions: [
+                IconButton(
+                  icon: const Icon(Icons.refresh),
+                  onPressed: () =>
+                      ref.read(overtimeProvider.notifier).loadSlots(),
+                ),
+              ],
+            ),
+      body: overtimeState.isLoading && slots.isEmpty
+          ? const Center(child: CircularProgressIndicator())
+          : isDesktop
           ? _buildDesktopLayout(context)
           : _buildMobileLayout(context),
       floatingActionButton: isDesktop
@@ -362,7 +409,9 @@ class _SlotCardState extends State<_SlotCard> {
       return;
     }
 
-    widget.onUpdate(OvertimeSlot(startHour: start, endHour: end, rate: rate));
+    widget.onUpdate(
+      widget.slot.copyWith(startHour: start, endHour: end, rate: rate),
+    );
   }
 
   @override
