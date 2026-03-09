@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/designation_model.dart';
 import '../services/api_service.dart';
 import '../providers/auth_provider.dart';
+import '../providers/department_provider.dart';
 
 class DesignationState {
   final List<DesignationModel> designations;
@@ -30,36 +31,55 @@ class DesignationState {
 class DesignationNotifier extends Notifier<DesignationState> {
   @override
   DesignationState build() {
+    // Re-load when departments change or sync
+    ref.watch(departmentProvider);
+
+    // Initial load if departments already present
+    Future.microtask(() => loadAllDesignations());
+
     return DesignationState();
   }
 
-  Future<void> loadDesignations(String departmentId) async {
+  Future<void> loadAllDesignations() async {
+    final depts = ref.read(departmentProvider).departments;
     final token = ref.read(authProvider).token;
 
-    if (token == null) {
-      state = state.copyWith(error: 'Auth token missing');
-      return;
-    }
+    if (token == null || depts.isEmpty) return;
 
     state = state.copyWith(isLoading: true, error: null);
     try {
-      final response = await ApiService.getDesignations(departmentId, token);
+      List<DesignationModel> allDesignations = [];
 
-      if (response['success'] == true) {
-        final List<dynamic> data = response['designations'] ?? [];
-        final designations = data
-            .map((item) => DesignationModel.fromMap(item))
-            .toList();
-        state = state.copyWith(designations: designations, isLoading: false);
-      } else {
-        state = state.copyWith(
-          isLoading: false,
-          error: response['message'] ?? 'Failed to load designations',
-        );
+      // Fetch designations for each department
+      // Note: Backend getAll supports department_id filtering.
+      // If backend doesn't support company_id filter for designations yet,
+      // we aggregate here.
+      for (var dept in depts) {
+        final response = await ApiService.getDesignations(dept.id, token);
+        if (response['success'] == true) {
+          final List<dynamic> data = response['designations'] ?? [];
+          final designations = data
+              .map((item) => DesignationModel.fromMap(item))
+              .toList();
+          allDesignations.addAll(designations);
+        }
       }
+
+      // Remove duplicates if any (by ID)
+      final seenIds = <String>{};
+      allDesignations = allDesignations
+          .where((d) => seenIds.add(d.id))
+          .toList();
+
+      state = state.copyWith(designations: allDesignations, isLoading: false);
     } catch (e) {
       state = state.copyWith(isLoading: false, error: e.toString());
     }
+  }
+
+  Future<void> loadDesignations(String departmentId) async {
+    // Keeping this for backward compatibility if needed, but loadAllDesignations is preferred now
+    await loadAllDesignations();
   }
 
   Future<bool> addDesignation({
