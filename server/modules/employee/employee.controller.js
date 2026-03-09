@@ -4,19 +4,21 @@ const Attendance = require("../attendance/attendance.model");
 const Salary = require("../salary/salary.model");
 const EmployeeSalary = require("../employee_salary/employee_salary.model");
 const EmployeeOvertimeConfig = require("../employee_overtime_config/employee_overtime_config.model");
+const Department = require("../department/department.model");
+const Designation = require("../designation/designation.model");
 
 const employeeController = {
     create: async (req, res) => {
         try {
-            let { 
-                company_id, 
-                department_id, 
-                designation_id, 
-                full_name, 
+            let {
+                company_id,
+                department_id,
+                designation_id,
+                full_name,
                 name, // Flutter compatibility
-                phone, 
+                phone,
                 mobileNo, // Flutter compatibility
-                salary_config_id, 
+                salary_config_id,
                 monthly_salary,
                 salary // Flutter compatibility
             } = req.body;
@@ -69,7 +71,13 @@ const employeeController = {
             if (company_id) whereClause.company_id = company_id;
             if (department_id) whereClause.department_id = department_id;
 
-            const employees = await Employee.findAll({ where: whereClause });
+            const employees = await Employee.findAll({
+                where: whereClause,
+                include: [
+                    { model: Department, attributes: ['department_name'] },
+                    { model: Designation, attributes: ['designation_name'] }
+                ]
+            });
             return res.status(200).json({ employees });
         } catch (error) {
             console.error(error);
@@ -80,7 +88,12 @@ const employeeController = {
     getById: async (req, res) => {
         try {
             const { id } = req.params;
-            const employee = await Employee.findByPk(id);
+            const employee = await Employee.findByPk(id, {
+                include: [
+                    { model: Department, attributes: ['department_name'] },
+                    { model: Designation, attributes: ['designation_name'] }
+                ]
+            });
 
             if (!employee) {
                 return res.status(404).json({ message: "Employee not found" });

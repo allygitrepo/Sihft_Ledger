@@ -44,10 +44,10 @@ const Employee = sequelize.define("Employees",
         phone: { type: DataTypes.STRING, allowNull: false, unique: true },
         employee_code: { type: DataTypes.STRING, allowNull: true, unique: true },
         monthly_salary: { type: DataTypes.DECIMAL(10, 2), defaultValue: 0.00 },
-        join_date: { 
-            type: DataTypes.DATEONLY, 
-            allowNull: false, 
-            defaultValue: DataTypes.NOW 
+        join_date: {
+            type: DataTypes.DATEONLY,
+            allowNull: false,
+            defaultValue: DataTypes.NOW
         },
         status: { type: DataTypes.BOOLEAN, defaultValue: true }
     },
@@ -58,5 +58,9 @@ const Employee = sequelize.define("Employees",
         updatedAt: 'updated_at'
     }
 );
+
+// Define Associations
+Employee.belongsTo(Department, { foreignKey: 'department_id' });
+Employee.belongsTo(Designation, { foreignKey: 'designation_id' });
 
 module.exports = Employee;
