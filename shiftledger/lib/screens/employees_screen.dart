@@ -10,6 +10,7 @@ import '../providers/employee_provider.dart';
 import '../providers/settings_provider.dart';
 import '../providers/department_provider.dart';
 import '../providers/designation_provider.dart';
+import '../providers/overtime_provider.dart';
 import '../models/employee_model.dart';
 import '../services/csv_import_service.dart';
 import '../services/employee_service.dart';
@@ -17,6 +18,7 @@ import '../utills/app_colors.dart';
 import '../utills/app_spacing.dart';
 import '../widgets/csv_preview_dialog.dart';
 import '../widgets/toast.dart';
+import '../widgets/loader.dart';
 
 class EmployeesScreen extends ConsumerStatefulWidget {
   const EmployeesScreen({super.key});
@@ -46,9 +48,6 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
     setState(() {
       _editingEmployeeId = employee.id;
       _editControllers['name'] = TextEditingController(text: employee.name);
-      _editControllers['code'] = TextEditingController(
-        text: employee.employeeCode,
-      );
       _editControllers['mobile'] = TextEditingController(
         text: employee.mobileNo,
       );
@@ -94,7 +93,7 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
       id: originalEmployee.id,
       firstName: firstName,
       lastName: lastName,
-      employeeCode: _editControllers['code']!.text,
+      employeeCode: originalEmployee.employeeCode,
       mobileNo: _editControllers['mobile']!.text,
       position: _editControllers['position']!.text,
       department: _editControllers['department']!.text,
@@ -119,6 +118,11 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
   @override
   Widget build(BuildContext context) {
     final employeeState = ref.watch(employeeProvider);
+    // Eagerly watch department and designation providers so they load data
+    // before the user opens the Add/Edit employee dialogs.
+    ref.watch(departmentProvider);
+    ref.watch(designationProvider);
+
     final horizontalPadding = AppSpacing.getHorizontalPadding(context);
     final screenWidth = MediaQuery.of(context).size.width;
     final isDesktop = screenWidth > 800;
@@ -144,7 +148,9 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
     if (isDesktop) {
       return Scaffold(
         backgroundColor: backgroundColor,
-        body: employeeState.employees.isEmpty
+        body: employeeState.isLoading && employeeState.employees.isEmpty
+            ? const Center(child: AppLoader())
+            : employeeState.employees.isEmpty
             ? _buildEmptyState(context, isLoading: employeeState.isLoading)
             : Column(
                 children: [
@@ -196,6 +202,23 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
                             // Action Buttons
                             Row(
                               children: [
+                                IconButton(
+                                  onPressed: () => ref
+                                      .read(employeeProvider.notifier)
+                                      .loadEmployees(),
+                                  icon: const Icon(Icons.refresh),
+                                  tooltip: 'Refresh List',
+                                  style: IconButton.styleFrom(
+                                    foregroundColor: AppColors.primary,
+                                    padding: const EdgeInsets.all(16),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    backgroundColor: AppColors.primary
+                                        .withValues(alpha: 0.1),
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
                                 ElevatedButton.icon(
                                   onPressed: () =>
                                       _showAddEmployeeForm(context),
@@ -323,6 +346,12 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
       appBar: AppBar(
         title: const Text('Employees'),
         actions: [
+          IconButton(
+            onPressed: () =>
+                ref.read(employeeProvider.notifier).loadEmployees(),
+            icon: const Icon(Icons.refresh),
+            tooltip: 'Refresh',
+          ),
           PopupMenuButton<String>(
             icon: const Icon(Icons.more_vert),
             onSelected: (value) {
@@ -373,7 +402,9 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
           ),
         ],
       ),
-      body: employeeState.employees.isEmpty
+      body: employeeState.isLoading && employeeState.employees.isEmpty
+          ? const Center(child: AppLoader())
+          : employeeState.employees.isEmpty
           ? _buildEmptyState(context, isLoading: employeeState.isLoading)
           : Column(
               children: [
@@ -499,12 +530,6 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
         columns: const [
           DataColumn(
             label: Text(
-              'Employee ID',
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-            ),
-          ),
-          DataColumn(
-            label: Text(
               'Name',
               style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
             ),
@@ -546,43 +571,6 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
 
           return DataRow(
             cells: [
-              // Employee ID
-              DataCell(
-                isEditing
-                    ? SizedBox(
-                        width: 100,
-                        child: TextFormField(
-                          controller: _editControllers['code'],
-                          style: const TextStyle(fontSize: 13),
-                          decoration: const InputDecoration(
-                            isDense: true,
-                            contentPadding: EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 8,
-                            ),
-                            border: OutlineInputBorder(),
-                          ),
-                        ),
-                      )
-                    : Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 6,
-                        ),
-                        decoration: BoxDecoration(
-                          color: AppColors.primary.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: Text(
-                          employee.employeeCode,
-                          style: const TextStyle(
-                            fontWeight: FontWeight.w600,
-                            color: AppColors.primary,
-                            fontSize: 13,
-                          ),
-                        ),
-                      ),
-              ),
               // Name with Avatar
               DataCell(
                 Row(
@@ -591,7 +579,9 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
                       backgroundColor: AppColors.primary,
                       radius: 18,
                       child: Text(
-                        employee.name[0].toUpperCase(),
+                        employee.name.isEmpty
+                            ? '?'
+                            : employee.name[0].toUpperCase(),
                         style: const TextStyle(
                           color: Colors.white,
                           fontWeight: FontWeight.bold,
@@ -805,6 +795,22 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           IconButton(
+                            icon: const Icon(Icons.timer_outlined, size: 20),
+                            color: AppColors.primary,
+                            onPressed: () =>
+                                _showOvertimeDialog(context, employee),
+                            tooltip: 'Overtime',
+                            style: IconButton.styleFrom(
+                              backgroundColor: AppColors.primary.withValues(
+                                alpha: 0.1,
+                              ),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          IconButton(
                             icon: const Icon(Icons.edit, size: 20),
                             color: Colors.blue,
                             onPressed: () => _startEditing(employee),
@@ -863,7 +869,9 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
                     backgroundColor: AppColors.primary,
                     radius: 24,
                     child: Text(
-                      employee.name[0].toUpperCase(),
+                      employee.name.isEmpty
+                          ? '?'
+                          : employee.name[0].toUpperCase(),
                       style: const TextStyle(
                         color: Colors.white,
                         fontWeight: FontWeight.bold,
@@ -883,31 +891,26 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
                             fontSize: 16,
                           ),
                         ),
-                        const SizedBox(height: 2),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 4,
-                          ),
-                          decoration: BoxDecoration(
-                            color: AppColors.primary.withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: Text(
-                            employee.employeeCode,
-                            style: const TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                              color: AppColors.primary,
-                            ),
-                          ),
-                        ),
                       ],
                     ),
                   ),
                   PopupMenuButton(
                     icon: const Icon(Icons.more_vert),
                     itemBuilder: (context) => [
+                      const PopupMenuItem(
+                        value: 'overtime',
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.timer_outlined,
+                              size: 20,
+                              color: AppColors.primary,
+                            ),
+                            SizedBox(width: 8),
+                            Text('Overtime'),
+                          ],
+                        ),
+                      ),
                       const PopupMenuItem(
                         value: 'edit',
                         child: Row(
@@ -930,7 +933,9 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
                       ),
                     ],
                     onSelected: (value) {
-                      if (value == 'edit') {
+                      if (value == 'overtime') {
+                        _showOvertimeDialog(context, employee);
+                      } else if (value == 'edit') {
                         _showEditEmployeeDialog(context, employee);
                       } else if (value == 'delete') {
                         _confirmDelete(context, employee);
@@ -1023,6 +1028,9 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
   Widget _buildEmptyState(BuildContext context, {bool isLoading = false}) {
     final theme = Theme.of(context);
     final isDesktop = MediaQuery.of(context).size.width > 800;
+    final employeeState = ref.watch(
+      employeeProvider,
+    ); // Assuming employeeState is available here
 
     return Center(
       child: Container(
@@ -1046,8 +1054,9 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
             ),
             const SizedBox(height: 32),
             // Title
-            const Text(
-              'No Employees Found',
+            Text(
+              employeeState.error ??
+                  'No Employees Found', // Display error if available
               style: TextStyle(
                 fontSize: 24,
                 fontWeight: FontWeight.bold,
@@ -1134,7 +1143,6 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
 
   void _showAddEmployeeForm(BuildContext context) {
     final nameController = TextEditingController();
-    final codeController = TextEditingController();
     final mobileController = TextEditingController();
     final salaryController = TextEditingController();
     final formKey = GlobalKey<FormState>();
@@ -1183,20 +1191,6 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
                       textAlign: TextAlign.center,
                     ),
                     const SizedBox(height: 24),
-                    TextFormField(
-                      controller: codeController,
-                      decoration: const InputDecoration(
-                        labelText: 'Employee ID',
-                        prefixIcon: Icon(Icons.badge),
-                        border: OutlineInputBorder(),
-                      ),
-                      validator: (value) {
-                        if (value == null || value.isEmpty) {
-                          return 'Please enter employee ID';
-                        }
-                        return null;
-                      },
-                    ),
                     const SizedBox(height: 16),
                     TextFormField(
                       controller: nameController,
@@ -1323,7 +1317,6 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
                           _addEmployeeManually(
                             context,
                             nameController.text,
-                            codeController.text,
                             mobileController.text,
                             desig.designationName,
                             dept.departmentName,
@@ -1393,7 +1386,6 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
   void _addEmployeeManually(
     BuildContext context,
     String name,
-    String code,
     String mobileNo,
     String position,
     String department,
@@ -1401,12 +1393,21 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
     String departmentId,
     String designationId,
   ) {
+    final code = 'EMP${DateTime.now().millisecondsSinceEpoch % 10000}';
     final id =
         DateTime.now().millisecondsSinceEpoch.toString() +
         code.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '');
 
     // Split name into first and last name
-    final nameParts = name.trim().split(' ');
+    final nameParts = name
+        .trim()
+        .split(' ')
+        .where((s) => s.isNotEmpty)
+        .toList();
+    if (nameParts.isEmpty) {
+      ToastHelper.error('Please enter a valid name');
+      return;
+    }
     final firstName = nameParts[0];
     final lastName = nameParts.length > 1 ? nameParts.sublist(1).join(' ') : '';
 
@@ -1441,7 +1442,6 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
   void _showEditEmployeeDialog(BuildContext context, EmployeeModel employee) {
     final firstNameController = TextEditingController(text: employee.firstName);
     final lastNameController = TextEditingController(text: employee.lastName);
-    final codeController = TextEditingController(text: employee.employeeCode);
     final mobileController = TextEditingController(text: employee.mobileNo);
     final salaryController = TextEditingController(
       text: employee.salaryOriginal.toString(),
@@ -1492,16 +1492,6 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
                     controller: lastNameController,
                     decoration: const InputDecoration(
                       labelText: 'Last Name',
-                      border: OutlineInputBorder(),
-                    ),
-                    validator: (value) =>
-                        value?.isEmpty ?? true ? 'Required' : null,
-                  ),
-                  const SizedBox(height: 12),
-                  TextFormField(
-                    controller: codeController,
-                    decoration: const InputDecoration(
-                      labelText: 'Employee Code',
                       border: OutlineInputBorder(),
                     ),
                     validator: (value) =>
@@ -1621,7 +1611,7 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
                     id: employee.id,
                     firstName: firstNameController.text,
                     lastName: lastNameController.text,
-                    employeeCode: codeController.text,
+                    employeeCode: employee.employeeCode,
                     mobileNo: mobileController.text,
                     position: desig.designationName,
                     department: dept.departmentName,
@@ -1682,6 +1672,220 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
             child: const Text('Delete'),
           ),
         ],
+      ),
+    );
+  }
+
+  void _showOvertimeDialog(
+    // Changed from Future<void> ... async
+    BuildContext context,
+    EmployeeModel employee,
+  ) {
+    // Changed from async {
+    // Initial values from employee model
+    bool overtimeEnabled = employee.overtimeType != OvertimeType.none;
+
+    // Fetch settings to get org-level default overtime rate
+    final settings = ref.read(settingsProvider);
+    final settingsLoaded = ref.read(settingsLoadedProvider);
+
+    // Use employee's own stored rate if > 0, otherwise fall back to org setting
+    final initialRate = employee.overtimeRate > 0
+        ? employee.overtimeRate
+        : settings.defaultOvertimeRate;
+    final rateController = TextEditingController(text: initialRate.toString());
+
+    // Check if we have a server-loaded config for this specific employee
+    final overtimeState = ref.read(overtimeProvider);
+    final serverConfig = overtimeState.employeeConfigs[employee.id];
+
+    if (serverConfig != null) {
+      overtimeEnabled = serverConfig.overtimeEnabled;
+      // Use server config rate if set, otherwise fall back to org setting
+      final serverRate = serverConfig.hourlyRate > 0
+          ? serverConfig.hourlyRate
+          : settings.defaultOvertimeRate;
+      rateController.text = serverRate.toString();
+    } else {
+      // Proactively load it in background so next open is faster
+      Future.microtask(() {
+        ref.read(overtimeProvider.notifier).loadEmployeeConfig(employee.id);
+      });
+    }
+
+    // if (!context.mounted) return; // This line was removed as it was part of the async flow
+
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          return AlertDialog(
+            title: Row(
+              children: [
+                const Icon(Icons.timer_outlined, color: AppColors.primary),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    'Overtime: ${employee.name}',
+                    style: const TextStyle(fontSize: 18),
+                  ),
+                ),
+              ],
+            ),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'Configure specific overtime settings for this employee. This will override global defaults.',
+                        style: TextStyle(fontSize: 13, color: Colors.grey),
+                      ),
+                      if (!settingsLoaded)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 8.0),
+                          child: Row(
+                            children: [
+                              SizedBox(
+                                width: 12,
+                                height: 12,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  valueColor: AlwaysStoppedAnimation<Color>(
+                                    Colors.orange.shade700,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                'Loading organization settings...',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.orange.shade700,
+                                  fontStyle: FontStyle.italic,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      if (settingsLoaded && settings.defaultOvertimeRate == 0.0)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 8.0),
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.warning_amber_rounded,
+                                size: 16,
+                                color: Colors.orange.shade700,
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  'No default overtime rate configured for this organization.',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: Colors.orange.shade700,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+                  Card(
+                    elevation: 0,
+                    color: Theme.of(
+                      context,
+                    ).dividerColor.withValues(alpha: 0.05),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: SwitchListTile(
+                      title: const Text('Enable Overtime'),
+                      subtitle: Text(overtimeEnabled ? 'Enabled' : 'Disabled'),
+                      value: overtimeEnabled,
+                      activeColor: AppColors.primary,
+                      onChanged: (value) {
+                        setDialogState(() => overtimeEnabled = value);
+                      },
+                    ),
+                  ),
+                  if (overtimeEnabled) ...[
+                    const SizedBox(height: 16),
+                    const Text(
+                      'Hourly Overtime Rate',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: rateController,
+                      decoration: const InputDecoration(
+                        hintText: 'Enter rate per hour',
+                        prefixIcon: Icon(Icons.currency_rupee, size: 20),
+                        border: OutlineInputBorder(),
+                        isDense: true,
+                      ),
+                      keyboardType: TextInputType.number,
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancel'),
+              ),
+              ElevatedButton(
+                onPressed: () async {
+                  final rate = double.tryParse(rateController.text) ?? 0.0;
+                  final success = await ref
+                      .read(overtimeProvider.notifier)
+                      .saveEmployeeConfig(
+                        employeeId: employee.id,
+                        overtimeEnabled: overtimeEnabled,
+                        hourlyRate: rate,
+                      );
+
+                  if (success) {
+                    ToastHelper.success('Configuration saved');
+                    if (context.mounted) Navigator.pop(context);
+
+                    // Also update the employee in the main list to reflect change immediately
+                    final updatedEmployee = employee.copyWith(
+                      overtimeType: overtimeEnabled
+                          ? OvertimeType.hourwise
+                          : OvertimeType.none,
+                      overtimeRate: rate,
+                    );
+                    ref
+                        .read(employeeProvider.notifier)
+                        .updateEmployeeInList(updatedEmployee);
+                  } else {
+                    ToastHelper.error('Failed to save configuration');
+                  }
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 24,
+                    vertical: 12,
+                  ),
+                ),
+                child: const Text('Save Changes'),
+              ),
+            ],
+          );
+        },
       ),
     );
   }
