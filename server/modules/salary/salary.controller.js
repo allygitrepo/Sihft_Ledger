@@ -3,12 +3,15 @@ const Salary = require("./salary.model");
 const salaryController = {
     saveConfig: async (req, res) => {
         try {
-            const { 
-                company_id, 
-                salary_calculation_method, 
-                hours_per_day, 
-                days_per_month, 
-                salary_input_type 
+            const {
+                company_id,
+                salary_calculation_method,
+                hours_per_day,
+                days_per_month,
+                salary_input_type,
+                overtime_enabled,
+                overtime_type,
+                default_overtime_rate
             } = req.body;
 
             if (!company_id) {
@@ -23,7 +26,10 @@ const salaryController = {
                     salary_calculation_method,
                     hours_per_day,
                     days_per_month,
-                    salary_input_type
+                    salary_input_type,
+                    overtime_enabled,
+                    overtime_type,
+                    default_overtime_rate
                 });
                 return res.status(200).json({ message: "Salary configuration updated successfully", config });
             } else {
@@ -32,7 +38,10 @@ const salaryController = {
                     salary_calculation_method,
                     hours_per_day,
                     days_per_month,
-                    salary_input_type
+                    salary_input_type,
+                    overtime_enabled,
+                    overtime_type,
+                    default_overtime_rate
                 });
                 return res.status(201).json({ message: "Salary configuration saved successfully", config });
             }
