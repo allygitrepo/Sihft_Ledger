@@ -3,30 +3,64 @@ enum EmployeeType { hourly, daily }
 enum OvertimeType { none, hourwise, slotwise }
 
 class OvertimeSlot {
+  final int? id;
+  final String? slotName;
   final int startHour;
   final int endHour;
   final double rate;
 
   const OvertimeSlot({
+    this.id,
+    this.slotName,
     required this.startHour,
     required this.endHour,
     required this.rate,
   });
 
   Map<String, dynamic> toJson() {
-    return {'startHour': startHour, 'endHour': endHour, 'rate': rate};
+    return {
+      if (id != null) 'id': id,
+      'slot_name': slotName ?? 'Slot',
+      'start_time': '${startHour.toString().padLeft(2, '0')}:00:00',
+      'end_time': '${endHour.toString().padLeft(2, '0')}:00:00',
+      'rate_multiplier': rate, // Mapping rate to multiplier for now
+      'startHour': startHour,
+      'endHour': endHour,
+      'rate': rate,
+    };
   }
 
   factory OvertimeSlot.fromJson(Map<String, dynamic> json) {
+    int start = json['startHour'] as int? ?? 0;
+    int end = json['endHour'] as int? ?? 0;
+
+    if (json['start_time'] != null && json['start_time'] is String) {
+      start = int.tryParse(json['start_time'].split(':')[0]) ?? start;
+    }
+    if (json['end_time'] != null && json['end_time'] is String) {
+      end = int.tryParse(json['end_time'].split(':')[0]) ?? end;
+    }
+
     return OvertimeSlot(
-      startHour: json['startHour'] as int,
-      endHour: json['endHour'] as int,
-      rate: (json['rate'] as num).toDouble(),
+      id: json['id'] as int?,
+      slotName: json['slot_name'] as String?,
+      startHour: start,
+      endHour: end,
+      rate: (json['rate_multiplier'] as num? ?? json['rate'] as num? ?? 1.0)
+          .toDouble(),
     );
   }
 
-  OvertimeSlot copyWith({int? startHour, int? endHour, double? rate}) {
+  OvertimeSlot copyWith({
+    int? id,
+    String? slotName,
+    int? startHour,
+    int? endHour,
+    double? rate,
+  }) {
     return OvertimeSlot(
+      id: id ?? this.id,
+      slotName: slotName ?? this.slotName,
       startHour: startHour ?? this.startHour,
       endHour: endHour ?? this.endHour,
       rate: rate ?? this.rate,
@@ -81,7 +115,7 @@ class EmployeeModel {
     this.hourlyRate,
     this.dailyRate,
     this.overtimeType = OvertimeType.hourwise,
-    this.overtimeRate = 100.0,
+    this.overtimeRate = 0.0,
     this.overtimeSlots = const [],
   });
 
@@ -111,12 +145,18 @@ class EmployeeModel {
   }
 
   factory EmployeeModel.fromJson(Map<String, dynamic> json) {
-    // Handle both frontend (name) and backend (first_name, last_name)
+    // Handle both frontend (name) and backend (first_name, last_name, full_name)
     String fName = json['first_name'] ?? '';
     String lName = json['last_name'] ?? '';
-    if (fName.isEmpty && json['name'] != null) {
-      final nameParts = (json['name'] as String).split(' ');
-      fName = nameParts[0];
+    String fullName = json['full_name'] ?? json['name'] ?? '';
+
+    if (fName.isEmpty && fullName.isNotEmpty) {
+      final nameParts = fullName
+          .trim()
+          .split(' ')
+          .where((s) => s.isNotEmpty)
+          .toList();
+      fName = nameParts.isNotEmpty ? nameParts[0] : '';
       lName = nameParts.length > 1 ? nameParts.sublist(1).join(' ') : '';
     }
 
@@ -128,26 +168,17 @@ class EmployeeModel {
       mobileNo: json['phone'] ?? json['mobileNo'] ?? '',
       department: json['Department'] != null
           ? json['Department']['department_name'] ?? ''
-          : (json['department'] ?? ''),
+          : (json['department_name'] ?? json['department'] ?? ''),
       position: json['Designation'] != null
           ? json['Designation']['designation_name'] ?? ''
-          : (json['position'] ?? ''),
-      departmentId: json['department_id'] is int
-          ? json['department_id']
-          : int.tryParse(json['department_id']?.toString() ?? ''),
-      designationId: json['designation_id'] is int
-          ? json['designation_id']
-          : int.tryParse(json['designation_id']?.toString() ?? ''),
-      salary: (json['salary'] as num?)?.toDouble() ?? 0.0,
-      createdAt: json['created_at'] != null
-          ? DateTime.parse(json['created_at'])
-          : (json['createdAt'] != null
-                ? DateTime.parse(json['createdAt'])
-                : DateTime.now()),
-      salaryOriginal:
-          (json['salaryOriginal'] as num?)?.toDouble() ??
-          (json['salary'] as num?)?.toDouble() ??
-          0.0,
+          : (json['designation_name'] ?? json['position'] ?? ''),
+      departmentId: _parseId(json['department_id']),
+      designationId: _parseId(json['designation_id']),
+      salary: _parseDouble(json['salary'] ?? json['monthly_salary']),
+      createdAt: _parseDate(json['created_at'] ?? json['createdAt']),
+      salaryOriginal: _parseDouble(
+        json['salaryOriginal'] ?? json['monthly_salary'] ?? json['salary'],
+      ),
       salaryType: (json['salaryType'] as String?) ?? 'hourwise',
       employeeType: json['employeeType'] != null
           ? EmployeeType.values.firstWhere(
@@ -163,7 +194,7 @@ class EmployeeModel {
               orElse: () => OvertimeType.hourwise,
             )
           : OvertimeType.hourwise,
-      overtimeRate: (json['overtimeRate'] as num?)?.toDouble() ?? 100.0,
+      overtimeRate: (json['overtimeRate'] as num?)?.toDouble() ?? 0.0,
       overtimeSlots:
           (json['overtimeSlots'] as List<dynamic>?)
               ?.map((s) => OvertimeSlot.fromJson(s as Map<String, dynamic>))
@@ -214,5 +245,29 @@ class EmployeeModel {
       overtimeRate: overtimeRate ?? this.overtimeRate,
       overtimeSlots: overtimeSlots ?? this.overtimeSlots,
     );
+  }
+
+  static double _parseDouble(dynamic value) {
+    if (value == null) return 0.0;
+    if (value is num) return value.toDouble();
+    if (value is String) return double.tryParse(value) ?? 0.0;
+    return 0.0;
+  }
+
+  static int? _parseId(dynamic value) {
+    if (value == null) return null;
+    if (value is int) return value;
+    if (value is String) return int.tryParse(value);
+    return null;
+  }
+
+  static DateTime _parseDate(dynamic value) {
+    if (value == null) return DateTime.now();
+    try {
+      if (value is String) return DateTime.parse(value);
+      return DateTime.now();
+    } catch (e) {
+      return DateTime.now();
+    }
   }
 }
