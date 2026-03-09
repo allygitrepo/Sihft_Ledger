@@ -94,8 +94,12 @@ class CsvImportService {
     if (department.isEmpty) throw Exception('Department cannot be empty');
 
     // Split name into first and last name
-    final nameParts = name.split(' ');
-    final firstName = nameParts[0];
+    final nameParts = name
+        .trim()
+        .split(' ')
+        .where((s) => s.isNotEmpty)
+        .toList();
+    final firstName = nameParts.isNotEmpty ? nameParts[0] : 'Employee';
     final lastName = nameParts.length > 1 ? nameParts.sublist(1).join(' ') : '';
 
     // Clean salary string - remove currency symbols, commas, spaces
