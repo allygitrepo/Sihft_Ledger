@@ -270,15 +270,6 @@ class ApiService {
     );
   }
 
-  static Future<Map<String, dynamic>> bulkCreateEmployees(
-    List<Map<String, dynamic>> employees,
-    String token,
-  ) async {
-    return await post(ApiConstant.employeesBulk, {
-      'employees': employees,
-    }, headers: _authHeader(token));
-  }
-
   static Future<Map<String, dynamic>> updateEmployee(
     String id,
     Map<String, dynamic> data,
@@ -297,6 +288,97 @@ class ApiService {
   ) async {
     return await delete(
       ApiConstant.deleteEmployee(id),
+      headers: _authHeader(token),
+    );
+  }
+
+  // --- Salary Configuration ---
+
+  static Future<Map<String, dynamic>> getSalaryConfig(
+    String companyId,
+    String token,
+  ) async {
+    return await get(
+      ApiConstant.getSalaryConfig(companyId),
+      headers: _authHeader(token),
+    );
+  }
+
+  static Future<Map<String, dynamic>> saveSalaryConfig(
+    Map<String, dynamic> data,
+    String token,
+  ) async {
+    return await post(
+      ApiConstant.salaryConfigBase,
+      data,
+      headers: _authHeader(token),
+    );
+  }
+
+  // --- Overtime Slots ---
+
+  static Future<Map<String, dynamic>> getOvertimeSlots(
+    String companyId,
+    String token,
+  ) async {
+    return await get(
+      '${ApiConstant.overtimeSlotsBase}?company_id=$companyId',
+      headers: _authHeader(token),
+    );
+  }
+
+  static Future<Map<String, dynamic>> createOvertimeSlot(
+    Map<String, dynamic> data,
+    String token,
+  ) async {
+    return await post(
+      ApiConstant.overtimeSlotsBase,
+      data,
+      headers: _authHeader(token),
+    );
+  }
+
+  static Future<Map<String, dynamic>> updateOvertimeSlot(
+    String id,
+    Map<String, dynamic> data,
+    String token,
+  ) async {
+    return await put(
+      '${ApiConstant.overtimeSlotsBase}/$id',
+      data,
+      headers: _authHeader(token),
+    );
+  }
+
+  static Future<Map<String, dynamic>> deleteOvertimeSlot(
+    String id,
+    String token,
+  ) async {
+    return await delete(
+      '${ApiConstant.overtimeSlotsBase}/$id',
+      headers: _authHeader(token),
+    );
+  }
+
+  // --- Employee Overtime Config ---
+
+  static Future<Map<String, dynamic>> getEmployeeOvertimeConfig(
+    String employeeId,
+    String token,
+  ) async {
+    return await get(
+      '${ApiConstant.employeeOvertimeConfigsBase}/employee/$employeeId',
+      headers: _authHeader(token),
+    );
+  }
+
+  static Future<Map<String, dynamic>> saveEmployeeOvertimeConfig(
+    Map<String, dynamic> data,
+    String token,
+  ) async {
+    return await post(
+      ApiConstant.employeeOvertimeConfigsBase,
+      data,
       headers: _authHeader(token),
     );
   }
