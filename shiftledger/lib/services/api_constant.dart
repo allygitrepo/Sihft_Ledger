@@ -1,7 +1,7 @@
 class ApiConstant {
   // Base URLs
   static const String serverUrl =
-      "http://192.168.1.7:3000"; // Android Emulator default for localhost
+      "http://192.168.1.6:3000"; // Android Emulator default for localhost
   static const String baseUrl = "$serverUrl/shiftledger";
 
   // Health Check
@@ -48,6 +48,9 @@ class ApiConstant {
 
   // Salary & Payroll Management
   static const String salariesBase = "$baseUrl/salaries";
+  static const String salaryConfigBase = salariesBase;
+  static String getSalaryConfig(String companyId) =>
+      "$salaryConfigBase/company/$companyId";
   static const String employeeSalariesBase = "$baseUrl/employee-salaries";
   static const String overtimeSlotsBase = "$baseUrl/overtime-slots";
   static const String employeeOvertimeConfigsBase =
