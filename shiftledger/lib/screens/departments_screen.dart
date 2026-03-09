@@ -130,6 +130,14 @@ class _DepartmentsScreenState extends ConsumerState<DepartmentsScreen> {
               },
             ),
           ),
+          const SizedBox(width: 8),
+          IconButton(
+            onPressed: () {
+              ref.read(departmentProvider.notifier).loadDepartments();
+            },
+            icon: const Icon(Icons.refresh, color: AppColors.primary),
+            tooltip: 'Refresh',
+          ),
           const SizedBox(width: 16),
           ElevatedButton.icon(
             onPressed: () => _showDepartmentBottomSheet(context),
