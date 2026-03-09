@@ -32,14 +32,24 @@ class DesignationModel {
   }
 
   factory DesignationModel.fromMap(Map<String, dynamic> map) {
+    DateTime parseDate(dynamic date) {
+      if (date == null) return DateTime.now();
+      if (date is DateTime) return date;
+      try {
+        return DateTime.parse(date.toString());
+      } catch (e) {
+        return DateTime.now();
+      }
+    }
+
     return DesignationModel(
       id: map['id']?.toString() ?? '',
       companyId: map['company_id']?.toString() ?? '',
       departmentId: map['department_id']?.toString() ?? '',
-      designationName: map['designation_name'] ?? '',
-      createdAt: DateTime.parse(map['created_at']),
-      updatedAt: DateTime.parse(map['updated_at']),
-      status: map['status'] ?? true,
+      designationName: map['designation_name'] ?? 'Unknown',
+      createdAt: parseDate(map['created_at']),
+      updatedAt: parseDate(map['updated_at']),
+      status: map['status'] == true || map['status'] == 1,
     );
   }
 
