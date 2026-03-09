@@ -31,9 +31,26 @@ class DepartmentState {
 class DepartmentNotifier extends Notifier<DepartmentState> {
   @override
   DepartmentState build() {
-    // We don't call loadDepartments here directly if it depends on other providers being settled
-    // But since build can watch other providers, we can link them
+    // Watch for session readiness
+    ref.watch(authProvider);
+    ref.watch(companyProvider);
+
+    // Initial check in case they are already ready
+    Future.microtask(() => _checkAndLoad());
+
     return DepartmentState();
+  }
+
+  void _checkAndLoad() {
+    final token = ref.read(authProvider).token;
+    final companyId = ref.read(companyProvider).company?.id;
+
+    if (token != null &&
+        companyId != null &&
+        state.departments.isEmpty &&
+        !state.isLoading) {
+      loadDepartments();
+    }
   }
 
   Future<void> loadDepartments() async {
