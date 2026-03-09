@@ -6,6 +6,8 @@ import '../providers/auth_provider.dart';
 import '../providers/company_provider.dart';
 import '../providers/department_provider.dart';
 import '../providers/designation_provider.dart';
+import '../providers/settings_provider.dart';
+import '../providers/overtime_provider.dart';
 import '../widgets/toast.dart';
 
 class EmployeeState {
@@ -43,8 +45,26 @@ class EmployeeState {
 class EmployeeNotifier extends Notifier<EmployeeState> {
   @override
   EmployeeState build() {
-    print('[EmployeeProvider] Initializing provider...');
+    // Watch for session readiness
+    ref.watch(authProvider);
+    ref.watch(companyProvider);
+
+    // Initial check in case they are already ready
+    Future.microtask(() => _checkAndLoad());
+
     return const EmployeeState();
+  }
+
+  void _checkAndLoad() {
+    final token = ref.read(authProvider).token;
+    final companyId = ref.read(companyProvider).company?.id;
+
+    if (token != null &&
+        companyId != null &&
+        state.employees.isEmpty &&
+        !state.isLoading) {
+      loadEmployees();
+    }
   }
 
   Future<void> loadEmployees() async {
@@ -59,21 +79,31 @@ class EmployeeNotifier extends Notifier<EmployeeState> {
     state = state.copyWith(isLoading: true, error: null);
     print('[EmployeeProvider] Fetching employees for company: $companyId');
 
-    final response = await ApiService.getEmployees(companyId, token);
+    try {
+      final response = await ApiService.getEmployees(companyId, token);
 
-    if (response['success'] == true) {
-      final List<dynamic> employeesJson = response['employees'] ?? [];
-      final employees = employeesJson
-          .map((json) => EmployeeModel.fromJson(json))
-          .toList();
-      state = state.copyWith(employees: employees, isLoading: false);
-      print(
-        '[EmployeeProvider] Successfully loaded ${employees.length} employees',
-      );
-    } else {
+      if (response['success'] == true) {
+        final List<dynamic> employeesJson = response['employees'] ?? [];
+        final employees = employeesJson
+            .map((json) => EmployeeModel.fromJson(json))
+            .toList();
+        state = state.copyWith(employees: employees, isLoading: false);
+        print(
+          '[EmployeeProvider] Successfully loaded ${employees.length} employees',
+        );
+      } else {
+        state = state.copyWith(
+          isLoading: false,
+          error: response['message'] ?? 'Failed to load employees',
+        );
+        ToastHelper.error(state.error!);
+      }
+    } catch (e, stack) {
+      print('[EmployeeProvider] Error loading employees: $e');
+      print(stack);
       state = state.copyWith(
         isLoading: false,
-        error: response['message'] ?? 'Failed to load employees',
+        error: 'Error parsing employee data: $e',
       );
       ToastHelper.error(state.error!);
     }
@@ -90,28 +120,40 @@ class EmployeeNotifier extends Notifier<EmployeeState> {
 
     state = state.copyWith(isLoading: true);
 
-    // Map model to backend request body
+    // Map model to backend request body (using fields handled by backend controller)
     final data = {
       'company_id': companyId,
       'department_id': employee.departmentId,
       'designation_id': employee.designationId,
-      'employee_code': employee.employeeCode,
-      'first_name': employee.firstName,
-      'last_name': employee.lastName,
-      'phone': employee.mobileNo,
-      'email': null, // Optional
-      'join_date': DateTime.now().toIso8601String().split('T')[0],
-      'basic_salary': employee.salaryOriginal,
-      'allowances': 0,
-      'deductions': 0,
-      'net_salary': employee.salaryOriginal,
-      'overtime_enabled': employee.overtimeType != OvertimeType.none,
-      'hourly_rate': employee.overtimeRate,
+      'name': '${employee.firstName} ${employee.lastName}'.trim(),
+      'mobileNo': employee.mobileNo,
+      'salary': employee.salaryOriginal,
     };
 
     final response = await ApiService.createEmployee(data, token);
 
     if (response['success'] == true) {
+      final newEmp = response['employee'];
+      if (newEmp != null && newEmp['id'] != null) {
+        final settings = ref.read(settingsProvider);
+        if (settings.defaultOvertimeType == OvertimeType.hourwise &&
+            settings.overtimeEnabled) {
+          try {
+            await ref
+                .read(overtimeProvider.notifier)
+                .saveEmployeeConfig(
+                  employeeId: newEmp['id'].toString(),
+                  overtimeEnabled: true,
+                  hourlyRate: settings.defaultOvertimeRate,
+                );
+          } catch (e) {
+            print(
+              '[EmployeeProvider] Error setting initial overtime config: $e',
+            );
+          }
+        }
+      }
+
       await loadEmployees();
       ToastHelper.success('Employee added successfully');
     } else {
@@ -129,13 +171,9 @@ class EmployeeNotifier extends Notifier<EmployeeState> {
     final data = {
       'department_id': employee.departmentId,
       'designation_id': employee.designationId,
-      'employee_code': employee.employeeCode,
-      'first_name': employee.firstName,
-      'last_name': employee.lastName,
-      'phone': employee.mobileNo,
-      'basic_salary': employee.salaryOriginal,
-      'overtime_enabled': employee.overtimeType != OvertimeType.none,
-      'hourly_rate': employee.overtimeRate,
+      'name': '${employee.firstName} ${employee.lastName}'.trim(),
+      'mobileNo': employee.mobileNo,
+      'salary': employee.salaryOriginal,
     };
 
     final response = await ApiService.updateEmployee(employee.id, data, token);
@@ -147,6 +185,17 @@ class EmployeeNotifier extends Notifier<EmployeeState> {
       state = state.copyWith(isLoading: false);
       ToastHelper.error(response['message'] ?? 'Failed to update employee');
     }
+  }
+
+  /// Update a single employee in the local list without a full reload
+  void updateEmployeeInList(EmployeeModel employee) {
+    if (state.employees.isEmpty) return;
+
+    final updatedEmployees = state.employees.map((e) {
+      return e.id == employee.id ? employee : e;
+    }).toList();
+
+    state = state.copyWith(employees: updatedEmployees);
   }
 
   Future<void> deleteEmployee(String employeeId) async {
@@ -181,10 +230,13 @@ class EmployeeNotifier extends Notifier<EmployeeState> {
     final designations = ref.read(designationProvider).designations;
 
     print(
-      '[EmployeeProvider] Resolving IDs for ${employees.length} employees. Departments: ${departments.length}, Designations: ${designations.length}',
+      '[EmployeeProvider] Importing ${employees.length} employees. Resolving IDs...',
     );
 
-    final employeeList = employees.map((employee) {
+    int successCount = 0;
+    int failCount = 0;
+
+    for (var employee in employees) {
       // Try to resolve department ID from name if missing
       int? resolvedDeptId = employee.departmentId;
       if (resolvedDeptId == null && employee.department.isNotEmpty) {
@@ -215,36 +267,36 @@ class EmployeeNotifier extends Notifier<EmployeeState> {
         }
       }
 
-      return {
+      final data = {
         'company_id': companyId,
         'department_id': resolvedDeptId ?? 1,
         'designation_id': resolvedDesigId ?? 1,
-        'employee_code': employee.employeeCode,
-        'first_name': employee.firstName,
-        'last_name': employee.lastName,
-        'phone': employee.mobileNo,
-        'email': null,
-        'join_date': DateTime.now().toIso8601String().split('T')[0],
-        'basic_salary': employee.salaryOriginal,
-        'allowances': 0,
-        'deductions': 0,
-        'net_salary': employee.salaryOriginal,
-        'overtime_enabled': employee.overtimeType != OvertimeType.none,
-        'hourly_rate': employee.overtimeRate,
+        'name': '${employee.firstName} ${employee.lastName}'.trim(),
+        'mobileNo': employee.mobileNo,
+        'salary': employee.salaryOriginal,
       };
-    }).toList();
 
-    final response = await ApiService.bulkCreateEmployees(employeeList, token);
+      final response = await ApiService.createEmployee(data, token);
 
-    if (response['success'] == true) {
-      await loadEmployees();
-      state = state.copyWith(isImporting: false);
-      ToastHelper.success(
-        '${employees.length} employees imported successfully',
-      );
+      if (response['success'] == true) {
+        successCount++;
+      } else {
+        failCount++;
+        print(
+          '[EmployeeProvider] Failed to import ${employee.firstName}: ${response['message']}',
+        );
+      }
+    }
+
+    await loadEmployees();
+    state = state.copyWith(isImporting: false);
+
+    if (failCount == 0) {
+      ToastHelper.success('$successCount employees imported successfully');
     } else {
-      state = state.copyWith(isImporting: false);
-      ToastHelper.error(response['message'] ?? 'Failed to import employees');
+      ToastHelper.show(
+        'Import complete: $successCount success, $failCount failed',
+      );
     }
   }
 
