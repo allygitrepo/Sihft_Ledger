@@ -4,16 +4,17 @@ import '../models/employee_model.dart';
 import '../services/attendance_service.dart';
 import '../services/salary_calculator_service.dart';
 import '../providers/settings_provider.dart';
+import '../providers/company_provider.dart';
 
 // Attendance Form State
 class AttendanceFormState {
   final EmployeeModel? selectedEmployee;
   final DateTime selectedDate;
-  
+
   // Time tracking
   final DateTime? checkInTime;
   final DateTime? checkOutTime;
-  
+
   // Calculated values
   final double calculatedWorkingHours;
   final double workSalary;
@@ -21,7 +22,7 @@ class AttendanceFormState {
   final double overtimeSalary;
   final double totalSalary;
   final AttendanceStatus attendanceStatus;
-  
+
   // Loading state
   final bool isLoading;
 
@@ -57,7 +58,8 @@ class AttendanceFormState {
       selectedDate: selectedDate ?? this.selectedDate,
       checkInTime: checkInTime ?? this.checkInTime,
       checkOutTime: checkOutTime ?? this.checkOutTime,
-      calculatedWorkingHours: calculatedWorkingHours ?? this.calculatedWorkingHours,
+      calculatedWorkingHours:
+          calculatedWorkingHours ?? this.calculatedWorkingHours,
       workSalary: workSalary ?? this.workSalary,
       overtimeHours: overtimeHours ?? this.overtimeHours,
       overtimeSalary: overtimeSalary ?? this.overtimeSalary,
@@ -72,9 +74,7 @@ class AttendanceFormState {
 class AttendanceFormNotifier extends Notifier<AttendanceFormState> {
   @override
   AttendanceFormState build() {
-    return AttendanceFormState(
-      selectedDate: DateTime.now(),
-    );
+    return AttendanceFormState(selectedDate: DateTime.now());
   }
 
   void setEmployee(EmployeeModel employee) {
@@ -167,8 +167,8 @@ class AttendanceFormNotifier extends Notifier<AttendanceFormState> {
       return false;
     }
 
-    // Check for duplicate attendance
-    final exists = await AttendanceService.attendanceExists(
+    // Check for duplicate attendance (optional since backend upserts, but prevents accidental submits)
+    final exists = await AttendanceService.checkAttendanceExists(
       state.selectedEmployee!.id,
       state.selectedDate,
     );
@@ -195,10 +195,10 @@ class AttendanceFormNotifier extends Notifier<AttendanceFormState> {
       );
 
       await AttendanceService.addAttendance(attendance);
-      
+
       // Refresh attendance list
       ref.read(attendanceListProvider.notifier).loadAttendance();
-      
+
       // Reset form
       state = AttendanceFormState(
         selectedDate: DateTime.now(),
@@ -213,9 +213,7 @@ class AttendanceFormNotifier extends Notifier<AttendanceFormState> {
   }
 
   void reset() {
-    state = AttendanceFormState(
-      selectedDate: DateTime.now(),
-    );
+    state = AttendanceFormState(selectedDate: DateTime.now());
   }
 }
 
@@ -244,17 +242,38 @@ class AttendanceListState {
 class AttendanceListNotifier extends Notifier<AttendanceListState> {
   @override
   AttendanceListState build() {
-    // Load attendance asynchronously after build
+    // Watch for company changes to reload attendance
+    ref.watch(companyProvider);
+    
+    // Load attendance asynchronously after build - load ALL records
     Future.microtask(() => loadAttendance());
     return const AttendanceListState(isLoading: true);
   }
 
-  Future<void> loadAttendance() async {
+  Future<void> loadAttendance({DateTime? date}) async {
     try {
       state = state.copyWith(isLoading: true);
-      final records = await AttendanceService.loadAttendance();
+      
+      // Get current company ID for filtering
+      final companyId = ref.read(companyProvider).company?.id;
+      
+      // If a specific date is provided, load only that date
+      // Otherwise, load ALL attendance records
+      final List<AttendanceModel> records;
+      if (date != null) {
+        records = await AttendanceService.getAttendanceByDate(
+          date,
+          companyId: companyId,
+        );
+      } else {
+        records = await AttendanceService.loadAttendance(
+          companyId: companyId,
+        );
+      }
+      
       state = state.copyWith(attendanceRecords: records, isLoading: false);
     } catch (e) {
+      print('Error loading attendance: $e');
       state = state.copyWith(attendanceRecords: [], isLoading: false);
     }
   }
@@ -283,14 +302,13 @@ class AttendanceListNotifier extends Notifier<AttendanceListState> {
 // Providers
 final attendanceFormProvider =
     NotifierProvider<AttendanceFormNotifier, AttendanceFormState>(() {
-  return AttendanceFormNotifier();
-});
+      return AttendanceFormNotifier();
+    });
 
 final attendanceListProvider =
     NotifierProvider<AttendanceListNotifier, AttendanceListState>(() {
-  return AttendanceListNotifier();
-});
-
+      return AttendanceListNotifier();
+    });
 
 // Attendance Edit State
 class AttendanceEditState {
@@ -298,14 +316,14 @@ class AttendanceEditState {
   final EmployeeModel? employee;
   final DateTime? checkInTime;
   final DateTime? checkOutTime;
-  
+
   // Calculated values
   final double calculatedWorkingHours;
   final double workSalary;
   final double overtimeHours;
   final double overtimeSalary;
   final double totalSalary;
-  
+
   final bool isLoading;
 
   const AttendanceEditState({
@@ -338,7 +356,8 @@ class AttendanceEditState {
       employee: employee ?? this.employee,
       checkInTime: checkInTime ?? this.checkInTime,
       checkOutTime: checkOutTime ?? this.checkOutTime,
-      calculatedWorkingHours: calculatedWorkingHours ?? this.calculatedWorkingHours,
+      calculatedWorkingHours:
+          calculatedWorkingHours ?? this.calculatedWorkingHours,
       workSalary: workSalary ?? this.workSalary,
       overtimeHours: overtimeHours ?? this.overtimeHours,
       overtimeSalary: overtimeSalary ?? this.overtimeSalary,
@@ -380,7 +399,9 @@ class AttendanceEditNotifier extends Notifier<AttendanceEditState> {
   }
 
   void _recalculate() {
-    if (state.employee == null || state.checkInTime == null || state.checkOutTime == null) {
+    if (state.employee == null ||
+        state.checkInTime == null ||
+        state.checkOutTime == null) {
       return;
     }
 
@@ -438,8 +459,8 @@ class AttendanceEditNotifier extends Notifier<AttendanceEditState> {
       final status = state.calculatedWorkingHours >= settings.fixedHoursPerDay
           ? AttendanceStatus.fullDay
           : state.calculatedWorkingHours >= settings.fixedHoursPerDay / 2
-              ? AttendanceStatus.halfDay
-              : AttendanceStatus.absent;
+          ? AttendanceStatus.halfDay
+          : AttendanceStatus.absent;
 
       final updatedAttendance = state.originalAttendance!.copyWith(
         checkIn: state.checkInTime,
@@ -453,10 +474,10 @@ class AttendanceEditNotifier extends Notifier<AttendanceEditState> {
       );
 
       await AttendanceService.updateAttendance(updatedAttendance);
-      
+
       // Refresh attendance list
       ref.read(attendanceListProvider.notifier).loadAttendance();
-      
+
       state = const AttendanceEditState();
       return true;
     } catch (e) {
@@ -473,5 +494,5 @@ class AttendanceEditNotifier extends Notifier<AttendanceEditState> {
 // Providers
 final attendanceEditProvider =
     NotifierProvider<AttendanceEditNotifier, AttendanceEditState>(() {
-  return AttendanceEditNotifier();
-});
+      return AttendanceEditNotifier();
+    });
