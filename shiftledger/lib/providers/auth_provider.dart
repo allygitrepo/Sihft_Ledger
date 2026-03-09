@@ -5,6 +5,10 @@ import '../widgets/toast.dart';
 import '../services/api_service.dart';
 import 'company_provider.dart';
 import 'employee_provider.dart';
+import 'department_provider.dart';
+import 'designation_provider.dart';
+import 'settings_provider.dart';
+import 'overtime_provider.dart';
 import 'attendance_provider.dart';
 import 'payroll_provider.dart';
 import 'navigation_provider.dart';
@@ -223,31 +227,35 @@ class AuthNotifier extends Notifier<AuthState> {
   }
 
   Future<void> logout() async {
-    final prefs = await SharedPreferences.getInstance();
+    try {
+      // Clear ALL stored preferences in one shot for a clean slate
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.clear();
 
-    // Clear local state first
-    await prefs.remove(_isLoggedInKey);
-    await prefs.remove(_tokenKey);
-    await prefs.remove('user_name');
-    await prefs.remove('user_phone');
-    await prefs.remove('user_email');
-    await prefs.remove('owner_name');
+      // Reset setup status
+      await SetupService.resetSetup();
 
-    // Reset setup status
-    await SetupService.resetSetup();
+      // Invalidate ALL data providers to reset their state
+      ref.invalidate(companyProvider);
+      ref.invalidate(employeeProvider);
+      ref.invalidate(departmentProvider);
+      ref.invalidate(designationProvider);
+      ref.invalidate(settingsProvider);
+      ref.invalidate(overtimeProvider);
+      ref.invalidate(attendanceListProvider);
+      ref.invalidate(payrollProvider);
+      ref.invalidate(navigationProvider);
+      ref.invalidate(setupProvider);
 
-    // Invalidate and reset all relevant providers
-    ref.invalidate(companyProvider);
-    ref.invalidate(employeeProvider);
-    ref.invalidate(attendanceListProvider);
-    ref.invalidate(payrollProvider);
-    ref.invalidate(navigationProvider);
-    ref.invalidate(setupProvider);
+      // Reset auth state last — this triggers UI rebuild in reactive widgets
+      state = const AuthState(isInitialized: true, isLoggedIn: false);
 
-    // Reset auth state
-    state = const AuthState(isInitialized: true);
-
-    ToastHelper.success('Logged out successfully');
+      ToastHelper.success('Logged out successfully');
+    } catch (e) {
+      // Even on error, reset auth state to force re-login
+      state = const AuthState(isInitialized: true, isLoggedIn: false);
+      ToastHelper.error('Logout completed (some cleanup may have failed)');
+    }
   }
 }
 
