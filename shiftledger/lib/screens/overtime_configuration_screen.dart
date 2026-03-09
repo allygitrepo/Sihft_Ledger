@@ -2,20 +2,22 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/employee_model.dart';
 import '../providers/settings_provider.dart';
+import '../providers/employee_provider.dart';
+import '../providers/overtime_provider.dart';
 import '../utills/app_spacing.dart';
 import '../widgets/loader.dart';
 import '../widgets/toast.dart';
 
 class OvertimeConfigurationScreen extends ConsumerStatefulWidget {
-  const OvertimeConfigurationScreen({
-    super.key,
-  });
+  const OvertimeConfigurationScreen({super.key});
 
   @override
-  ConsumerState<OvertimeConfigurationScreen> createState() => _OvertimeConfigurationScreenState();
+  ConsumerState<OvertimeConfigurationScreen> createState() =>
+      _OvertimeConfigurationScreenState();
 }
 
-class _OvertimeConfigurationScreenState extends ConsumerState<OvertimeConfigurationScreen> {
+class _OvertimeConfigurationScreenState
+    extends ConsumerState<OvertimeConfigurationScreen> {
   late GlobalKey<FormState> formKey;
   late bool overtimeEnabled;
   late OvertimeType selectedOvertimeType;
@@ -26,7 +28,7 @@ class _OvertimeConfigurationScreenState extends ConsumerState<OvertimeConfigurat
   void initState() {
     super.initState();
     formKey = GlobalKey<FormState>();
-    
+
     final settings = ref.read(settingsProvider);
     overtimeEnabled = settings.overtimeEnabled;
     selectedOvertimeType = settings.defaultOvertimeType;
@@ -54,6 +56,20 @@ class _OvertimeConfigurationScreenState extends ConsumerState<OvertimeConfigurat
 
       await ref.read(settingsProvider.notifier).updateSettings(updatedSettings);
 
+      // Apply hour-wise configuration to all current employees using existing route
+      if (selectedOvertimeType == OvertimeType.hourwise && overtimeEnabled) {
+        final employees = ref.read(employeeProvider).employees;
+        final overtimeHelper = ref.read(overtimeProvider.notifier);
+
+        for (var emp in employees) {
+          await overtimeHelper.saveEmployeeConfig(
+            employeeId: emp.id,
+            overtimeEnabled: overtimeEnabled,
+            hourlyRate: double.parse(overtimeRateController.text),
+          );
+        }
+      }
+
       setState(() => isLoading = false);
 
       if (mounted) {
@@ -72,18 +88,16 @@ class _OvertimeConfigurationScreenState extends ConsumerState<OvertimeConfigurat
     return Scaffold(
       appBar: isDesktop
           ? null
-          : AppBar(
-              title: const Text('Overtime Configuration'),
-            ),
+          : AppBar(title: const Text('Overtime Configuration')),
       body: Stack(
         children: [
-          isDesktop ? _buildDesktopLayout(context) : _buildMobileLayout(context, screenHeight),
+          isDesktop
+              ? _buildDesktopLayout(context)
+              : _buildMobileLayout(context, screenHeight),
           if (isLoading)
             Container(
               color: Colors.black.withValues(alpha: 0.5),
-              child: const Center(
-                child: AppLoader(size: 80),
-              ),
+              child: const Center(child: AppLoader(size: 80)),
             ),
         ],
       ),
@@ -114,7 +128,10 @@ class _OvertimeConfigurationScreenState extends ConsumerState<OvertimeConfigurat
             key: formKey,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: _buildFormContent(context, MediaQuery.of(context).size.height),
+              children: _buildFormContent(
+                context,
+                MediaQuery.of(context).size.height,
+              ),
             ),
           ),
         ),
@@ -141,9 +158,9 @@ class _OvertimeConfigurationScreenState extends ConsumerState<OvertimeConfigurat
         // Overtime Type
         Text(
           'Overtime Calculation Type',
-          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
+          style: Theme.of(
+            context,
+          ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 12),
         Card(
@@ -177,9 +194,9 @@ class _OvertimeConfigurationScreenState extends ConsumerState<OvertimeConfigurat
         if (selectedOvertimeType == OvertimeType.hourwise) ...[
           Text(
             'Default Overtime Rate',
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.bold,
-                ),
+            style: Theme.of(
+              context,
+            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 12),
           TextFormField(
@@ -230,7 +247,7 @@ class _OvertimeConfigurationScreenState extends ConsumerState<OvertimeConfigurat
           child: Text('Save Overtime Configuration'),
         ),
       ),
-      
+
       const SizedBox(height: 16),
     ];
   }
