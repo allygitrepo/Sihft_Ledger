@@ -1,24 +1,99 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/legacy.dart';
 import 'package:riverpod/riverpod.dart';
 import '../models/settings_model.dart';
 import '../services/settings_service.dart';
+import '../services/api_service.dart';
+import 'auth_provider.dart';
+import 'company_provider.dart';
 import '../widgets/toast.dart';
+
+/// Provider to track when settings are being synchronized with the backend.
+final settingsSyncProvider = StateProvider<bool>((ref) => false);
+
+/// Provider to track if settings have been loaded from API at least once
+final settingsLoadedProvider = StateProvider<bool>((ref) => false);
 
 class SettingsNotifier extends Notifier<SettingsModel> {
   @override
   SettingsModel build() {
-    _loadSettings();
+    // Watch for dependencies
+    ref.watch(authProvider);
+    ref.watch(companyProvider);
+
+    // Initial load from local storage
+    _loadLocalSettings();
+
+    // Trigger async load from API if already ready
+    Future.microtask(() => loadApiSettings());
+
     return SettingsModel.defaultSettings();
   }
 
-  Future<void> _loadSettings() async {
+  Future<void> _loadLocalSettings() async {
     final settings = await SettingsService.loadSettings();
     state = settings;
   }
 
-  Future<void> updateSettings(SettingsModel settings) async {
+  Future<void> loadApiSettings() async {
+    final token = ref.read(authProvider).token;
+    final companyId = ref.read(companyProvider).company?.id;
+
+    if (token == null || companyId == null) {
+      ref.read(settingsLoadedProvider.notifier).state = true;
+      return;
+    }
+
+    ref.read(settingsSyncProvider.notifier).state = true;
+
+    try {
+      final response = await ApiService.getSalaryConfig(companyId, token);
+
+      if (response['success'] == true && response['config'] != null) {
+        final updatedSettings = SettingsService.fromApiJson(
+          response['config'],
+          state,
+        );
+        state = updatedSettings;
+        // Also save locally to keep in sync
+        await SettingsService.saveSettings(state);
+        ref.read(settingsLoadedProvider.notifier).state = true;
+      }
+    } catch (e) {
+      print('[SettingsProvider] Error loading API settings: $e');
+      // Mark as loaded even on error to prevent blocking UI
+      ref.read(settingsLoadedProvider.notifier).state = true;
+    } finally {
+      ref.read(settingsSyncProvider.notifier).state = false;
+    }
+  }
+
+  Future<bool> updateSettings(SettingsModel settings) async {
     state = settings;
+
+    // Save locally
     await SettingsService.saveSettings(state);
+
+    // Save to API
+    final token = ref.read(authProvider).token;
+    final companyId = ref.read(companyProvider).company?.id;
+
+    if (token != null && companyId != null) {
+      ref.read(settingsSyncProvider.notifier).state = true;
+      try {
+        final apiData = SettingsService.toApiJson(state, int.parse(companyId));
+        final response = await ApiService.saveSalaryConfig(apiData, token);
+
+        return response['success'] == true;
+      } catch (e) {
+        print('[SettingsProvider] Error saving to API: $e');
+        return false;
+      } finally {
+        ref.read(settingsSyncProvider.notifier).state = false;
+      }
+    }
+
+    return true; // Successfully saved locally even if no API available
   }
 
   Future<void> updateAttendanceType(PayrollAttendanceType type) async {
@@ -62,6 +137,22 @@ class SettingsNotifier extends Notifier<SettingsModel> {
   Future<void> resetSettings() async {
     state = SettingsModel.defaultSettings();
     await SettingsService.saveSettings(state);
+
+    // Also reset on API if possible
+    final token = ref.read(authProvider).token;
+    final companyId = ref.read(companyProvider).company?.id;
+    if (token != null && companyId != null) {
+      ref.read(settingsSyncProvider.notifier).state = true;
+      try {
+        final apiData = SettingsService.toApiJson(state, int.parse(companyId));
+        await ApiService.saveSalaryConfig(apiData, token);
+      } catch (e) {
+        print('[SettingsProvider] Error resetting API settings: $e');
+      } finally {
+        ref.read(settingsSyncProvider.notifier).state = false;
+      }
+    }
+
     ToastHelper.success('Settings reset to default');
   }
 }
