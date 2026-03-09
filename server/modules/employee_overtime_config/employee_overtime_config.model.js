@@ -8,6 +8,7 @@ const EmployeeOvertimeConfig = sequelize.define("EmployeeOvertimeConfigs",
         employee_id: {
             type: DataTypes.INTEGER,
             allowNull: false,
+            unique: true,
             references: {
                 model: Employee,
                 key: 'id'

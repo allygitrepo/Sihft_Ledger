@@ -1,4 +1,6 @@
 const EmployeeOvertimeConfig = require("./employee_overtime_config.model");
+const Employee = require("../employee/employee.model");
+const sequelize = require("../../config/db");
 
 const employeeOvertimeConfigController = {
     createOrUpdate: async (req, res) => {
@@ -7,6 +9,12 @@ const employeeOvertimeConfigController = {
 
             if (!employee_id) {
                 return res.status(400).json({ message: "Employee ID is required" });
+            }
+
+            // Verify employee exists
+            const employee = await Employee.findByPk(employee_id);
+            if (!employee) {
+                return res.status(404).json({ message: "Employee not found" });
             }
 
             let config = await EmployeeOvertimeConfig.findOne({ where: { employee_id } });
@@ -27,6 +35,7 @@ const employeeOvertimeConfigController = {
             return res.status(500).json({ message: "Internal server error" });
         }
     },
+
 
     getByEmployeeId: async (req, res) => {
         try {
