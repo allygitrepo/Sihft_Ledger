@@ -19,6 +19,10 @@ const Attendance = sequelize.define("Attendance",
         attendance_status: { type: DataTypes.ENUM('Present', 'Absent', 'Leave', 'Half-day'), defaultValue: 'Present' },
         late_minutes: { type: DataTypes.INTEGER, defaultValue: 0 },
         total_hours: { type: DataTypes.DECIMAL(4, 2), defaultValue: 0.00 },
+        work_salary: { type: DataTypes.DECIMAL(10, 2), defaultValue: 0.00 },
+        overtime_hours: { type: DataTypes.DECIMAL(4, 2), defaultValue: 0.00 },
+        overtime_salary: { type: DataTypes.DECIMAL(10, 2), defaultValue: 0.00 },
+        total_salary: { type: DataTypes.DECIMAL(10, 2), defaultValue: 0.00 },
         status: { type: DataTypes.BOOLEAN, defaultValue: true }
     },
     {
@@ -28,5 +32,9 @@ const Attendance = sequelize.define("Attendance",
         updatedAt: 'updated_at'
     }
 );
+
+// Associations
+Attendance.belongsTo(Employee, { foreignKey: 'employee_id' });
+Employee.hasMany(Attendance, { foreignKey: 'employee_id' });
 
 module.exports = Attendance;
