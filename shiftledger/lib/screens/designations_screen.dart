@@ -4,7 +4,6 @@ import 'package:intl/intl.dart';
 import '../models/designation_model.dart';
 import '../models/department_model.dart';
 import '../providers/designation_provider.dart';
-import '../providers/company_provider.dart';
 import '../providers/department_provider.dart';
 import '../utills/app_colors.dart';
 import '../widgets/toast.dart';
@@ -24,13 +23,7 @@ class _DesignationsScreenState extends ConsumerState<DesignationsScreen> {
   @override
   void initState() {
     super.initState();
-    // Initially we might not have a department selected, so we wait or load for the first one if available
-    Future.microtask(() {
-      final depts = ref.read(departmentProvider).departments;
-      if (depts.isNotEmpty) {
-        ref.read(designationProvider.notifier).loadDesignations(depts.first.id);
-      }
-    });
+    // Initial load happens automatically via the reactive provider
   }
 
   @override
@@ -46,15 +39,6 @@ class _DesignationsScreenState extends ConsumerState<DesignationsScreen> {
     final theme = Theme.of(context);
     final screenWidth = MediaQuery.of(context).size.width;
     final isDesktop = screenWidth > 800;
-
-    // Listen for company sync updates
-    ref.listen(companyProvider, (previous, next) {
-      if (previous?.company?.id == null && next.company?.id != null) {
-        // If we are on this screen, we might need departments loaded first
-        // But since designations depend on a specific department,
-        // usually we come from the department selection.
-      }
-    });
 
     final filteredDesignations = designationState.designations.where((desig) {
       if (_searchQuery.isEmpty) return true;
@@ -144,6 +128,15 @@ class _DesignationsScreenState extends ConsumerState<DesignationsScreen> {
               },
             ),
           ),
+          const SizedBox(width: 8),
+          IconButton(
+            onPressed: () {
+              ref.read(departmentProvider.notifier).loadDepartments();
+              ref.read(designationProvider.notifier).loadAllDesignations();
+            },
+            icon: const Icon(Icons.refresh, color: AppColors.primary),
+            tooltip: 'Refresh',
+          ),
           const SizedBox(width: 16),
           ElevatedButton.icon(
             onPressed: () {
@@ -178,25 +171,43 @@ class _DesignationsScreenState extends ConsumerState<DesignationsScreen> {
     bool isDesktop,
   ) {
     if (designations.isEmpty) {
+      final error = ref.read(designationProvider).error;
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.badge, size: 64, color: Colors.grey[400]),
+            Icon(
+              error != null ? Icons.error_outline : Icons.badge,
+              size: 64,
+              color: error != null ? Colors.red[300] : Colors.grey[400],
+            ),
             const SizedBox(height: 16),
             Text(
-              'No designations found',
+              error ?? 'No designations found',
+              textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 18,
-                color: Colors.grey[600],
+                color: error != null ? Colors.red[700] : Colors.grey[600],
                 fontWeight: FontWeight.w500,
               ),
             ),
             const SizedBox(height: 8),
             Text(
-              'Click "Add Designation" to create one',
+              error != null
+                  ? 'Try refreshing or checking your connection'
+                  : 'Click "Add Designation" to create one',
               style: TextStyle(fontSize: 14, color: Colors.grey[500]),
             ),
+            if (error != null) ...[
+              const SizedBox(height: 24),
+              ElevatedButton(
+                onPressed: () {
+                  ref.read(departmentProvider.notifier).loadDepartments();
+                  ref.read(designationProvider.notifier).loadAllDesignations();
+                },
+                child: const Text('Retry'),
+              ),
+            ],
           ],
         ),
       );
