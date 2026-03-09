@@ -7,15 +7,15 @@ import '../widgets/loader.dart';
 import '../widgets/toast.dart';
 
 class SalaryConfigurationScreen extends ConsumerStatefulWidget {
-  const SalaryConfigurationScreen({
-    super.key,
-  });
+  const SalaryConfigurationScreen({super.key});
 
   @override
-  ConsumerState<SalaryConfigurationScreen> createState() => _SalaryConfigurationScreenState();
+  ConsumerState<SalaryConfigurationScreen> createState() =>
+      _SalaryConfigurationScreenState();
 }
 
-class _SalaryConfigurationScreenState extends ConsumerState<SalaryConfigurationScreen> {
+class _SalaryConfigurationScreenState
+    extends ConsumerState<SalaryConfigurationScreen> {
   late GlobalKey<FormState> formKey;
   late DefaultSalaryType selectedSalaryType;
   late SalaryInputType selectedInputType;
@@ -27,7 +27,7 @@ class _SalaryConfigurationScreenState extends ConsumerState<SalaryConfigurationS
   void initState() {
     super.initState();
     formKey = GlobalKey<FormState>();
-    
+
     final settings = ref.read(settingsProvider);
     selectedSalaryType = settings.defaultSalaryType;
     selectedInputType = settings.salaryInputType;
@@ -58,19 +58,44 @@ class _SalaryConfigurationScreenState extends ConsumerState<SalaryConfigurationS
         salaryInputType: selectedInputType,
       );
 
-      await ref.read(settingsProvider.notifier).updateSettings(updatedSettings);
+      final success = await ref
+          .read(settingsProvider.notifier)
+          .updateSettings(updatedSettings);
 
       setState(() => isLoading = false);
 
       if (mounted) {
-        ToastHelper.success('Salary configuration saved successfully');
-        Navigator.pop(context);
+        if (success) {
+          ToastHelper.success('Salary configuration saved successfully');
+          Navigator.pop(context);
+        } else {
+          ToastHelper.error('Failed to sync salary configuration with server');
+        }
       }
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    // Listen for background updates outside of build via ref.listen if needed,
+    // but ref.watch is usually enough for the UI to respond.
+    ref.listen<SettingsModel>(settingsProvider, (previous, next) {
+      if (previous != next) {
+        // Only update text controllers if we aren't actively editing
+        if (fixedHoursController.text != next.fixedHoursPerDay.toString()) {
+          fixedHoursController.text = next.fixedHoursPerDay.toString();
+        }
+        if (workingDaysController.text != next.workingDaysPerMonth.toString()) {
+          workingDaysController.text = next.workingDaysPerMonth.toString();
+        }
+        setState(() {
+          selectedSalaryType = next.defaultSalaryType;
+          selectedInputType = next.salaryInputType;
+        });
+      }
+    });
+
+    final isSyncing = ref.watch(settingsSyncProvider);
     final screenWidth = MediaQuery.of(context).size.width;
     final screenHeight = MediaQuery.of(context).size.height;
     final isDesktop = screenWidth > 900;
@@ -80,15 +105,48 @@ class _SalaryConfigurationScreenState extends ConsumerState<SalaryConfigurationS
           ? null
           : AppBar(
               title: const Text('Salary Configuration'),
+              actions: [
+                if (isSyncing)
+                  const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 16.0),
+                    child: Center(
+                      child: SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
             ),
       body: Stack(
         children: [
-          isDesktop ? _buildDesktopLayout(context) : _buildMobileLayout(context, screenHeight),
-          if (isLoading)
+          isDesktop
+              ? _buildDesktopLayout(context)
+              : _buildMobileLayout(context, screenHeight),
+          if (isLoading || isSyncing)
             Container(
-              color: Colors.black.withValues(alpha: 0.5),
-              child: const Center(
-                child: AppLoader(size: 80),
+              color: Colors.black.withValues(alpha: 0.3),
+              child: Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const AppLoader(size: 80),
+                    if (isSyncing && !isLoading) ...[
+                      const SizedBox(height: 16),
+                      const Text(
+                        'Syncing with server...',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
               ),
             ),
         ],
@@ -120,7 +178,10 @@ class _SalaryConfigurationScreenState extends ConsumerState<SalaryConfigurationS
             key: formKey,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: _buildFormContent(context, MediaQuery.of(context).size.height),
+              children: _buildFormContent(
+                context,
+                MediaQuery.of(context).size.height,
+              ),
             ),
           ),
         ),
@@ -133,9 +194,9 @@ class _SalaryConfigurationScreenState extends ConsumerState<SalaryConfigurationS
       // Salary Calculation Method
       Text(
         'Salary Calculation Method',
-        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.bold,
-            ),
+        style: Theme.of(
+          context,
+        ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
       ),
       const SizedBox(height: 12),
       Card(
@@ -176,9 +237,9 @@ class _SalaryConfigurationScreenState extends ConsumerState<SalaryConfigurationS
               children: [
                 Text(
                   'Hours Per Day',
-                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 8),
                 TextFormField(
@@ -211,9 +272,9 @@ class _SalaryConfigurationScreenState extends ConsumerState<SalaryConfigurationS
               children: [
                 Text(
                   'Days Per Month',
-                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(height: 8),
                 TextFormField(
@@ -245,9 +306,9 @@ class _SalaryConfigurationScreenState extends ConsumerState<SalaryConfigurationS
       // Salary Input Type
       Text(
         'Salary Input Type',
-        style: Theme.of(context).textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.bold,
-            ),
+        style: Theme.of(
+          context,
+        ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
       ),
       const SizedBox(height: 12),
       Card(
@@ -257,7 +318,9 @@ class _SalaryConfigurationScreenState extends ConsumerState<SalaryConfigurationS
             children: [
               Expanded(
                 child: InkWell(
-                  onTap: () => setState(() => selectedInputType = SalaryInputType.monthly),
+                  onTap: () => setState(
+                    () => selectedInputType = SalaryInputType.monthly,
+                  ),
                   child: Row(
                     children: [
                       Radio<SalaryInputType>(
@@ -267,16 +330,15 @@ class _SalaryConfigurationScreenState extends ConsumerState<SalaryConfigurationS
                           setState(() => selectedInputType = value!);
                         },
                       ),
-                      const Expanded(
-                        child: Text('Monthly'),
-                      ),
+                      const Expanded(child: Text('Monthly')),
                     ],
                   ),
                 ),
               ),
               Expanded(
                 child: InkWell(
-                  onTap: () => setState(() => selectedInputType = SalaryInputType.daily),
+                  onTap: () =>
+                      setState(() => selectedInputType = SalaryInputType.daily),
                   child: Row(
                     children: [
                       Radio<SalaryInputType>(
@@ -286,16 +348,16 @@ class _SalaryConfigurationScreenState extends ConsumerState<SalaryConfigurationS
                           setState(() => selectedInputType = value!);
                         },
                       ),
-                      const Expanded(
-                        child: Text('Daily'),
-                      ),
+                      const Expanded(child: Text('Daily')),
                     ],
                   ),
                 ),
               ),
               Expanded(
                 child: InkWell(
-                  onTap: () => setState(() => selectedInputType = SalaryInputType.hourly),
+                  onTap: () => setState(
+                    () => selectedInputType = SalaryInputType.hourly,
+                  ),
                   child: Row(
                     children: [
                       Radio<SalaryInputType>(
@@ -305,9 +367,7 @@ class _SalaryConfigurationScreenState extends ConsumerState<SalaryConfigurationS
                           setState(() => selectedInputType = value!);
                         },
                       ),
-                      const Expanded(
-                        child: Text('Hourly'),
-                      ),
+                      const Expanded(child: Text('Hourly')),
                     ],
                   ),
                 ),
@@ -326,7 +386,7 @@ class _SalaryConfigurationScreenState extends ConsumerState<SalaryConfigurationS
           child: Text('Save Salary Configuration'),
         ),
       ),
-      
+
       const SizedBox(height: 16),
     ];
   }
