@@ -11,6 +11,7 @@ import '../services/salary_calculator_service.dart';
 import '../utills/app_colors.dart';
 import '../services/attendance_export_service.dart';
 import '../widgets/toast.dart';
+import '../widgets/loader.dart';
 
 class AttendanceScreen extends ConsumerStatefulWidget {
   const AttendanceScreen({super.key});
@@ -345,7 +346,9 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
           ),
         // Content - Cards for mobile, Table for desktop
         Expanded(
-          child: employeeState.employees.isEmpty
+          child: employeeState.isLoading && employeeState.employees.isEmpty
+              ? const Center(child: AppLoader())
+              : employeeState.employees.isEmpty
               ? _buildEmptyState(employeeState.isLoading)
               : filteredEmployees.isEmpty
               ? Center(
@@ -354,11 +357,6 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        if (employeeState.isLoading)
-                          const Padding(
-                            padding: EdgeInsets.only(bottom: 20),
-                            child: CircularProgressIndicator(),
-                          ),
                         Icon(
                           _searchQuery.isEmpty
                               ? Icons.people_outline
@@ -1759,7 +1757,11 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
         ),
         // Content - Cards for mobile, Table for desktop
         Expanded(
-          child: employeeState.employees.isEmpty
+          child:
+              (employeeState.isLoading || listState.isLoading) &&
+                  employeeState.employees.isEmpty
+              ? const Center(child: AppLoader())
+              : employeeState.employees.isEmpty
               ? _buildEmptyState(employeeState.isLoading)
               : markedRecords.isEmpty
               ? Center(
@@ -1768,11 +1770,6 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        if (listState.isLoading)
-                          const Padding(
-                            padding: EdgeInsets.only(bottom: 20),
-                            child: CircularProgressIndicator(),
-                          ),
                         Icon(
                           Icons.table_chart_outlined,
                           size: 64,
@@ -2961,17 +2958,28 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
     // Get settings for calculation
     final settings = ref.read(settingsProvider);
 
-    // Calculate all salary components using the new service
-    final calculation = SalaryCalculatorService.calculateAttendanceSalary(
+    // Calculate work salary (without overtime)
+    final workSalary = SalaryCalculatorService.calculateWorkSalary(
       employee: employee,
       workingHours: workingHours,
       settings: settings,
     );
 
-    final workSalary = calculation['workSalary']!;
-    final overtimeHours = calculation['overtimeHours']!;
-    final overtimeSalary = calculation['overtimeSalary']!;
-    final totalSalary = calculation['totalSalary']!;
+    // Use user-provided overtime hours instead of auto-calculating
+    final overtimeHours = otHours;
+
+    // Calculate overtime salary based on user-provided hours
+    final overtimeSalary = SalaryCalculatorService.calculateOvertimeSalary(
+      employee: employee,
+      overtimeHours: overtimeHours,
+      settingsOvertimeRate: settings.defaultOvertimeRate,
+    );
+
+    // Calculate total salary
+    final totalSalary = SalaryCalculatorService.calculateTotalSalary(
+      workSalary: workSalary,
+      overtimeSalary: overtimeSalary,
+    );
 
     // Determine final status based on working hours
     AttendanceStatus finalStatus = status;
@@ -2985,7 +2993,7 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
       }
     }
 
-    // Create updated record
+    // Create updated record with user-provided overtime hours
     final updatedRecord = record.copyWith(
       checkIn: checkIn,
       checkOut: checkOut,
@@ -3051,16 +3059,7 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            // Loading Indicator (Subtle)
-            if (isLoading)
-              const Padding(
-                padding: EdgeInsets.only(bottom: 24),
-                child: SizedBox(
-                  width: 40,
-                  height: 40,
-                  child: CircularProgressIndicator(strokeWidth: 3),
-                ),
-              ),
+            // Illustration/Icon (Don't show extra loader inside if we are showing full screen one)
 
             // Illustration/Icon
             Container(
