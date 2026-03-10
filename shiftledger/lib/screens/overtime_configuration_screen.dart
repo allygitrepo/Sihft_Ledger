@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shiftledger/models/settings_model.dart';
 import '../models/employee_model.dart';
 import '../providers/settings_provider.dart';
 import '../providers/employee_provider.dart';
@@ -35,6 +36,11 @@ class _OvertimeConfigurationScreenState
     overtimeRateController = TextEditingController(
       text: settings.defaultOvertimeRate.toString(),
     );
+
+    // Reload settings from API when screen opens
+    Future.microtask(() {
+      ref.read(settingsProvider.notifier).loadApiSettings();
+    });
   }
 
   @override
@@ -81,6 +87,22 @@ class _OvertimeConfigurationScreenState
 
   @override
   Widget build(BuildContext context) {
+    // Listen for settings changes and update UI
+    ref.listen<SettingsModel>(settingsProvider, (previous, next) {
+      if (previous != next) {
+        // Update text controller if value changed
+        if (overtimeRateController.text !=
+            next.defaultOvertimeRate.toString()) {
+          overtimeRateController.text = next.defaultOvertimeRate.toString();
+        }
+        setState(() {
+          overtimeEnabled = next.overtimeEnabled;
+          selectedOvertimeType = next.defaultOvertimeType;
+        });
+      }
+    });
+
+    final isSyncing = ref.watch(settingsSyncProvider);
     final screenWidth = MediaQuery.of(context).size.width;
     final screenHeight = MediaQuery.of(context).size.height;
     final isDesktop = screenWidth > 900;
@@ -88,16 +110,51 @@ class _OvertimeConfigurationScreenState
     return Scaffold(
       appBar: isDesktop
           ? null
-          : AppBar(title: const Text('Overtime Configuration')),
+          : AppBar(
+              title: const Text('Overtime Configuration'),
+              actions: [
+                if (isSyncing)
+                  const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 16.0),
+                    child: Center(
+                      child: SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
       body: Stack(
         children: [
           isDesktop
               ? _buildDesktopLayout(context)
               : _buildMobileLayout(context, screenHeight),
-          if (isLoading)
+          if (isLoading || isSyncing)
             Container(
-              color: Colors.black.withValues(alpha: 0.5),
-              child: const Center(child: AppLoader(size: 80)),
+              color: Colors.black.withOpacity(0.3),
+              child: Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const AppLoader(size: 80),
+                    if (isSyncing && !isLoading) ...[
+                      const SizedBox(height: 16),
+                      const Text(
+                        'Syncing with server...',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
             ),
         ],
       ),
