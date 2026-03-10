@@ -107,7 +107,7 @@ class OvertimeNotifier extends Notifier<OvertimeState> {
       // The backend has create and update. Let's try to handle them.
       for (var slot in slotsToSave) {
         final data = slot.toJson();
-        data['company_id'] = int.parse(companyId);
+        data['company_id'] = companyId;
 
         final Map<String, dynamic> response;
         if (slot.id != null) {
