@@ -40,24 +40,52 @@ class SettingsNotifier extends Notifier<SettingsModel> {
     final companyId = ref.read(companyProvider).company?.id;
 
     if (token == null || companyId == null) {
+      print('[SettingsProvider] Aborting loadApiSettings: token=$token, companyId=$companyId');
       ref.read(settingsLoadedProvider.notifier).state = true;
       return;
     }
 
+    print('[SettingsProvider] Loading API settings for companyId: $companyId');
     ref.read(settingsSyncProvider.notifier).state = true;
 
     try {
       final response = await ApiService.getSalaryConfig(companyId, token);
 
-      if (response['success'] == true && response['config'] != null) {
-        final updatedSettings = SettingsService.fromApiJson(
-          response['config'],
-          state,
-        );
-        state = updatedSettings;
-        // Also save locally to keep in sync
-        await SettingsService.saveSettings(state);
-        ref.read(settingsLoadedProvider.notifier).state = true;
+      if (response['success'] == true) {
+        // Try multiple possible keys for config data
+        dynamic configData = response['config'] ?? 
+                            response['salary_config'] ?? 
+                            response['data'] ?? 
+                            response['salaryConfig'];
+        
+        if (configData == null) {
+          print('[SettingsProvider] No config data found in response keys: config, salary_config, data, salaryConfig');
+          ref.read(settingsLoadedProvider.notifier).state = true;
+          return;
+        }
+        
+        // Handle case where config might be returned as a list with one item
+        if (configData is List && configData.isNotEmpty) {
+          configData = configData[0];
+          print('[SettingsProvider] Config data extracted from singleton list');
+        }
+
+        if (configData is Map<String, dynamic>) {
+          print('[SettingsProvider] Config data: $configData');
+          final updatedSettings = SettingsService.fromApiJson(
+            configData,
+            state,
+          );
+          state = updatedSettings;
+          print('[SettingsProvider] API Settings loaded: ${state.fixedHoursPerDay} hrs, ${state.workingDaysPerMonth} days');
+          
+          // Also save locally to keep in sync
+          await SettingsService.saveSettings(state);
+          ref.read(settingsLoadedProvider.notifier).state = true;
+        } else {
+          print('[SettingsProvider] Invalid config data format: ${configData.runtimeType}');
+          ref.read(settingsLoadedProvider.notifier).state = true;
+        }
       }
     } catch (e) {
       print('[SettingsProvider] Error loading API settings: $e');
@@ -81,7 +109,7 @@ class SettingsNotifier extends Notifier<SettingsModel> {
     if (token != null && companyId != null) {
       ref.read(settingsSyncProvider.notifier).state = true;
       try {
-        final apiData = SettingsService.toApiJson(state, int.parse(companyId));
+        final apiData = SettingsService.toApiJson(state, companyId);
         final response = await ApiService.saveSalaryConfig(apiData, token);
 
         return response['success'] == true;
@@ -144,7 +172,7 @@ class SettingsNotifier extends Notifier<SettingsModel> {
     if (token != null && companyId != null) {
       ref.read(settingsSyncProvider.notifier).state = true;
       try {
-        final apiData = SettingsService.toApiJson(state, int.parse(companyId));
+        final apiData = SettingsService.toApiJson(state, companyId);
         await ApiService.saveSalaryConfig(apiData, token);
       } catch (e) {
         print('[SettingsProvider] Error resetting API settings: $e');
