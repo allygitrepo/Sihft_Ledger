@@ -81,7 +81,7 @@ class ProfileScreen extends ConsumerWidget {
                   Expanded(
                     child: ElevatedButton.icon(
                       onPressed: () {
-                        ToastHelper.show('Edit profile feature coming soon!');
+                        _showEditProfileDialog(context, ref, authState);
                       },
                       icon: const Icon(Icons.edit),
                       label: const Text('Edit Profile'),
@@ -147,6 +147,89 @@ class ProfileScreen extends ConsumerWidget {
             const SizedBox(height: 32),
           ],
         ),
+      ),
+    );
+  }
+
+  void _showEditProfileDialog(
+    BuildContext context,
+    WidgetRef ref,
+    AuthState authState,
+  ) {
+    final nameController = TextEditingController(
+      text: authState.userData?['owner_name'],
+    );
+    final phoneController = TextEditingController(
+      text: authState.userData?['phone'],
+    );
+    final emailController = TextEditingController(
+      text: authState.userData?['email'],
+    );
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Edit Profile'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: nameController,
+                decoration: const InputDecoration(
+                  labelText: 'Full Name',
+                  prefixIcon: Icon(Icons.person),
+                ),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: phoneController,
+                decoration: const InputDecoration(
+                  labelText: 'Mobile Number',
+                  prefixIcon: Icon(Icons.phone),
+                ),
+                keyboardType: TextInputType.phone,
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: emailController,
+                decoration: const InputDecoration(
+                  labelText: 'Email Address',
+                  prefixIcon: Icon(Icons.email),
+                ),
+                keyboardType: TextInputType.emailAddress,
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              final name = nameController.text.trim();
+              final phone = phoneController.text.trim();
+              final email = emailController.text.trim();
+
+              if (name.isEmpty || phone.isEmpty) {
+                ToastHelper.error('Name and phone are required');
+                return;
+              }
+
+              Navigator.pop(context);
+              await ref
+                  .read(authProvider.notifier)
+                  .updateProfile(
+                    ownerName: name,
+                    phone: phone,
+                    email: email.isEmpty ? null : email,
+                  );
+            },
+            child: const Text('Save'),
+          ),
+        ],
       ),
     );
   }
