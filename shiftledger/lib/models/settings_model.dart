@@ -128,26 +128,30 @@ class SettingsModel {
   factory SettingsModel.fromJson(Map<String, dynamic> json) {
     return SettingsModel(
       defaultSalaryType: DefaultSalaryType.values.firstWhere(
-        (e) => e.name == json['defaultSalaryType'],
+        (e) => e.name == json['defaultSalaryType'] || e.name == json['salary_calculation_method'],
         orElse: () => DefaultSalaryType.hourwise,
       ),
-      fixedHoursPerDay: (json['fixedHoursPerDay'] as num?)?.toDouble() ?? 8.0,
-      workingDaysPerMonth: (json['workingDaysPerMonth'] as int?) ?? 26,
+      fixedHoursPerDay: _parseDouble(json['fixedHoursPerDay'] ?? json['hours_per_day']),
+      workingDaysPerMonth: _parseInt(json['workingDaysPerMonth'] ?? json['days_per_month']) ?? 26,
       salaryInputType: SalaryInputType.values.firstWhere(
-        (e) => e.name == json['salaryInputType'],
+        (e) => e.name == json['salaryInputType'] || e.name.toLowerCase() == (json['salary_input_type'] as String?)?.toLowerCase(),
         orElse: () => SalaryInputType.monthly,
       ),
-      fullDayHours: (json['fullDayHours'] as num?)?.toDouble() ?? 8.0,
-      halfDayHours: (json['halfDayHours'] as num?)?.toDouble() ?? 4.0,
-      breakMinutes: (json['breakMinutes'] as int?) ?? 60,
-      overtimeEnabled: (json['overtimeEnabled'] as bool?) ?? true,
+      fullDayHours: _parseDouble(json['full_day_hours'] ?? json['fullDayHours']),
+      halfDayHours: _parseDouble(json['half_day_hours'] ?? json['halfDayHours']),
+      breakMinutes: _parseInt(json['break_minutes'] ?? json['breakMinutes']) ?? 60,
+      overtimeEnabled: json['overtime_enabled'] == true || json['overtime_enabled'] == 1 || json['overtimeEnabled'] == true,
       defaultOvertimeType: OvertimeType.values.firstWhere(
-        (e) => e.name == json['defaultOvertimeType'] || e.name == json['overtimeType'],
+        (e) => e.name == json['defaultOvertimeType'] || e.name == json['overtimeType'] || e.name == (json['overtime_type'] as String?)?.toLowerCase().replaceAll('-', ''),
         orElse: () => OvertimeType.hourwise,
       ),
-      defaultOvertimeRate: (json['defaultOvertimeRate'] as num?)?.toDouble() ?? 
-                          (json['overtimeRate'] as num?)?.toDouble() ?? 0.0,
-      overtimeSlots: (json['overtimeSlots'] as List<dynamic>?)
+      defaultOvertimeRate: _parseDouble(
+        json['default_overtime_rate'] ?? 
+        json['defaultOvertimeRate'] ?? 
+        json['overtime_rate'] ?? 
+        json['overtimeRate']
+      ),
+      overtimeSlots: (json['overtime_slots'] as List<dynamic>? ?? json['overtimeSlots'] as List<dynamic>?)
               ?.map((s) => OvertimeSlot.fromJson(s as Map<String, dynamic>))
               .toList() ??
           const [
@@ -159,7 +163,7 @@ class SettingsModel {
         (e) => e.name == json['attendanceType'],
         orElse: () => PayrollAttendanceType.daily,
       ),
-      overtimeMultiplier: (json['overtimeMultiplier'] as num?)?.toDouble() ?? 1.5,
+      overtimeMultiplier: _parseDouble(json['overtimeMultiplier'] ?? json['overtime_multiplier']),
       salaryCycle: SalaryCycle.values.firstWhere(
         (e) => e.name == json['salaryCycle'],
         orElse: () => SalaryCycle.monthly,
@@ -170,14 +174,24 @@ class SettingsModel {
       customEndDate: json['customEndDate'] != null
           ? DateTime.parse(json['customEndDate'])
           : null,
-      minimumHours: (json['minimumHours'] as num?)?.toDouble() ?? 8.0,
-      createdAt: json['createdAt'] != null
-          ? DateTime.parse(json['createdAt'])
-          : null,
-      updatedAt: json['updatedAt'] != null
-          ? DateTime.parse(json['updatedAt'])
-          : null,
+      minimumHours: _parseDouble(json['minimumHours'] ?? json['minimum_hours']),
+      createdAt: json['created_at'] != null ? DateTime.parse(json['created_at']) : (json['createdAt'] != null ? DateTime.parse(json['createdAt']) : null),
+      updatedAt: json['updated_at'] != null ? DateTime.parse(json['updated_at']) : (json['updatedAt'] != null ? DateTime.parse(json['updatedAt']) : null),
     );
+  }
+
+  static double _parseDouble(dynamic value) {
+    if (value == null) return 0.0;
+    if (value is num) return value.toDouble();
+    if (value is String) return double.tryParse(value) ?? 0.0;
+    return 0.0;
+  }
+
+  static int? _parseInt(dynamic value) {
+    if (value == null) return null;
+    if (value is int) return value;
+    if (value is String) return int.tryParse(value);
+    return null;
   }
 
   SettingsModel copyWith({
