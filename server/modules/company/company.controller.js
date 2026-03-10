@@ -123,7 +123,7 @@ const companyController = {
             if (empIds.length > 0) {
                 await Employee.update({ status: false }, { where: { id: empIds }, transaction });
                 await Attendance.update({ status: false }, { where: { employee_id: empIds }, transaction });
-                await Salary.update({ status: false }, { where: { employee_id: empIds }, transaction });
+                await Salary.update({ status: false }, { where: { company_id: id }, transaction });
                 await EmployeeSalary.update({ status: false }, { where: { emp_id: empIds }, transaction });
                 await EmployeeOvertimeConfig.update({ status: false }, { where: { employee_id: empIds }, transaction });
             }

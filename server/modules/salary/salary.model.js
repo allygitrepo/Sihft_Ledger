@@ -8,6 +8,7 @@ const Salary = sequelize.define("SalaryConfiguration",
         company_id: {
             type: DataTypes.INTEGER,
             allowNull: false,
+            unique: true,
             references: {
                 model: Company,
                 key: 'id'
