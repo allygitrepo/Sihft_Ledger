@@ -1169,7 +1169,7 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
                 filled: true,
                 fillColor: (!alreadyMarked && isSelected)
                     ? null
-                    : Colors.grey.withValues(alpha: 0.1),
+                    : Colors.grey.withOpacity(0.1),
               ),
               keyboardType: TextInputType.number,
               style: TextStyle(
@@ -1411,6 +1411,7 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
       employee: employee,
       workingHours: workingHours,
       settings: settings,
+      manualOvertimeHours: otHours, // Pass manual overtime hours
     );
 
     final workSalary = calculation['workSalary']!;
@@ -1883,7 +1884,7 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
                     vertical: 4,
                   ),
                   decoration: BoxDecoration(
-                    color: AppColors.primary.withValues(alpha: 0.1),
+                    color: AppColors.primary.withOpacity(0.1),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: SelectableText(
@@ -1908,13 +1909,13 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
                   ),
                   decoration: BoxDecoration(
                     color: employee.employeeType == EmployeeType.hourly
-                        ? Colors.blue.withValues(alpha: 0.1)
-                        : Colors.green.withValues(alpha: 0.1),
+                        ? Colors.blue.withOpacity(0.1)
+                        : Colors.green.withOpacity(0.1),
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(
                       color: employee.employeeType == EmployeeType.hourly
-                          ? Colors.blue.withValues(alpha: 0.3)
-                          : Colors.green.withValues(alpha: 0.3),
+                          ? Colors.blue.withOpacity(0.3)
+                          : Colors.green.withOpacity(0.3),
                     ),
                   ),
                   child: Row(
@@ -1957,7 +1958,7 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
                     decoration: BoxDecoration(
                       color: _getStatusColor(
                         record.attendanceStatus,
-                      ).withValues(alpha: 0.1),
+                      ).withOpacity(0.1),
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(
                         color: _getStatusColor(record.attendanceStatus),
@@ -2046,10 +2047,10 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: Colors.orange.withValues(alpha: 0.1),
+                  color: Colors.orange.withOpacity(0.1),
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(
-                    color: Colors.orange.withValues(alpha: 0.3),
+                    color: Colors.orange.withOpacity(0.3),
                   ),
                 ),
                 child: Row(
@@ -2080,10 +2081,10 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: AppColors.primary.withValues(alpha: 0.1),
+                color: AppColors.primary.withOpacity(0.1),
                 borderRadius: BorderRadius.circular(8),
                 border: Border.all(
-                  color: AppColors.primary.withValues(alpha: 0.3),
+                  color: AppColors.primary.withOpacity(0.3),
                 ),
               ),
               child: Row(
@@ -2202,7 +2203,7 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
 
     return DataTable(
       headingRowColor: WidgetStateProperty.all(
-        AppColors.primary.withValues(alpha: 0.1),
+        AppColors.primary.withOpacity(0.1),
       ),
       border: TableBorder.all(color: Colors.grey.shade300, width: 1),
       columnSpacing: 24,
