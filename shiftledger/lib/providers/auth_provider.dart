@@ -226,6 +226,49 @@ class AuthNotifier extends Notifier<AuthState> {
     }
   }
 
+  Future<void> updateProfile({
+    required String ownerName,
+    required String phone,
+    String? email,
+  }) async {
+    if (ownerName.isEmpty || phone.isEmpty) {
+      ToastHelper.error('Name and phone are required');
+      return;
+    }
+
+    if (state.token == null) {
+      ToastHelper.error('User not authenticated');
+      return;
+    }
+
+    state = state.copyWith(isLoading: true);
+
+    final response = await ApiService.updateProfile(
+      ownerName: ownerName,
+      phone: phone,
+      email: email,
+      token: state.token!,
+    );
+
+    if (response['success'] == true) {
+      final prefs = await SharedPreferences.getInstance();
+      final user = response['user'];
+
+      await prefs.setString('user_name', ownerName);
+      await prefs.setString('user_phone', phone);
+      if (email != null) {
+        await prefs.setString('user_email', email);
+      }
+
+      state = state.copyWith(isLoading: false, userData: user);
+
+      ToastHelper.success('Profile updated successfully');
+    } else {
+      state = state.copyWith(isLoading: false);
+      ToastHelper.error(response['message'] ?? 'Update failed');
+    }
+  }
+
   Future<void> logout() async {
     try {
       // Clear ALL stored preferences in one shot for a clean slate
