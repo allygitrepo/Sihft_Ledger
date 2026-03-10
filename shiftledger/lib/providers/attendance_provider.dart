@@ -5,6 +5,7 @@ import '../services/attendance_service.dart';
 import '../services/salary_calculator_service.dart';
 import '../providers/settings_provider.dart';
 import '../providers/company_provider.dart';
+import '../providers/employee_provider.dart';
 
 // Attendance Form State
 class AttendanceFormState {
@@ -74,6 +75,8 @@ class AttendanceFormState {
 class AttendanceFormNotifier extends Notifier<AttendanceFormState> {
   @override
   AttendanceFormState build() {
+    // Watch settings to recalculate if they change
+    ref.watch(settingsProvider);
     return AttendanceFormState(selectedDate: DateTime.now());
   }
 
@@ -110,7 +113,12 @@ class AttendanceFormNotifier extends Notifier<AttendanceFormState> {
     _recalculate();
   }
 
-  void _recalculate() {
+  void setManualOvertimeHours(double hours) {
+    state = state.copyWith(overtimeHours: hours);
+    _recalculate(useManualOvertime: true);
+  }
+
+  void _recalculate({bool useManualOvertime = false}) {
     if (state.selectedEmployee == null || state.calculatedWorkingHours <= 0) {
       return;
     }
@@ -123,6 +131,7 @@ class AttendanceFormNotifier extends Notifier<AttendanceFormState> {
       employee: employee,
       workingHours: state.calculatedWorkingHours,
       settings: settings,
+      manualOvertimeHours: useManualOvertime ? state.overtimeHours : null,
     );
 
     // Determine attendance status based on working hours
@@ -242,12 +251,19 @@ class AttendanceListState {
 class AttendanceListNotifier extends Notifier<AttendanceListState> {
   @override
   AttendanceListState build() {
-    // Watch for company changes to reload attendance
+    // Watch for company and settings changes to reload attendance
     ref.watch(companyProvider);
-    
+    ref.watch(settingsProvider);
+
     // Load attendance asynchronously after build - load ALL records
-    Future.microtask(() => loadAttendance());
+    Future.microtask(() => loadEmployeesThenAttendance());
     return const AttendanceListState(isLoading: true);
+  }
+
+  Future<void> loadEmployeesThenAttendance() async {
+    // Ensure employees are loaded before attendance to have names/metadata
+    await ref.read(employeeProvider.notifier).loadEmployees();
+    await loadAttendance();
   }
 
   Future<void> loadAttendance({DateTime? date}) async {
@@ -398,7 +414,12 @@ class AttendanceEditNotifier extends Notifier<AttendanceEditState> {
     _recalculate();
   }
 
-  void _recalculate() {
+  void setManualOvertimeHours(double hours) {
+    state = state.copyWith(overtimeHours: hours);
+    _recalculate(useManualOvertime: true);
+  }
+
+  void _recalculate({bool useManualOvertime = false}) {
     if (state.employee == null ||
         state.checkInTime == null ||
         state.checkOutTime == null) {
@@ -421,6 +442,7 @@ class AttendanceEditNotifier extends Notifier<AttendanceEditState> {
       employee: state.employee!,
       workingHours: workingHours,
       settings: settings,
+      manualOvertimeHours: useManualOvertime ? state.overtimeHours : null,
     );
 
     state = state.copyWith(
