@@ -7,6 +7,7 @@ import '../providers/company_provider.dart';
 import '../routes/app_routes.dart';
 import '../utills/app_assets.dart';
 import '../utills/app_spacing.dart';
+import '../utills/validator.dart';
 import '../widgets/loader.dart';
 import '../widgets/toast.dart';
 
@@ -360,15 +361,7 @@ class _CompanyRegisterScreenState extends ConsumerState<CompanyRegisterScreen> {
           border: OutlineInputBorder(),
         ),
         textInputAction: TextInputAction.next,
-        validator: (value) {
-          if (value == null || value.isEmpty) {
-            return 'Please enter company name';
-          }
-          if (value.length < 2) {
-            return 'Company name must be at least 2 characters';
-          }
-          return null;
-        },
+        validator: (value) => AppValidator.validateName(value, 'Company Name'),
       ),
       SizedBox(height: screenHeight * 0.02),
 
@@ -413,6 +406,7 @@ class _CompanyRegisterScreenState extends ConsumerState<CompanyRegisterScreen> {
         ),
         maxLines: 3,
         textInputAction: TextInputAction.done,
+        validator: AppValidator.validateAddress,
       ),
       SizedBox(height: screenHeight * 0.04),
 

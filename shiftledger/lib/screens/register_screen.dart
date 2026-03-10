@@ -4,6 +4,7 @@ import '../providers/auth_provider.dart';
 import '../routes/app_routes.dart';
 import '../utills/app_assets.dart';
 import '../utills/app_spacing.dart';
+import '../utills/validator.dart';
 import '../widgets/loader.dart';
 
 class RegisterScreen extends ConsumerStatefulWidget {
@@ -235,15 +236,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
           border: OutlineInputBorder(),
         ),
         textInputAction: TextInputAction.next,
-        validator: (value) {
-          if (value == null || value.isEmpty) {
-            return 'Please enter owner name';
-          }
-          if (value.length < 2) {
-            return 'Name must be at least 2 characters';
-          }
-          return null;
-        },
+        validator: (value) => AppValidator.validateName(value, 'Owner Name'),
       ),
       SizedBox(height: screenHeight * 0.02),
 
@@ -259,18 +252,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
         keyboardType: TextInputType.phone,
         textInputAction: TextInputAction.next,
         maxLength: 10,
-        validator: (value) {
-          if (value == null || value.isEmpty) {
-            return 'Please enter mobile number';
-          }
-          if (value.length != 10) {
-            return 'Mobile number must be 10 digits';
-          }
-          if (!RegExp(r'^[0-9]+$').hasMatch(value)) {
-            return 'Please enter valid mobile number';
-          }
-          return null;
-        },
+        validator: (value) => AppValidator.validatePhoneNumber(value, 'Mobile Number'),
       ),
       SizedBox(height: screenHeight * 0.02),
 
@@ -285,12 +267,8 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
         keyboardType: TextInputType.emailAddress,
         textInputAction: TextInputAction.next,
         validator: (value) {
-          if (value != null && value.isNotEmpty) {
-            if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(value)) {
-              return 'Please enter a valid email';
-            }
-          }
-          return null;
+          if (value == null || value.isEmpty) return null;
+          return AppValidator.validateEmail(value);
         },
       ),
       SizedBox(height: screenHeight * 0.02),
@@ -314,15 +292,7 @@ class _RegisterScreenState extends ConsumerState<RegisterScreen> {
         ),
         obscureText: !isPasswordVisible,
         textInputAction: TextInputAction.done,
-        validator: (value) {
-          if (value == null || value.isEmpty) {
-            return 'Please enter password';
-          }
-          if (value.length < 6) {
-            return 'Password must be at least 6 characters';
-          }
-          return null;
-        },
+        validator: AppValidator.validatePassword,
       ),
       SizedBox(height: screenHeight * 0.02),
 

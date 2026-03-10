@@ -19,6 +19,7 @@ import '../utills/app_spacing.dart';
 import '../widgets/csv_preview_dialog.dart';
 import '../widgets/toast.dart';
 import '../widgets/loader.dart';
+import '../utills/validator.dart';
 
 class EmployeesScreen extends ConsumerStatefulWidget {
   const EmployeesScreen({super.key});
@@ -1199,12 +1200,7 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
                         prefixIcon: Icon(Icons.person),
                         border: OutlineInputBorder(),
                       ),
-                      validator: (value) {
-                        if (value == null || value.isEmpty) {
-                          return 'Please enter employee name';
-                        }
-                        return null;
-                      },
+                      validator: (value) => AppValidator.validateName(value, 'Employee Name'),
                     ),
                     const SizedBox(height: 16),
                     TextFormField(
@@ -1215,15 +1211,7 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
                         border: OutlineInputBorder(),
                       ),
                       keyboardType: TextInputType.phone,
-                      validator: (value) {
-                        if (value == null || value.isEmpty) {
-                          return 'Please enter mobile number';
-                        }
-                        if (value.length != 10) {
-                          return 'Mobile number must be 10 digits';
-                        }
-                        return null;
-                      },
+                      validator: (value) => AppValidator.validatePhoneNumber(value, 'Mobile Number'),
                     ),
                     const SizedBox(height: 16),
                     // Department Dropdown
@@ -1291,18 +1279,7 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
                       keyboardType: const TextInputType.numberWithOptions(
                         decimal: true,
                       ),
-                      validator: (value) {
-                        if (value == null || value.isEmpty) {
-                          return 'Please enter salary';
-                        }
-                        if (double.tryParse(value) == null) {
-                          return 'Please enter valid number';
-                        }
-                        if (double.parse(value) <= 0) {
-                          return 'Salary must be greater than 0';
-                        }
-                        return null;
-                      },
+                      validator: AppValidator.validateSalary,
                     ),
                     const SizedBox(height: 24),
                     ElevatedButton(
@@ -1484,8 +1461,7 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
                       labelText: 'First Name',
                       border: OutlineInputBorder(),
                     ),
-                    validator: (value) =>
-                        value?.isEmpty ?? true ? 'Required' : null,
+                    validator: (value) => AppValidator.validateName(value, 'First Name'),
                   ),
                   const SizedBox(height: 12),
                   TextFormField(
@@ -1494,8 +1470,7 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
                       labelText: 'Last Name',
                       border: OutlineInputBorder(),
                     ),
-                    validator: (value) =>
-                        value?.isEmpty ?? true ? 'Required' : null,
+                    validator: (value) => AppValidator.validateName(value, 'Last Name'),
                   ),
                   const SizedBox(height: 12),
                   TextFormField(
@@ -1505,8 +1480,7 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
                       border: OutlineInputBorder(),
                     ),
                     keyboardType: TextInputType.phone,
-                    validator: (value) =>
-                        value?.isEmpty ?? true ? 'Required' : null,
+                    validator: (value) => AppValidator.validatePhoneNumber(value, 'Mobile Number'),
                   ),
                   const SizedBox(height: 12),
                   // Department Dropdown
@@ -1571,14 +1545,7 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
                       helperText: 'Enter monthly salary amount',
                     ),
                     keyboardType: TextInputType.number,
-                    validator: (value) {
-                      if (value?.isEmpty ?? true) return 'Required';
-                      if (double.tryParse(value!) == null)
-                        return 'Invalid number';
-                      if (double.parse(value) <= 0)
-                        return 'Must be greater than 0';
-                      return null;
-                    },
+                    validator: AppValidator.validateSalary,
                   ),
                 ],
               ),
