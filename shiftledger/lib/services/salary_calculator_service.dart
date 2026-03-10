@@ -62,8 +62,13 @@ class SalaryCalculatorService {
     required double overtimeHours,
     required double overtimeRate,
   }) {
-    if (overtimeHours <= 0 || overtimeRate <= 0) return 0.0;
-    return overtimeHours * overtimeRate;
+    if (overtimeHours <= 0 || overtimeRate <= 0) {
+      print('[SalaryCalc] No overtime: hours=$overtimeHours, rate=$overtimeRate');
+      return 0.0;
+    }
+    final salary = overtimeHours * overtimeRate;
+    print('[SalaryCalc] Overtime Calculation: $overtimeHours × $overtimeRate = ₹$salary');
+    return salary;
   }
 
   /// Calculate overtime salary for slotwise overtime
@@ -91,9 +96,34 @@ class SalaryCalculatorService {
     required double workingHours,
     required SettingsModel settings,
   }) {
+    // Validate inputs
+    if (workingHours <= 0) {
+      print('[SalaryCalc] Working hours is 0 or negative: $workingHours');
+      return 0.0;
+    }
+
+    if (employee.salary <= 0) {
+      print('[SalaryCalc] Employee salary is 0 or negative: ${employee.salary}');
+      return 0.0;
+    }
+
+    // Ensure settings have valid values
+    final workingDays = settings.workingDaysPerMonth > 0 
+        ? settings.workingDaysPerMonth 
+        : 20; // Default fallback
+    final hoursPerDay = settings.fixedHoursPerDay > 0 
+        ? settings.fixedHoursPerDay 
+        : 8.0; // Default fallback
+
     // Determine if we should use hour-wise or day-wise calculation
     // Priority: employee.salaryType > settings.defaultSalaryType
     final useHourwise = employee.salaryType == 'hourwise';
+    
+    print('[SalaryCalc] Employee: ${employee.name}');
+    print('[SalaryCalc] Monthly Salary: ${employee.salary}');
+    print('[SalaryCalc] Salary Type: ${employee.salaryType}');
+    print('[SalaryCalc] Working Hours: $workingHours');
+    print('[SalaryCalc] Settings - Days: $workingDays, Hours/Day: $hoursPerDay');
     
     if (useHourwise) {
       // Hour-wise calculation
@@ -101,28 +131,40 @@ class SalaryCalculatorService {
       
       // If hourlyRate is not set or is 0, calculate it from monthly salary
       if (effectiveHourlyRate <= 0 && employee.salary > 0) {
-        final totalHoursPerMonth = settings.workingDaysPerMonth * settings.fixedHoursPerDay;
+        final totalHoursPerMonth = workingDays * hoursPerDay;
         effectiveHourlyRate = employee.salary / totalHoursPerMonth;
+        print('[SalaryCalc] Calculated Hourly Rate: $effectiveHourlyRate (${employee.salary} ÷ $totalHoursPerMonth)');
+      } else {
+        print('[SalaryCalc] Using Stored Hourly Rate: $effectiveHourlyRate');
       }
       
-      return calculateHourlyWorkSalary(
+      final workSalary = calculateHourlyWorkSalary(
         workingHours: workingHours,
         hourlyRate: effectiveHourlyRate,
       );
+      
+      print('[SalaryCalc] Work Salary (Hour-wise): $workSalary');
+      return workSalary;
     } else {
       // Day-wise calculation
       double effectiveDailyRate = employee.dailyRate ?? 0.0;
       
       // If dailyRate is not set or is 0, calculate it from monthly salary
       if (effectiveDailyRate <= 0 && employee.salary > 0) {
-        effectiveDailyRate = employee.salary / settings.workingDaysPerMonth;
+        effectiveDailyRate = employee.salary / workingDays;
+        print('[SalaryCalc] Calculated Daily Rate: $effectiveDailyRate (${employee.salary} ÷ $workingDays)');
+      } else {
+        print('[SalaryCalc] Using Stored Daily Rate: $effectiveDailyRate');
       }
       
-      return calculateDailyWorkSalary(
+      final workSalary = calculateDailyWorkSalary(
         workingHours: workingHours,
         dailyRate: effectiveDailyRate,
-        fixedHoursPerDay: settings.fixedHoursPerDay,
+        fixedHoursPerDay: hoursPerDay,
       );
+      
+      print('[SalaryCalc] Work Salary (Day-wise): $workSalary');
+      return workSalary;
     }
   }
 
@@ -169,19 +211,30 @@ class SalaryCalculatorService {
     required EmployeeModel employee,
     required double workingHours,
     required SettingsModel settings,
+    double? manualOvertimeHours,
   }) {
+    print('[SalaryCalc] ========== Starting Attendance Salary Calculation ==========');
+    print('[SalaryCalc] Employee: ${employee.name} (${employee.employeeCode})');
+    print('[SalaryCalc] Monthly Salary: ₹${employee.salary}');
+    print('[SalaryCalc] Working Hours: $workingHours');
+    
     // Calculate work salary
     final workSalary = calculateWorkSalary(
       employee: employee,
       workingHours: workingHours,
       settings: settings,
     );
+    
+    print('[SalaryCalc] Calculated Work Salary: ₹$workSalary');
 
-    // Calculate overtime hours
-    final overtimeHours = calculateOvertimeHours(
-      workingHours: workingHours,
-      fixedHoursPerDay: settings.fixedHoursPerDay,
-    );
+    // Determine overtime hours: prioritize manual override, then auto-calculate
+    final overtimeHours = manualOvertimeHours ?? 
+        calculateOvertimeHours(
+          workingHours: workingHours,
+          fixedHoursPerDay: settings.fixedHoursPerDay > 0 ? settings.fixedHoursPerDay : 8.0,
+        );
+    
+    print('[SalaryCalc] Overtime Hours: $overtimeHours');
 
     // Calculate overtime salary, passing the org-level setting as fallback
     final overtimeSalary = calculateOvertimeSalary(
@@ -189,12 +242,17 @@ class SalaryCalculatorService {
       overtimeHours: overtimeHours,
       settingsOvertimeRate: settings.defaultOvertimeRate,
     );
+    
+    print('[SalaryCalc] Overtime Salary: ₹$overtimeSalary');
 
     // Calculate total salary
     final totalSalary = calculateTotalSalary(
       workSalary: workSalary,
       overtimeSalary: overtimeSalary,
     );
+    
+    print('[SalaryCalc] Total Salary: ₹$totalSalary');
+    print('[SalaryCalc] ========== Calculation Complete ==========');
 
     return {
       'workingHours': workingHours,
