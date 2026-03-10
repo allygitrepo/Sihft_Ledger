@@ -129,6 +129,19 @@ class ApiService {
     });
   }
 
+  static Future<Map<String, dynamic>> updateProfile({
+    required String ownerName,
+    required String phone,
+    String? email,
+    required String token,
+  }) async {
+    return await put(ApiConstant.authUpdateProfile, {
+      'owner_name': ownerName,
+      'phone': phone,
+      'email': email,
+    }, headers: _authHeader(token));
+  }
+
   // --- Company ---
 
   static Future<Map<String, dynamic>> registerCompany({
