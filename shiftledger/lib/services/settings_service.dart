@@ -43,7 +43,7 @@ class SettingsService {
   }
 
   /// Static method to map frontend settings to backend format
-  static Map<String, dynamic> toApiJson(SettingsModel settings, int companyId) {
+  static Map<String, dynamic> toApiJson(SettingsModel settings, dynamic companyId) {
     String overtimeTypeStr = 'None';
     if (settings.defaultOvertimeType == OvertimeType.hourwise) {
       overtimeTypeStr = 'Hour-wise';
@@ -65,6 +65,10 @@ class SettingsService {
       'overtime_enabled': settings.overtimeEnabled,
       'overtime_type': overtimeTypeStr,
       'default_overtime_rate': settings.defaultOvertimeRate,
+      'overtime_slots': settings.overtimeSlots.map((s) => s.toJson()).toList(),
+      'full_day_hours': settings.fullDayHours,
+      'half_day_hours': settings.halfDayHours,
+      'break_minutes': settings.breakMinutes,
     };
   }
 
@@ -82,25 +86,83 @@ class SettingsService {
     }
 
     return current.copyWith(
-      defaultSalaryType: json['salary_calculation_method'] == 'Hour-wise'
+      defaultSalaryType: (json['salary_calculation_method'] == 'Hour-wise' ||
+              json['salary_calculation_method'] == 'hourwise')
           ? DefaultSalaryType.hourwise
-          : DefaultSalaryType.daywise,
-      fixedHoursPerDay: (json['hours_per_day'] as num?)?.toDouble() ?? 8.0,
-      workingDaysPerMonth: (json['days_per_month'] as int?) ?? 26,
+          : (json['salary_calculation_method'] == 'Day-wise' ||
+                  json['salary_calculation_method'] == 'daywise')
+              ? DefaultSalaryType.daywise
+              : current.defaultSalaryType,
+      fixedHoursPerDay: _parseDouble(
+        json['hours_per_day'] ?? json['fixedHoursPerDay'],
+        defaultValue: current.fixedHoursPerDay,
+      ),
+      workingDaysPerMonth:
+          _parseInt(json['days_per_month'] ?? json['workingDaysPerMonth']) ??
+          current.workingDaysPerMonth,
       salaryInputType: SalaryInputType.values.firstWhere(
         (e) =>
             e.name.toLowerCase() ==
             (json['salary_input_type'] as String?)?.toLowerCase(),
-        orElse: () => SalaryInputType.monthly,
+        orElse: () => current.salaryInputType,
       ),
-      overtimeEnabled:
-          json['overtime_enabled'] == true || json['overtime_enabled'] == 1,
-      defaultOvertimeType: ovType,
-      defaultOvertimeRate:
-          (json['default_overtime_rate'] as num?)?.toDouble() ?? 0.0,
-      updatedAt: json['updated_at'] != null
-          ? DateTime.parse(json['updated_at'])
-          : DateTime.now(),
+      overtimeEnabled: json['overtime_enabled'] != null
+          ? (json['overtime_enabled'] == true ||
+              json['overtime_enabled'] == 1 ||
+              json['overtime_enabled'] == '1' ||
+              json['overtime_enabled'] == 'true')
+          : current.overtimeEnabled,
+      defaultOvertimeType: ovType != OvertimeType.none
+          ? ovType
+          : (json['overtimeType'] != null || json['overtime_type_name'] != null)
+              ? OvertimeType.values.firstWhere(
+                (e) =>
+                    e.name == json['overtimeType'] ||
+                    e.name == json['overtime_type_name'],
+                orElse: () => current.defaultOvertimeType,
+              )
+              : current.defaultOvertimeType,
+      defaultOvertimeRate: _parseDouble(
+        json['default_overtime_rate'] ??
+            json['defaultOvertimeRate'] ??
+            json['overtime_rate'] ??
+            json['overtimeRate'],
+        defaultValue: current.defaultOvertimeRate,
+      ),
+      overtimeSlots:
+          (json['overtime_slots'] as List<dynamic>?)
+              ?.map((s) => OvertimeSlot.fromJson(s as Map<String, dynamic>))
+              .toList() ??
+          current.overtimeSlots,
+      fullDayHours: _parseDouble(
+        json['full_day_hours'] ?? json['fullDayHours'],
+        defaultValue: current.fullDayHours,
+      ),
+      halfDayHours: _parseDouble(
+        json['half_day_hours'] ?? json['halfDayHours'],
+        defaultValue: current.halfDayHours,
+      ),
+      breakMinutes:
+          _parseInt(json['break_minutes'] ?? json['breakMinutes']) ??
+          current.breakMinutes,
+      updatedAt:
+          json['updated_at'] != null
+              ? DateTime.parse(json['updated_at'])
+              : current.updatedAt ?? DateTime.now(),
     );
+  }
+
+  static double _parseDouble(dynamic value, {double defaultValue = 0.0}) {
+    if (value == null) return defaultValue;
+    if (value is num) return value.toDouble();
+    if (value is String) return double.tryParse(value) ?? defaultValue;
+    return defaultValue;
+  }
+
+  static int? _parseInt(dynamic value) {
+    if (value == null) return null;
+    if (value is int) return value;
+    if (value is String) return int.tryParse(value);
+    return null;
   }
 }
