@@ -37,6 +37,11 @@ class _SalaryConfigurationScreenState
     workingDaysController = TextEditingController(
       text: settings.workingDaysPerMonth.toString(),
     );
+
+    // Reload settings from API when screen opens
+    Future.microtask(() {
+      ref.read(settingsProvider.notifier).loadApiSettings();
+    });
   }
 
   @override
@@ -129,7 +134,7 @@ class _SalaryConfigurationScreenState
               : _buildMobileLayout(context, screenHeight),
           if (isLoading || isSyncing)
             Container(
-              color: Colors.black.withValues(alpha: 0.3),
+              color: Colors.black.withOpacity(0.3),
               child: Center(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
