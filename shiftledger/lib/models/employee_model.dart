@@ -125,22 +125,21 @@ class EmployeeModel {
       'first_name': firstName,
       'last_name': lastName,
       'employee_code': employeeCode,
-      'mobileNo': mobileNo, // Frontend uses mobileNo, backend might use phone
-      'phone': mobileNo, // Add phone for backend
+      'phone': mobileNo,
       'position': position,
       'department': department,
       'department_id': departmentId,
       'designation_id': designationId,
       'salary': salary,
-      'createdAt': createdAt.toIso8601String(),
-      'salaryOriginal': salaryOriginal,
-      'salaryType': salaryType,
-      'employeeType': employeeType.name,
-      'hourlyRate': hourlyRate,
-      'dailyRate': dailyRate,
-      'overtimeType': overtimeType.name,
-      'overtimeRate': overtimeRate,
-      'overtimeSlots': overtimeSlots.map((s) => s.toJson()).toList(),
+      'created_at': createdAt.toIso8601String(),
+      'salary_original': salaryOriginal,
+      'salary_type': salaryType,
+      'employee_type': employeeType.name,
+      'hourly_rate': hourlyRate,
+      'daily_rate': dailyRate,
+      'overtime_type': overtimeType.name,
+      'overtime_rate': overtimeRate,
+      'overtime_slots': overtimeSlots.map((s) => s.toJson()).toList(),
     };
   }
 
@@ -160,6 +159,26 @@ class EmployeeModel {
       lName = nameParts.length > 1 ? nameParts.sublist(1).join(' ') : '';
     }
 
+    // Overtime Type mapping from snake_case or camelCase
+    OvertimeType ovType = OvertimeType.hourwise;
+    final ovTypeStr = json['overtime_type'] ?? json['overtimeType'];
+    if (ovTypeStr != null) {
+      ovType = OvertimeType.values.firstWhere(
+        (e) => e.name == ovTypeStr,
+        orElse: () => OvertimeType.hourwise,
+      );
+    }
+
+    // Employee Type mapping
+    EmployeeType empType = EmployeeType.hourly;
+    final empTypeStr = json['employee_type'] ?? json['employeeType'];
+    if (empTypeStr != null) {
+      empType = EmployeeType.values.firstWhere(
+        (e) => e.name == empTypeStr,
+        orElse: () => EmployeeType.hourly,
+      );
+    }
+
     return EmployeeModel(
       id: json['id']?.toString() ?? '',
       firstName: fName,
@@ -177,26 +196,16 @@ class EmployeeModel {
       salary: _parseDouble(json['salary'] ?? json['monthly_salary']),
       createdAt: _parseDate(json['created_at'] ?? json['createdAt']),
       salaryOriginal: _parseDouble(
-        json['salaryOriginal'] ?? json['monthly_salary'] ?? json['salary'],
+        json['salary_original'] ?? json['salaryOriginal'] ?? json['monthly_salary'] ?? json['salary'],
       ),
-      salaryType: (json['salaryType'] as String?) ?? 'hourwise',
-      employeeType: json['employeeType'] != null
-          ? EmployeeType.values.firstWhere(
-              (e) => e.name == json['employeeType'],
-              orElse: () => EmployeeType.hourly,
-            )
-          : EmployeeType.hourly,
-      hourlyRate: (json['hourlyRate'] as num?)?.toDouble(),
-      dailyRate: (json['dailyRate'] as num?)?.toDouble(),
-      overtimeType: json['overtimeType'] != null
-          ? OvertimeType.values.firstWhere(
-              (e) => e.name == json['overtimeType'],
-              orElse: () => OvertimeType.hourwise,
-            )
-          : OvertimeType.hourwise,
-      overtimeRate: (json['overtimeRate'] as num?)?.toDouble() ?? 0.0,
+      salaryType: (json['salary_type'] ?? json['salaryType'] as String?) ?? 'hourwise',
+      employeeType: empType,
+      hourlyRate: _parseDouble(json['hourly_rate'] ?? json['hourlyRate']),
+      dailyRate: _parseDouble(json['daily_rate'] ?? json['dailyRate']),
+      overtimeType: ovType,
+      overtimeRate: _parseDouble(json['overtime_rate'] ?? json['overtimeRate']),
       overtimeSlots:
-          (json['overtimeSlots'] as List<dynamic>?)
+          (json['overtime_slots'] ?? json['overtimeSlots'] as List<dynamic>?)
               ?.map((s) => OvertimeSlot.fromJson(s as Map<String, dynamic>))
               .toList() ??
           const [],
