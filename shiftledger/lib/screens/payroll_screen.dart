@@ -74,31 +74,34 @@ class _PayrollScreenState extends ConsumerState<PayrollScreen> {
             Expanded(
               child: payrollState.isLoading
                   ? const Center(child: AppLoader(size: 60))
-                  : ListView(
+                  : SingleChildScrollView(
                       padding: const EdgeInsets.symmetric(vertical: 8),
-                      children: [
-                        if (payrollState.isGenerated &&
-                            payrollState.payrollRecords.isNotEmpty)
-                          _buildPayrollSummary(payrollState),
+                      child: Column(
+                        children: [
+                          if (payrollState.isGenerated &&
+                              payrollState.payrollRecords.isNotEmpty)
+                            _buildPayrollSummary(payrollState),
 
-                        const SizedBox(height: 8),
+                          const SizedBox(height: 8),
 
-                        if (payrollState.payrollRecords.isEmpty)
-                          _buildEmptyState(context, payrollState.isGenerated)
-                        else if (filteredRecords.isEmpty)
-                          _buildNoSearchResults()
-                        else if (isDesktop)
-                          Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 16),
-                            child: _buildPayrollTable(
-                              context,
-                              filteredRecords,
-                              theme,
-                            ),
-                          )
-                        else
-                          _buildPayrollList(context, filteredRecords),
-                      ],
+                          if (payrollState.payrollRecords.isEmpty)
+                            _buildEmptyState(context, payrollState.isGenerated)
+                          else if (filteredRecords.isEmpty)
+                            _buildNoSearchResults()
+                          else if (isDesktop)
+                            Padding(
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 16),
+                              child: _buildPayrollTable(
+                                context,
+                                filteredRecords,
+                                theme,
+                              ),
+                            )
+                          else
+                            _buildPayrollList(context, filteredRecords),
+                        ],
+                      ),
                     ),
             ),
           ],
@@ -848,13 +851,13 @@ class _PayrollScreenState extends ConsumerState<PayrollScreen> {
     BuildContext context,
     List<PayrollModel> payrollRecords,
   ) {
-    return ListView.builder(
+    return Padding(
       padding: const EdgeInsets.all(16),
-      itemCount: payrollRecords.length,
-      itemBuilder: (context, index) {
-        final payroll = payrollRecords[index];
-        return _buildPayrollCard(context, payroll);
-      },
+      child: Column(
+        children: payrollRecords.map((payroll) {
+          return _buildPayrollCard(context, payroll);
+        }).toList(),
+      ),
     );
   }
 
