@@ -78,8 +78,11 @@ class EmployeeModel {
   final String department; // Kept for name display if needed
   final int? departmentId;
   final int? designationId;
+  final int? salaryConfigId;
+  final bool status;
   final double salary; // Kept for backward compatibility
   final DateTime createdAt;
+  final DateTime? joinDate;
 
   // Salary conversion fields
   final double
@@ -107,8 +110,11 @@ class EmployeeModel {
     required this.department,
     this.departmentId,
     this.designationId,
+    this.salaryConfigId,
+    this.status = true,
     required this.salary,
     required this.createdAt,
+    this.joinDate,
     required this.salaryOriginal,
     required this.salaryType,
     this.employeeType = EmployeeType.hourly,
@@ -130,8 +136,11 @@ class EmployeeModel {
       'department': department,
       'department_id': departmentId,
       'designation_id': designationId,
+      'salary_config_id': salaryConfigId,
+      'status': status,
       'salary': salary,
       'created_at': createdAt.toIso8601String(),
+      'join_date': joinDate?.toIso8601String(),
       'salary_original': salaryOriginal,
       'salary_type': salaryType,
       'employee_type': employeeType.name,
@@ -193,8 +202,11 @@ class EmployeeModel {
           : (json['designation_name'] ?? json['position'] ?? ''),
       departmentId: _parseId(json['department_id']),
       designationId: _parseId(json['designation_id']),
+      salaryConfigId: _parseId(json['salary_config_id'] ?? json['salaryConfigId']),
+      status: json['status'] is bool ? json['status'] : (json['status'] == 1 || json['status'] == '1'),
       salary: _parseDouble(json['salary'] ?? json['monthly_salary']),
       createdAt: _parseDate(json['created_at'] ?? json['createdAt']),
+      joinDate: _parseOptionalDate(json['join_date'] ?? json['joinDate']),
       salaryOriginal: _parseDouble(
         json['salary_original'] ?? json['salaryOriginal'] ?? json['monthly_salary'] ?? json['salary'],
       ),
@@ -222,8 +234,11 @@ class EmployeeModel {
     String? department,
     int? departmentId,
     int? designationId,
+    int? salaryConfigId,
+    bool? status,
     double? salary,
     DateTime? createdAt,
+    DateTime? joinDate,
     double? salaryOriginal,
     String? salaryType,
     EmployeeType? employeeType,
@@ -243,8 +258,11 @@ class EmployeeModel {
       department: department ?? this.department,
       departmentId: departmentId ?? this.departmentId,
       designationId: designationId ?? this.designationId,
+      salaryConfigId: salaryConfigId ?? this.salaryConfigId,
+      status: status ?? this.status,
       salary: salary ?? this.salary,
       createdAt: createdAt ?? this.createdAt,
+      joinDate: joinDate ?? this.joinDate,
       salaryOriginal: salaryOriginal ?? this.salaryOriginal,
       salaryType: salaryType ?? this.salaryType,
       employeeType: employeeType ?? this.employeeType,
@@ -277,6 +295,16 @@ class EmployeeModel {
       return DateTime.now();
     } catch (e) {
       return DateTime.now();
+    }
+  }
+
+  static DateTime? _parseOptionalDate(dynamic value) {
+    if (value == null) return null;
+    try {
+      if (value is String) return DateTime.parse(value);
+      return null;
+    } catch (e) {
+      return null;
     }
   }
 }
