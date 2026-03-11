@@ -78,8 +78,37 @@ class DesignationNotifier extends Notifier<DesignationState> {
   }
 
   Future<void> loadDesignations(String departmentId) async {
-    // Keeping this for backward compatibility if needed, but loadAllDesignations is preferred now
-    await loadAllDesignations();
+    final token = ref.read(authProvider).token;
+    if (token == null) return;
+
+    // Check if we already have designations for this department to avoid redundant calls
+    final hasDesignations = state.designations.any((d) => d.departmentId == departmentId);
+    if (hasDesignations) return;
+
+    state = state.copyWith(isLoading: true);
+    try {
+      final response = await ApiService.getDesignations(departmentId, token);
+      if (response['success'] == true) {
+        final List<dynamic> data = response['designations'] ?? [];
+        final newDesignations = data
+            .map((item) => DesignationModel.fromMap(item))
+            .toList();
+        
+        // Merge with existing avoiding duplicates
+        final updatedList = List<DesignationModel>.from(state.designations);
+        for (var desig in newDesignations) {
+          if (!updatedList.any((d) => d.id == desig.id)) {
+            updatedList.add(desig);
+          }
+        }
+        
+        state = state.copyWith(designations: updatedList, isLoading: false);
+      } else {
+        state = state.copyWith(isLoading: false, error: response['message']);
+      }
+    } catch (e) {
+      state = state.copyWith(isLoading: false, error: e.toString());
+    }
   }
 
   Future<bool> addDesignation({
