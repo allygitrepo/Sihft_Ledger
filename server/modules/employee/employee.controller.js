@@ -1,3 +1,4 @@
+const { Op } = require("sequelize");
 const Employee = require("./employee.model");
 const sequelize = require("../../config/db");
 const Attendance = require("../attendance/attendance.model");
@@ -35,6 +36,21 @@ const employeeController = {
             const employeeExists = await Employee.findOne({ where: { phone } });
             if (employeeExists) {
                 return res.status(400).json({ message: "Employee with this phone already exists" });
+            }
+
+            // Validation: Unique name within the same department
+            const nameExistsInDept = await Employee.findOne({
+                where: {
+                    full_name,
+                    department_id,
+                    status: true // Only check active employees
+                }
+            });
+
+            if (nameExistsInDept) {
+                return res.status(400).json({
+                    message: "Employee with same name already exists in this department"
+                });
             }
 
             const currentYear = new Date().getFullYear();
@@ -108,13 +124,29 @@ const employeeController = {
 
     update: async (req, res) => {
         try {
-            const { id } = req.params;
-            const updates = req.body;
+            const id = req.params.id || req.body.employee_id;
+            if (!id || isNaN(id)) {
+                return res.status(400).json({ message: "Valid Employee ID is required" });
+            }
 
-            // Handle Flutter field mappings for updates
-            if (!updates.full_name && updates.name) updates.full_name = updates.name;
-            if (!updates.phone && updates.mobileNo) updates.phone = updates.mobileNo;
-            if (updates.monthly_salary === undefined && updates.salary !== undefined) updates.monthly_salary = updates.salary;
+            const body = req.body;
+            const updates = {};
+
+            // Mapping and filtering for partial updates
+            if (body.full_name !== undefined) updates.full_name = body.full_name;
+            else if (body.name !== undefined) updates.full_name = body.name;
+
+            if (body.phone !== undefined) updates.phone = body.phone;
+            else if (body.mobileNo !== undefined) updates.phone = body.mobileNo;
+
+            if (body.monthly_salary !== undefined) updates.monthly_salary = body.monthly_salary;
+            else if (body.salary !== undefined) updates.monthly_salary = body.salary;
+            
+            if (body.department_id !== undefined && body.department_id !== null) updates.department_id = body.department_id;
+            if (body.designation_id !== undefined && body.designation_id !== null) updates.designation_id = body.designation_id;
+            if (body.salary_config_id !== undefined) updates.salary_config_id = body.salary_config_id;
+            if (body.join_date !== undefined && body.join_date !== null && body.join_date !== '') updates.join_date = body.join_date;
+            if (body.status !== undefined && body.status !== null) updates.status = body.status;
 
             const employee = await Employee.findByPk(id);
 
@@ -122,9 +154,39 @@ const employeeController = {
                 return res.status(404).json({ message: "Employee not found" });
             }
 
+            // Validation: Unique name within the same department (excluding current employee)
+            const targetFullName = updates.full_name || employee.full_name;
+            const targetDeptId = updates.department_id || employee.department_id;
+
+            const nameExistsInDept = await Employee.findOne({
+                where: {
+                    full_name: targetFullName,
+                    department_id: targetDeptId,
+                    status: true,
+                    id: { [Op.ne]: id }
+                }
+            });
+
+            if (nameExistsInDept) {
+                return res.status(400).json({
+                    message: "Employee with same name already exists in this department"
+                });
+            }
+
             await employee.update(updates);
 
-            return res.status(200).json({ message: "Employee updated successfully", employee });
+            // Fetch updated employee with associations
+            const updatedEmployee = await Employee.findByPk(id, {
+                include: [
+                    { model: Department, attributes: ['department_name'] },
+                    { model: Designation, attributes: ['designation_name'] }
+                ]
+            });
+
+            return res.status(200).json({ 
+                message: "Employee updated successfully", 
+                employee: updatedEmployee 
+            });
         } catch (error) {
             console.error(error);
             return res.status(500).json({ message: "Internal server error" });
