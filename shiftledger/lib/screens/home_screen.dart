@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../providers/employee_provider.dart';
 import '../providers/attendance_provider.dart';
 import '../providers/payroll_provider.dart';
+import '../providers/department_provider.dart';
+import '../providers/designation_provider.dart';
 import '../routes/app_routes.dart';
 import '../utills/app_colors.dart';
 import '../utills/app_spacing.dart';
@@ -21,6 +23,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final employeeState = ref.watch(employeeProvider);
     final payrollState = ref.watch(payrollProvider);
     final attendanceList = ref.watch(attendanceListProvider);
+    final departmentState = ref.watch(departmentProvider);
+    final designationState = ref.watch(designationProvider);
     final horizontalPadding = AppSpacing.getHorizontalPadding(context);
     final deviceType = ResponsiveHelper.getDeviceTypeFromContext(context);
 
@@ -37,6 +41,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         await ref.read(employeeProvider.notifier).loadEmployees();
         await ref.read(payrollProvider.notifier).loadSavedPayroll();
         await ref.read(attendanceListProvider.notifier).loadAttendance();
+        await ref.read(departmentProvider.notifier).loadDepartments();
+        await ref.read(designationProvider.notifier).loadAllDesignations();
       },
       child: ListView(
         padding: EdgeInsets.all(horizontalPadding),
@@ -54,6 +60,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             context,
             employeeState,
             payrollState,
+            departmentState,
+            designationState,
             todayAttendanceCount,
             deviceType,
           ),
@@ -154,6 +162,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     BuildContext context,
     employeeState,
     payrollState,
+    departmentState,
+    designationState,
     int todayAttendanceCount,
     DeviceScreenType deviceType,
   ) {
@@ -171,6 +181,18 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         color: Colors.green,
       ),
       _StatData(
+        title: 'Departments',
+        value: departmentState.departments.length.toString(),
+        icon: Icons.business,
+        color: Colors.orange,
+      ),
+      _StatData(
+        title: 'Designations',
+        value: designationState.designations.length.toString(),
+        icon: Icons.badge,
+        color: Colors.cyan,
+      ),
+      _StatData(
         title: 'Generated Payroll',
         value: payrollState.payrollRecords.length.toString(),
         icon: Icons.receipt_long,
@@ -180,7 +202,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         title: 'Total Payout',
         value: '₹${_formatAmount(payrollState.totalSalary)}',
         icon: Icons.account_balance_wallet,
-        color: Colors.orange,
+        color: Colors.purple,
       ),
     ];
 
@@ -202,6 +224,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               Expanded(child: _buildStatCard(context, stats[3])),
             ],
           ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(child: _buildStatCard(context, stats[4])),
+              const SizedBox(width: 12),
+              Expanded(child: _buildStatCard(context, stats[5])),
+            ],
+          ),
         ],
       );
     } else {
@@ -209,10 +239,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         shrinkWrap: true,
         physics: const NeverScrollableScrollPhysics(),
         gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: deviceType == DeviceScreenType.tablet ? 2 : 4,
+          crossAxisCount: deviceType == DeviceScreenType.tablet ? 3 : 6,
           crossAxisSpacing: 12,
           mainAxisSpacing: 12,
-          childAspectRatio: 1.5,
+          childAspectRatio: deviceType == DeviceScreenType.tablet ? 1.4 : 1.2,
         ),
         itemCount: stats.length,
         itemBuilder: (context, index) => _buildStatCard(context, stats[index]),
