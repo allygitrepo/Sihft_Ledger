@@ -249,6 +249,69 @@ class CompanyNotifier extends StateNotifier<CompanyState> {
     }
   }
 
+  /// Update company profile
+  Future<bool> updateCompany({
+    required String companyName,
+    required String industryType,
+    String? address,
+    String? companyPhoto,
+  }) async {
+    if (companyName.isEmpty || industryType.isEmpty) {
+      ToastHelper.error('Company name and industry type are required');
+      return false;
+    }
+
+    if (state.company?.id == null) {
+      ToastHelper.error('Company ID not found');
+      return false;
+    }
+
+    state = state.copyWith(isLoading: true);
+
+    try {
+      final token = ref.read(authProvider).token;
+      if (token == null) {
+        state = state.copyWith(isLoading: false);
+        ToastHelper.error('Authentication token missing');
+        return false;
+      }
+
+      final response = await ApiService.updateCompany(
+        companyId: state.company!.id!,
+        companyName: companyName,
+        industryType: industryType,
+        address: address,
+        companyPhoto: companyPhoto,
+        token: token,
+      );
+
+      if (response['success'] == true) {
+        final updatedCompany = CompanyModel(
+          id: state.company!.id,
+          companyName: companyName,
+          industryType: industryType,
+          address: address?.isEmpty == true ? null : address,
+          companyPhoto: companyPhoto,
+          createdAt: state.company!.createdAt,
+        );
+
+        await CompanyService.saveCompany(updatedCompany);
+        state = state.copyWith(isLoading: false, company: updatedCompany);
+
+        ToastHelper.success('Company updated successfully');
+        return true;
+      } else {
+        state = state.copyWith(isLoading: false);
+        ToastHelper.error(response['message'] ?? 'Failed to update company');
+        return false;
+      }
+    } catch (e) {
+      state = state.copyWith(isLoading: false);
+      ToastHelper.error('Failed to update company: $e');
+      return false;
+    }
+  }
+
   /// Clear company data
   Future<void> clearCompany() async {
     await CompanyService.clearCompany();
