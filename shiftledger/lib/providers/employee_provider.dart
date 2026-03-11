@@ -125,10 +125,16 @@ class EmployeeNotifier extends Notifier<EmployeeState> {
       'company_id': companyId,
       'department_id': employee.departmentId,
       'designation_id': employee.designationId,
+      'salary_config_id': employee.salaryConfigId,
       'name': '${employee.firstName} ${employee.lastName}'.trim(),
       'mobileNo': employee.mobileNo,
       'salary': employee.salaryOriginal,
+      'status': employee.status,
     };
+
+    if (employee.joinDate != null) {
+      data['join_date'] = employee.joinDate!.toIso8601String().split('T')[0];
+    }
 
     final response = await ApiService.createEmployee(data, token);
 
@@ -171,15 +177,27 @@ class EmployeeNotifier extends Notifier<EmployeeState> {
     final data = {
       'department_id': employee.departmentId,
       'designation_id': employee.designationId,
+      'salary_config_id': employee.salaryConfigId,
       'name': '${employee.firstName} ${employee.lastName}'.trim(),
       'mobileNo': employee.mobileNo,
       'salary': employee.salaryOriginal,
+      'status': employee.status,
     };
+
+    if (employee.joinDate != null) {
+      data['join_date'] = employee.joinDate!.toIso8601String().split('T')[0];
+    }
 
     final response = await ApiService.updateEmployee(employee.id, data, token);
 
     if (response['success'] == true) {
-      await loadEmployees();
+      if (response['employee'] != null) {
+        final updatedEmp = EmployeeModel.fromJson(response['employee']);
+        updateEmployeeInList(updatedEmp);
+        state = state.copyWith(isLoading: false);
+      } else {
+        await loadEmployees();
+      }
       ToastHelper.success('Employee updated successfully');
     } else {
       state = state.copyWith(isLoading: false);
