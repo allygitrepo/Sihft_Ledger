@@ -24,10 +24,10 @@ class AppValidator {
     return null;
   }
 
-  /// Validates proper email format
-  static String? validateEmail(String? value) {
+  /// Validates proper email format (optional)
+  static String? validateEmail(String? value, {bool required = false}) {
     if (value == null || value.isEmpty) {
-      return 'Email is required';
+      return required ? 'Email is required' : null;
     }
     final emailRegExp = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
     if (!emailRegExp.hasMatch(value)) {
