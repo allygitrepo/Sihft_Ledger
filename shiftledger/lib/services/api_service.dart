@@ -163,6 +163,22 @@ class ApiService {
     return await get(ApiConstant.companiesBase, headers: _authHeader(token));
   }
 
+  static Future<Map<String, dynamic>> updateCompany({
+    required String companyId,
+    required String companyName,
+    required String industryType,
+    String? address,
+    String? companyPhoto,
+    required String token,
+  }) async {
+    return await put(ApiConstant.updateCompany(companyId), {
+      'company_name': companyName,
+      'industry_type': industryType,
+      'address': address,
+      'company_logo': companyPhoto,
+    }, headers: _authHeader(token));
+  }
+
   static Map<String, String> _authHeader(String token) {
     return {
       'Content-Type': 'application/json',
