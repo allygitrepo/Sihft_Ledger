@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:file_saver/file_saver.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -34,6 +35,8 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
   final Map<String, TextEditingController> _editControllers = {};
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
+  String? _selectedEditDepartmentId;
+  String? _selectedEditDesignationId;
 
   @override
   void dispose() {
@@ -52,14 +55,39 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
       _editControllers['mobile'] = TextEditingController(
         text: employee.mobileNo,
       );
-      _editControllers['position'] = TextEditingController(
-        text: employee.position,
-      );
-      _editControllers['department'] = TextEditingController(
-        text: employee.department,
-      );
+      _selectedEditDepartmentId = employee.departmentId?.toString();
+      _selectedEditDesignationId = employee.designationId?.toString();
+
+      // If IDs are null, try to find them from names (fallback)
+      if (_selectedEditDepartmentId == null) {
+        final departments = ref.read(departmentProvider).departments;
+        _selectedEditDepartmentId = departments
+            .where(
+              (d) => d.departmentName.trim() == employee.department.trim(),
+            )
+            .firstOrNull
+            ?.id;
+      }
+
+      if (_selectedEditDesignationId == null) {
+        final allDesignations = ref.read(designationProvider).designations;
+        _selectedEditDesignationId = allDesignations
+            .where(
+              (d) => d.designationName.trim() == employee.position.trim(),
+            )
+            .firstOrNull
+            ?.id;
+      }
+
+      // Pre-load designations for the selected department
+      if (_selectedEditDepartmentId != null) {
+        ref
+            .read(designationProvider.notifier)
+            .loadDesignations(_selectedEditDepartmentId!);
+      }
+
       _editControllers['salary'] = TextEditingController(
-        text: employee.salary.toString(),
+        text: employee.salaryOriginal.toString(),
       );
     });
   }
@@ -67,6 +95,8 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
   void _cancelEditing() {
     setState(() {
       _editingEmployeeId = null;
+      _selectedEditDepartmentId = null;
+      _selectedEditDesignationId = null;
       for (var controller in _editControllers.values) {
         controller.dispose();
       }
@@ -75,20 +105,40 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
   }
 
   void _saveEditing(EmployeeModel originalEmployee) {
+    if (_selectedEditDepartmentId == null ||
+        _selectedEditDesignationId == null) {
+      ToastHelper.error('Position and Department are required');
+      return;
+    }
+
     final newSalary =
         double.tryParse(_editControllers['salary']!.text) ??
-        originalEmployee.salary;
+        originalEmployee.salaryOriginal;
 
-    // Split name in case it was edited as a single string field (if applicable)
-    // Actually, in the desktop table view, it might be a single 'name' field
     final name = _editControllers['name']!.text;
-    final nameParts = name.trim().split(' ');
+    final nameParts = name.contains(' ')
+        ? name.trim().split(' ')
+        : [name.trim()];
     final firstName = nameParts[0];
     final lastName = nameParts.length > 1 ? nameParts.sublist(1).join(' ') : '';
 
-    // Get settings and convert salary
     final settings = ref.read(settingsProvider);
     final conversion = EmployeeService.convertSalary(newSalary, settings);
+
+    final departments = ref.read(departmentProvider).departments;
+    final designations = ref.read(designationProvider).designations;
+
+    final deptName = departments
+            .where((d) => d.id == _selectedEditDepartmentId)
+            .firstOrNull
+            ?.departmentName ??
+        originalEmployee.department;
+
+    final posName = designations
+            .where((d) => d.id == _selectedEditDesignationId)
+            .firstOrNull
+            ?.designationName ??
+        originalEmployee.position;
 
     final updatedEmployee = EmployeeModel(
       id: originalEmployee.id,
@@ -96,8 +146,10 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
       lastName: lastName,
       employeeCode: originalEmployee.employeeCode,
       mobileNo: _editControllers['mobile']!.text,
-      position: _editControllers['position']!.text,
-      department: _editControllers['department']!.text,
+      position: posName,
+      department: deptName,
+      departmentId: int.tryParse(_selectedEditDepartmentId!),
+      designationId: int.tryParse(_selectedEditDesignationId!),
       salary: newSalary,
       salaryOriginal: newSalary,
       salaryType: conversion['salaryType'] as String,
@@ -108,12 +160,12 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
       overtimeType: originalEmployee.overtimeType,
       overtimeRate: originalEmployee.overtimeRate,
       overtimeSlots: originalEmployee.overtimeSlots,
+      status: originalEmployee.status,
+      joinDate: originalEmployee.joinDate,
     );
 
     ref.read(employeeProvider.notifier).updateEmployee(updatedEmployee);
     _cancelEditing();
-
-    ToastHelper.success('Employee updated successfully');
   }
 
   @override
@@ -543,13 +595,13 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
           ),
           DataColumn(
             label: Text(
-              'Position',
+              'Department',
               style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
             ),
           ),
           DataColumn(
             label: Text(
-              'Department',
+              'Position',
               style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
             ),
           ),
@@ -646,62 +698,53 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
                         ],
                       ),
               ),
-              // Position
-              DataCell(
-                isEditing
-                    ? SizedBox(
-                        width: 140,
-                        child: TextFormField(
-                          controller: _editControllers['position'],
-                          style: const TextStyle(fontSize: 13),
-                          decoration: const InputDecoration(
-                            isDense: true,
-                            contentPadding: EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 8,
-                            ),
-                            border: OutlineInputBorder(),
-                          ),
-                        ),
-                      )
-                    : Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 6,
-                        ),
-                        decoration: BoxDecoration(
-                          color: Colors.blue.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(6),
-                          border: Border.all(
-                            color: Colors.blue.withValues(alpha: 0.3),
-                          ),
-                        ),
-                        child: Text(
-                          employee.position,
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.blue[700],
-                          ),
-                        ),
-                      ),
-              ),
               // Department
               DataCell(
                 isEditing
                     ? SizedBox(
-                        width: 140,
-                        child: TextFormField(
-                          controller: _editControllers['department'],
-                          style: const TextStyle(fontSize: 13),
+                        width: 160,
+                        child: DropdownButtonFormField<String>(
+                          value: _selectedEditDepartmentId,
+                          isExpanded: true,
+                          isDense: true,
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: theme.textTheme.bodyMedium?.color,
+                          ),
                           decoration: const InputDecoration(
                             isDense: true,
                             contentPadding: EdgeInsets.symmetric(
                               horizontal: 8,
-                              vertical: 8,
+                              vertical: 10,
                             ),
                             border: OutlineInputBorder(),
                           ),
+                          hint: const Text('Select Dept', style: TextStyle(fontSize: 12)),
+                          items: ref
+                              .watch(departmentProvider)
+                              .departments
+                              .where((d) => d.status || d.id == _selectedEditDepartmentId)
+                              .map((dept) {
+                            return DropdownMenuItem(
+                              value: dept.id,
+                              child: Text(
+                                dept.departmentName,
+                                style: const TextStyle(fontSize: 13),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            );
+                          }).toList(),
+                          onChanged: (value) {
+                            setState(() {
+                              _selectedEditDepartmentId = value;
+                              _selectedEditDesignationId = null;
+                            });
+                            if (value != null) {
+                              ref
+                                  .read(designationProvider.notifier)
+                                  .loadDesignations(value);
+                            }
+                          },
                         ),
                       )
                     : Container(
@@ -722,6 +765,78 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
                             fontSize: 12,
                             fontWeight: FontWeight.w600,
                             color: Colors.green[700],
+                          ),
+                        ),
+                      ),
+              ),
+              // Position
+              DataCell(
+                isEditing
+                    ? SizedBox(
+                        width: 160,
+                        child: DropdownButtonFormField<String>(
+                          value: _selectedEditDesignationId,
+                          isExpanded: true,
+                          isDense: true,
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: theme.textTheme.bodyMedium?.color,
+                          ),
+                          decoration: const InputDecoration(
+                            isDense: true,
+                            contentPadding: EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 10,
+                            ),
+                            border: OutlineInputBorder(),
+                          ),
+                          hint: const Text('Select Position', style: TextStyle(fontSize: 12)),
+                          items: ref
+                              .watch(designationProvider)
+                              .designations
+                              .where(
+                                (d) =>
+                                    ((_selectedEditDepartmentId == null ||
+                                            d.departmentId ==
+                                                _selectedEditDepartmentId) &&
+                                        d.status) ||
+                                    d.id == _selectedEditDesignationId,
+                              )
+                              .map((desig) {
+                            return DropdownMenuItem(
+                              value: desig.id,
+                              child: Text(
+                                desig.designationName,
+                                style: const TextStyle(fontSize: 13),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            );
+                          }).toList(),
+                          onChanged: (value) {
+                            setState(() {
+                              _selectedEditDesignationId = value;
+                            });
+                          },
+                        ),
+                      )
+                    : Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 6,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.blue.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(
+                            color: Colors.blue.withValues(alpha: 0.3),
+                          ),
+                        ),
+                        child: Text(
+                          employee.position,
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.blue[700],
                           ),
                         ),
                       ),
@@ -768,7 +883,7 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
                             tooltip: 'Save',
                             style: IconButton.styleFrom(
                               backgroundColor: Colors.green.withValues(
-                                alpha: 0.1,
+                                alpha: 0.2,
                               ),
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(6),
@@ -783,7 +898,7 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
                             tooltip: 'Cancel',
                             style: IconButton.styleFrom(
                               backgroundColor: Colors.grey.withValues(
-                                alpha: 0.1,
+                                alpha: 0.2,
                               ),
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(6),
@@ -1148,11 +1263,10 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
     final salaryController = TextEditingController();
     final formKey = GlobalKey<FormState>();
 
-    final departments = ref.read(departmentProvider).departments;
-    final allDesignations = ref.read(designationProvider).designations;
-
     String? selectedDepartmentId;
     String? selectedDesignationId;
+    DateTime selectedJoinDate = DateTime.now();
+    bool isStatusActive = true;
 
     showModalBottomSheet(
       context: context,
@@ -1161,161 +1275,215 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (context) => StatefulBuilder(
-        builder: (context, setModalState) => Padding(
-          padding: EdgeInsets.only(
-            bottom: MediaQuery.of(context).viewInsets.bottom,
-          ),
-          child: Container(
-            padding: const EdgeInsets.all(24),
-            child: Form(
-              key: formKey,
-              child: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Container(
-                      width: 40,
-                      height: 4,
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                        color: Colors.grey[300],
-                        borderRadius: BorderRadius.circular(2),
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                    Text(
-                      'Add New Employee',
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 24),
-                    const SizedBox(height: 16),
-                    TextFormField(
-                      controller: nameController,
-                      decoration: const InputDecoration(
-                        labelText: 'Employee Name',
-                        prefixIcon: Icon(Icons.person),
-                        border: OutlineInputBorder(),
-                      ),
-                      validator: (value) => AppValidator.validateName(value, 'Employee Name'),
-                    ),
-                    const SizedBox(height: 16),
-                    TextFormField(
-                      controller: mobileController,
-                      decoration: const InputDecoration(
-                        labelText: 'Mobile Number',
-                        prefixIcon: Icon(Icons.phone),
-                        border: OutlineInputBorder(),
-                      ),
-                      keyboardType: TextInputType.phone,
-                      validator: (value) => AppValidator.validatePhoneNumber(value, 'Mobile Number'),
-                    ),
-                    const SizedBox(height: 16),
-                    // Department Dropdown
-                    DropdownButtonFormField<String>(
-                      value: selectedDepartmentId,
-                      decoration: const InputDecoration(
-                        labelText: 'Department',
-                        prefixIcon: Icon(Icons.business),
-                        border: OutlineInputBorder(),
-                      ),
-                      items: departments.map((dept) {
-                        return DropdownMenuItem(
-                          value: dept.id,
-                          child: Text(dept.departmentName),
-                        );
-                      }).toList(),
-                      onChanged: (value) {
-                        setModalState(() {
-                          selectedDepartmentId = value;
-                          selectedDesignationId = null; // reset designation
-                        });
-                      },
-                      validator: (value) =>
-                          value == null ? 'Please select a department' : null,
-                    ),
-                    const SizedBox(height: 16),
-                    // Designation Dropdown (filtered by selected department)
-                    DropdownButtonFormField<String>(
-                      value: selectedDesignationId,
-                      decoration: const InputDecoration(
-                        labelText: 'Designation / Position',
-                        prefixIcon: Icon(Icons.work),
-                        border: OutlineInputBorder(),
-                      ),
-                      items: allDesignations
-                          .where(
-                            (d) =>
-                                selectedDepartmentId == null ||
-                                d.departmentId == selectedDepartmentId,
-                          )
-                          .map((desig) {
+        builder: (context, setModalState) => Consumer(
+          builder: (context, ref, child) {
+            final departments = ref.watch(departmentProvider).departments;
+            final allDesignations = ref.watch(designationProvider).designations;
+
+            return Padding(
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.of(context).viewInsets.bottom,
+              ),
+              child: Container(
+                padding: const EdgeInsets.all(24),
+                child: Form(
+                  key: formKey,
+                  child: SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Container(
+                          width: 40,
+                          height: 4,
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(
+                            color: Colors.grey[300],
+                            borderRadius: BorderRadius.circular(2),
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+                        Text(
+                          'Add New Employee',
+                          style: Theme.of(context).textTheme.titleLarge
+                              ?.copyWith(fontWeight: FontWeight.bold),
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 24),
+                        TextFormField(
+                          controller: nameController,
+                          decoration: const InputDecoration(
+                            labelText: 'Employee Name',
+                            prefixIcon: Icon(Icons.person),
+                            border: OutlineInputBorder(),
+                          ),
+                          validator: (value) =>
+                              AppValidator.validateName(value, 'Employee Name'),
+                        ),
+                        const SizedBox(height: 16),
+                        TextFormField(
+                          controller: mobileController,
+                          decoration: const InputDecoration(
+                            labelText: 'Mobile Number',
+                            prefixIcon: Icon(Icons.phone),
+                            border: OutlineInputBorder(),
+                          ),
+                          keyboardType: TextInputType.phone,
+                          validator: (value) =>
+                              AppValidator.validatePhoneNumber(
+                                value,
+                                'Mobile Number',
+                              ),
+                        ),
+                        const SizedBox(height: 16),
+                        // Department Dropdown
+                        DropdownButtonFormField<String>(
+                          value: selectedDepartmentId,
+                          decoration: const InputDecoration(
+                            labelText: 'Department',
+                            prefixIcon: Icon(Icons.business),
+                            border: OutlineInputBorder(),
+                          ),
+                          items: departments.where((d) => d.status).map((dept) {
                             return DropdownMenuItem(
-                              value: desig.id,
-                              child: Text(desig.designationName),
+                              value: dept.id,
+                              child: Text(dept.departmentName),
                             );
-                          })
-                          .toList(),
-                      onChanged: (value) {
-                        setModalState(() {
-                          selectedDesignationId = value;
-                        });
-                      },
-                      validator: (value) =>
-                          value == null ? 'Please select a designation' : null,
+                          }).toList(),
+                          onChanged: (value) {
+                            setModalState(() {
+                              selectedDepartmentId = value;
+                              selectedDesignationId = null; // reset designation
+                            });
+                            if (value != null) {
+                              ref
+                                  .read(designationProvider.notifier)
+                                  .loadDesignations(value);
+                            }
+                          },
+                          validator: (value) => value == null
+                              ? 'Please select a department'
+                              : null,
+                        ),
+                        const SizedBox(height: 16),
+                        // Designation Dropdown (filtered by selected department)
+                        DropdownButtonFormField<String>(
+                          value: selectedDesignationId,
+                          decoration: const InputDecoration(
+                            labelText: 'Designation / Position',
+                            prefixIcon: Icon(Icons.work),
+                            border: OutlineInputBorder(),
+                          ),
+                          items: allDesignations
+                              .where(
+                                (d) =>
+                                    (selectedDepartmentId == null ||
+                                        d.departmentId ==
+                                            selectedDepartmentId) &&
+                                    d.status,
+                              )
+                              .map((desig) {
+                                return DropdownMenuItem(
+                                  value: desig.id,
+                                  child: Text(desig.designationName),
+                                );
+                              })
+                              .toList(),
+                          onChanged: (value) {
+                            setModalState(() {
+                              selectedDesignationId = value;
+                            });
+                          },
+                          validator: (value) => value == null
+                              ? 'Please select a designation'
+                              : null,
+                        ),
+                        const SizedBox(height: 16),
+                        TextFormField(
+                          controller: salaryController,
+                          decoration: const InputDecoration(
+                            labelText: 'Monthly Salary',
+                            prefixIcon: Icon(Icons.currency_rupee),
+                            border: OutlineInputBorder(),
+                            helperText: 'Enter monthly salary amount',
+                          ),
+                          keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true,
+                          ),
+                          validator: AppValidator.validateSalary,
+                        ),
+                        const SizedBox(height: 16),
+                        // Join Date Selection
+                        ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          title: Text(
+                            'Join Date: ${DateFormat('dd MMM yyyy').format(selectedJoinDate)}',
+                          ),
+                          trailing: const Icon(Icons.calendar_today),
+                          onTap: () async {
+                            final picked = await showDatePicker(
+                              context: context,
+                              initialDate: selectedJoinDate,
+                              firstDate: DateTime(2000),
+                              lastDate: DateTime(2100),
+                            );
+                            if (picked != null) {
+                              setModalState(() {
+                                selectedJoinDate = picked;
+                              });
+                            }
+                          },
+                        ),
+                        const SizedBox(height: 16),
+                        SwitchListTile(
+                          contentPadding: EdgeInsets.zero,
+                          title: const Text('Is Active'),
+                          activeColor: AppColors.primary,
+                          value: isStatusActive,
+                          onChanged: (value) {
+                            setModalState(() {
+                              isStatusActive = value;
+                            });
+                          },
+                        ),
+                        const SizedBox(height: 24),
+                        ElevatedButton(
+                          onPressed: () {
+                            if (formKey.currentState!.validate()) {
+                              final dept = departments.firstWhere(
+                                (d) => d.id == selectedDepartmentId,
+                              );
+                              final desig = allDesignations.firstWhere(
+                                (d) => d.id == selectedDesignationId,
+                              );
+                              _addEmployeeManually(
+                                context,
+                                nameController.text,
+                                mobileController.text,
+                                desig.designationName,
+                                dept.departmentName,
+                                double.parse(salaryController.text),
+                                selectedDepartmentId!,
+                                selectedDesignationId!,
+                                isStatusActive,
+                                selectedJoinDate,
+                              );
+                            }
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.primary,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                          ),
+                          child: const Text('Add Employee'),
+                        ),
+                      ],
                     ),
-                    const SizedBox(height: 16),
-                    TextFormField(
-                      controller: salaryController,
-                      decoration: const InputDecoration(
-                        labelText: 'Monthly Salary',
-                        prefixIcon: Icon(Icons.currency_rupee),
-                        border: OutlineInputBorder(),
-                        helperText: 'Enter monthly salary amount',
-                      ),
-                      keyboardType: const TextInputType.numberWithOptions(
-                        decimal: true,
-                      ),
-                      validator: AppValidator.validateSalary,
-                    ),
-                    const SizedBox(height: 24),
-                    ElevatedButton(
-                      onPressed: () {
-                        if (formKey.currentState!.validate()) {
-                          final dept = departments.firstWhere(
-                            (d) => d.id == selectedDepartmentId,
-                          );
-                          final desig = allDesignations.firstWhere(
-                            (d) => d.id == selectedDesignationId,
-                          );
-                          _addEmployeeManually(
-                            context,
-                            nameController.text,
-                            mobileController.text,
-                            desig.designationName,
-                            dept.departmentName,
-                            double.parse(salaryController.text),
-                            selectedDepartmentId!,
-                            selectedDesignationId!,
-                          );
-                        }
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.primary,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                      ),
-                      child: const Text('Add Employee'),
-                    ),
-                    const SizedBox(height: 12),
-                  ],
+                  ),
                 ),
               ),
-            ),
-          ),
+            );
+          },
         ),
       ),
     );
@@ -1369,6 +1537,8 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
     double salary,
     String departmentId,
     String designationId,
+    bool status,
+    DateTime joinDate,
   ) {
     final code = 'EMP${DateTime.now().millisecondsSinceEpoch % 10000}';
     final id =
@@ -1408,6 +1578,8 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
       hourlyRate: conversion['hourlyRate'] as double?,
       dailyRate: conversion['dailyRate'] as double?,
       createdAt: DateTime.now(),
+      status: status,
+      joinDate: joinDate,
     );
 
     ref.read(employeeProvider.notifier).addEmployee(employee);
@@ -1417,6 +1589,12 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
   }
 
   void _showEditEmployeeDialog(BuildContext context, EmployeeModel employee) {
+    if (employee.departmentId != null) {
+      ref
+          .read(designationProvider.notifier)
+          .loadDesignations(employee.departmentId.toString());
+    }
+
     final firstNameController = TextEditingController(text: employee.firstName);
     final lastNameController = TextEditingController(text: employee.lastName);
     final mobileController = TextEditingController(text: employee.mobileNo);
@@ -1425,190 +1603,264 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
     );
     final formKey = GlobalKey<FormState>();
 
-    final departments = ref.read(departmentProvider).departments;
-    final allDesignations = ref.read(designationProvider).designations;
+    bool isStatusActive = employee.status;
+    DateTime? selectedJoinDate = employee.joinDate;
 
-    // Try to match existing values to dropdown entries (by name)
-    String? selectedDepartmentId = departments
-        .cast<dynamic>()
-        .firstWhere(
-          (d) => d.departmentName == employee.department,
-          orElse: () => null,
-        )
-        ?.id;
-    String? selectedDesignationId = allDesignations
-        .cast<dynamic>()
-        .firstWhere(
-          (d) => d.designationName == employee.position,
-          orElse: () => null,
-        )
-        ?.id;
+    final departments = ref.read(departmentProvider).departments;
+
+    // Direct ID matching
+    String? selectedDepartmentId = employee.departmentId?.toString();
+    String? selectedDesignationId = employee.designationId?.toString();
+
+    // Fallback if IDs are null but names exist
+    if (selectedDepartmentId == null) {
+      selectedDepartmentId = departments
+          .cast<dynamic>()
+          .firstWhere(
+            (d) => d.departmentName == employee.department,
+            orElse: () => null,
+          )
+          ?.id;
+    }
+
+    if (selectedDesignationId == null) {
+      final allDesignations = ref.read(designationProvider).designations;
+      selectedDesignationId = allDesignations
+          .cast<dynamic>()
+          .firstWhere(
+            (d) => d.designationName == employee.position,
+            orElse: () => null,
+          )
+          ?.id;
+    }
 
     showDialog(
       context: context,
       builder: (context) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          title: const Text('Edit Employee'),
-          content: SingleChildScrollView(
-            child: Form(
-              key: formKey,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  TextFormField(
-                    controller: firstNameController,
-                    decoration: const InputDecoration(
-                      labelText: 'First Name',
-                      border: OutlineInputBorder(),
-                    ),
-                    validator: (value) => AppValidator.validateName(value, 'First Name'),
-                  ),
-                  const SizedBox(height: 12),
-                  TextFormField(
-                    controller: lastNameController,
-                    decoration: const InputDecoration(
-                      labelText: 'Last Name',
-                      border: OutlineInputBorder(),
-                    ),
-                    validator: (value) => AppValidator.validateName(value, 'Last Name'),
-                  ),
-                  const SizedBox(height: 12),
-                  TextFormField(
-                    controller: mobileController,
-                    decoration: const InputDecoration(
-                      labelText: 'Mobile Number',
-                      border: OutlineInputBorder(),
-                    ),
-                    keyboardType: TextInputType.phone,
-                    validator: (value) => AppValidator.validatePhoneNumber(value, 'Mobile Number'),
-                  ),
-                  const SizedBox(height: 12),
-                  // Department Dropdown
-                  DropdownButtonFormField<String>(
-                    value: selectedDepartmentId,
-                    decoration: const InputDecoration(
-                      labelText: 'Department',
-                      prefixIcon: Icon(Icons.business),
-                      border: OutlineInputBorder(),
-                    ),
-                    items: departments.map((dept) {
-                      return DropdownMenuItem(
-                        value: dept.id,
-                        child: Text(dept.departmentName),
-                      );
-                    }).toList(),
-                    onChanged: (value) {
-                      setDialogState(() {
-                        selectedDepartmentId = value;
-                        selectedDesignationId = null;
-                      });
-                    },
-                    validator: (value) =>
-                        value == null ? 'Please select a department' : null,
-                  ),
-                  const SizedBox(height: 12),
-                  // Designation Dropdown (filtered by selected department)
-                  DropdownButtonFormField<String>(
-                    value: selectedDesignationId,
-                    decoration: const InputDecoration(
-                      labelText: 'Designation / Position',
-                      prefixIcon: Icon(Icons.work),
-                      border: OutlineInputBorder(),
-                    ),
-                    items: allDesignations
-                        .where(
-                          (d) =>
-                              selectedDepartmentId == null ||
-                              d.departmentId == selectedDepartmentId,
-                        )
-                        .map((desig) {
-                          return DropdownMenuItem(
-                            value: desig.id,
-                            child: Text(desig.designationName),
+        builder: (context, setDialogState) => Consumer(
+          builder: (context, ref, child) {
+            final departments = ref.watch(departmentProvider).departments;
+            final allDesignations = ref.watch(designationProvider).designations;
+
+            return AlertDialog(
+              title: const Text('Edit Employee'),
+              content: SingleChildScrollView(
+                child: Form(
+                  key: formKey,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      TextFormField(
+                        controller: firstNameController,
+                        decoration: const InputDecoration(
+                          labelText: 'First Name',
+                          border: OutlineInputBorder(),
+                        ),
+                        validator: (value) =>
+                            AppValidator.validateName(value, 'First Name'),
+                      ),
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        controller: lastNameController,
+                        decoration: const InputDecoration(
+                          labelText: 'Last Name',
+                          border: OutlineInputBorder(),
+                        ),
+                        validator: (value) =>
+                            AppValidator.validateName(value, 'Last Name'),
+                      ),
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        controller: mobileController,
+                        decoration: const InputDecoration(
+                          labelText: 'Mobile Number',
+                          border: OutlineInputBorder(),
+                        ),
+                        keyboardType: TextInputType.phone,
+                        validator: (value) => AppValidator.validatePhoneNumber(
+                          value,
+                          'Mobile Number',
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      // Department Dropdown
+                      DropdownButtonFormField<String>(
+                        value: selectedDepartmentId,
+                        decoration: const InputDecoration(
+                          labelText: 'Department',
+                          prefixIcon: Icon(Icons.business),
+                          border: OutlineInputBorder(),
+                        ),
+                        items: departments
+                            .where(
+                              (d) => d.status || d.id == selectedDepartmentId,
+                            )
+                            .map((dept) {
+                              return DropdownMenuItem(
+                                value: dept.id,
+                                child: Text(dept.departmentName),
+                              );
+                            })
+                            .toList(),
+                        onChanged: (value) {
+                          setDialogState(() {
+                            selectedDepartmentId = value;
+                            selectedDesignationId = null;
+                          });
+                          if (value != null) {
+                            ref
+                                .read(designationProvider.notifier)
+                                .loadDesignations(value);
+                          }
+                        },
+                        validator: (value) =>
+                            value == null ? 'Please select a department' : null,
+                      ),
+                      const SizedBox(height: 12),
+                      // Designation Dropdown (filtered by selected department)
+                      DropdownButtonFormField<String>(
+                        value: selectedDesignationId,
+                        decoration: const InputDecoration(
+                          labelText: 'Designation / Position',
+                          prefixIcon: Icon(Icons.work),
+                          border: OutlineInputBorder(),
+                        ),
+                        items: allDesignations
+                            .where(
+                              (d) =>
+                                  (selectedDepartmentId == null ||
+                                      d.departmentId == selectedDepartmentId) &&
+                                  (d.status || d.id == selectedDesignationId),
+                            )
+                            .map((desig) {
+                              return DropdownMenuItem(
+                                value: desig.id,
+                                child: Text(desig.designationName),
+                              );
+                            })
+                            .toList(),
+                        onChanged: (value) {
+                          setDialogState(() {
+                            selectedDesignationId = value;
+                          });
+                        },
+                        validator: (value) => value == null
+                            ? 'Please select a designation'
+                            : null,
+                      ),
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        controller: salaryController,
+                        decoration: const InputDecoration(
+                          labelText: 'Monthly Salary',
+                          border: OutlineInputBorder(),
+                          helperText: 'Enter monthly salary amount',
+                        ),
+                        keyboardType: TextInputType.number,
+                        validator: AppValidator.validateSalary,
+                      ),
+                      const SizedBox(height: 12),
+                      // Join Date Selection
+                      ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: Text(
+                          selectedJoinDate == null
+                              ? 'Select Join Date'
+                              : 'Join Date: ${DateFormat('dd MMM yyyy').format(selectedJoinDate!)}',
+                        ),
+                        trailing: const Icon(Icons.calendar_today),
+                        onTap: () async {
+                          final picked = await showDatePicker(
+                            context: context,
+                            initialDate: selectedJoinDate ?? DateTime.now(),
+                            firstDate: DateTime(2000),
+                            lastDate: DateTime(2100),
                           );
-                        })
-                        .toList(),
-                    onChanged: (value) {
-                      setDialogState(() {
-                        selectedDesignationId = value;
-                      });
-                    },
-                    validator: (value) =>
-                        value == null ? 'Please select a designation' : null,
+                          if (picked != null) {
+                            setDialogState(() {
+                              selectedJoinDate = picked;
+                            });
+                          }
+                        },
+                      ),
+                      const SizedBox(height: 12),
+                      SwitchListTile(
+                        contentPadding: EdgeInsets.zero,
+                        title: const Text('Is Active'),
+                        activeColor: AppColors.primary,
+                        value: isStatusActive,
+                        onChanged: (value) {
+                          setDialogState(() {
+                            isStatusActive = value;
+                          });
+                        },
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 12),
-                  TextFormField(
-                    controller: salaryController,
-                    decoration: const InputDecoration(
-                      labelText: 'Monthly Salary',
-                      border: OutlineInputBorder(),
-                      helperText: 'Enter monthly salary amount',
-                    ),
-                    keyboardType: TextInputType.number,
-                    validator: AppValidator.validateSalary,
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Cancel'),
+                ),
+                ElevatedButton(
+                  onPressed: () {
+                    if (formKey.currentState!.validate()) {
+                      final newSalary = double.parse(salaryController.text);
+                      final dept = departments.firstWhere(
+                        (d) => d.id == selectedDepartmentId,
+                      );
+                      final desig = allDesignations.firstWhere(
+                        (d) => d.id == selectedDesignationId,
+                      );
+
+                      // Get settings and convert salary
+                      final settings = ref.read(settingsProvider);
+                      final conversion = EmployeeService.convertSalary(
+                        newSalary,
+                        settings,
+                      );
+
+                      final updatedEmployee = EmployeeModel(
+                        id: employee.id,
+                        firstName: firstNameController.text,
+                        lastName: lastNameController.text,
+                        employeeCode: employee.employeeCode,
+                        mobileNo: mobileController.text,
+                        position: desig.designationName,
+                        department: dept.departmentName,
+                        salary: newSalary,
+                        salaryOriginal: newSalary,
+                        salaryType: conversion['salaryType'] as String,
+                        hourlyRate: conversion['hourlyRate'] as double?,
+                        dailyRate: conversion['dailyRate'] as double?,
+                        createdAt: employee.createdAt,
+                        employeeType: employee.employeeType,
+                        overtimeType: employee.overtimeType,
+                        overtimeRate: employee.overtimeRate,
+                        overtimeSlots: employee.overtimeSlots,
+                        status: isStatusActive,
+                        joinDate: selectedJoinDate,
+                      );
+
+                      ref
+                          .read(employeeProvider.notifier)
+                          .updateEmployee(updatedEmployee);
+                      Navigator.pop(context);
+
+                      ToastHelper.success('Employee updated successfully');
+                    }
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: Colors.white,
                   ),
-                ],
-              ),
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel'),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                if (formKey.currentState!.validate()) {
-                  final newSalary = double.parse(salaryController.text);
-                  final dept = departments.firstWhere(
-                    (d) => d.id == selectedDepartmentId,
-                  );
-                  final desig = allDesignations.firstWhere(
-                    (d) => d.id == selectedDesignationId,
-                  );
-
-                  // Get settings and convert salary
-                  final settings = ref.read(settingsProvider);
-                  final conversion = EmployeeService.convertSalary(
-                    newSalary,
-                    settings,
-                  );
-
-                  final updatedEmployee = EmployeeModel(
-                    id: employee.id,
-                    firstName: firstNameController.text,
-                    lastName: lastNameController.text,
-                    employeeCode: employee.employeeCode,
-                    mobileNo: mobileController.text,
-                    position: desig.designationName,
-                    department: dept.departmentName,
-                    salary: newSalary,
-                    salaryOriginal: newSalary,
-                    salaryType: conversion['salaryType'] as String,
-                    hourlyRate: conversion['hourlyRate'] as double?,
-                    dailyRate: conversion['dailyRate'] as double?,
-                    createdAt: employee.createdAt,
-                    employeeType: employee.employeeType,
-                    overtimeType: employee.overtimeType,
-                    overtimeRate: employee.overtimeRate,
-                    overtimeSlots: employee.overtimeSlots,
-                  );
-
-                  ref
-                      .read(employeeProvider.notifier)
-                      .updateEmployee(updatedEmployee);
-                  Navigator.pop(context);
-
-                  ToastHelper.success('Employee updated successfully');
-                }
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primary,
-                foregroundColor: Colors.white,
-              ),
-              child: const Text('Update'),
-            ),
-          ],
+                  child: const Text('Update'),
+                ),
+              ],
+            );
+          },
         ),
       ),
     );
