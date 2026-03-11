@@ -1343,6 +1343,7 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
                             labelText: 'Department',
                             prefixIcon: Icon(Icons.business),
                             border: OutlineInputBorder(),
+                            helperText: 'Select department first',
                           ),
                           items: departments.where((d) => d.status).map((dept) {
                             return DropdownMenuItem(
@@ -1369,34 +1370,49 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
                         // Designation Dropdown (filtered by selected department)
                         DropdownButtonFormField<String>(
                           value: selectedDesignationId,
-                          decoration: const InputDecoration(
+                          decoration: InputDecoration(
                             labelText: 'Designation / Position',
                             prefixIcon: Icon(Icons.work),
-                            border: OutlineInputBorder(),
+                            border: const OutlineInputBorder(),
+                            helperText: selectedDepartmentId == null
+                                ? 'Select department first to enable'
+                                : 'Select designation for the department',
+                            helperStyle: TextStyle(
+                              color: selectedDepartmentId == null
+                                  ? Colors.orange
+                                  : Colors.grey,
+                            ),
+                            enabled: selectedDepartmentId != null,
                           ),
-                          items: allDesignations
-                              .where(
-                                (d) =>
-                                    (selectedDepartmentId == null ||
-                                        d.departmentId ==
-                                            selectedDepartmentId) &&
-                                    d.status,
-                              )
-                              .map((desig) {
-                                return DropdownMenuItem(
-                                  value: desig.id,
-                                  child: Text(desig.designationName),
-                                );
-                              })
-                              .toList(),
-                          onChanged: (value) {
-                            setModalState(() {
-                              selectedDesignationId = value;
-                            });
-                          },
+                          items: selectedDepartmentId == null
+                              ? []
+                              : allDesignations
+                                  .where(
+                                    (d) =>
+                                        d.departmentId == selectedDepartmentId &&
+                                        d.status,
+                                  )
+                                  .map((desig) {
+                                    return DropdownMenuItem(
+                                      value: desig.id,
+                                      child: Text(desig.designationName),
+                                    );
+                                  })
+                                  .toList(),
+                          onChanged: selectedDepartmentId == null
+                              ? null
+                              : (value) {
+                                  setModalState(() {
+                                    selectedDesignationId = value;
+                                  });
+                                },
                           validator: (value) => value == null
                               ? 'Please select a designation'
                               : null,
+                          disabledHint: Text(
+                            'Select department first',
+                            style: TextStyle(color: Colors.grey[400]),
+                          ),
                         ),
                         const SizedBox(height: 16),
                         TextFormField(
@@ -1690,6 +1706,7 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
                           labelText: 'Department',
                           prefixIcon: Icon(Icons.business),
                           border: OutlineInputBorder(),
+                          helperText: 'Select department first',
                         ),
                         items: departments
                             .where(
@@ -1720,33 +1737,49 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
                       // Designation Dropdown (filtered by selected department)
                       DropdownButtonFormField<String>(
                         value: selectedDesignationId,
-                        decoration: const InputDecoration(
+                        decoration: InputDecoration(
                           labelText: 'Designation / Position',
-                          prefixIcon: Icon(Icons.work),
-                          border: OutlineInputBorder(),
+                          prefixIcon: const Icon(Icons.work),
+                          border: const OutlineInputBorder(),
+                          helperText: selectedDepartmentId == null
+                              ? 'Select department first to enable'
+                              : 'Select designation for the department',
+                          helperStyle: TextStyle(
+                            color: selectedDepartmentId == null
+                                ? Colors.orange
+                                : Colors.grey,
+                          ),
+                          enabled: selectedDepartmentId != null,
                         ),
-                        items: allDesignations
-                            .where(
-                              (d) =>
-                                  (selectedDepartmentId == null ||
-                                      d.departmentId == selectedDepartmentId) &&
-                                  (d.status || d.id == selectedDesignationId),
-                            )
-                            .map((desig) {
-                              return DropdownMenuItem(
-                                value: desig.id,
-                                child: Text(desig.designationName),
-                              );
-                            })
-                            .toList(),
-                        onChanged: (value) {
-                          setDialogState(() {
-                            selectedDesignationId = value;
-                          });
-                        },
+                        items: selectedDepartmentId == null
+                            ? []
+                            : allDesignations
+                                .where(
+                                  (d) =>
+                                      d.departmentId == selectedDepartmentId &&
+                                      (d.status || d.id == selectedDesignationId),
+                                )
+                                .map((desig) {
+                                  return DropdownMenuItem(
+                                    value: desig.id,
+                                    child: Text(desig.designationName),
+                                  );
+                                })
+                                .toList(),
+                        onChanged: selectedDepartmentId == null
+                            ? null
+                            : (value) {
+                                setDialogState(() {
+                                  selectedDesignationId = value;
+                                });
+                              },
                         validator: (value) => value == null
                             ? 'Please select a designation'
                             : null,
+                        disabledHint: Text(
+                          'Select department first',
+                          style: TextStyle(color: Colors.grey[400]),
+                        ),
                       ),
                       const SizedBox(height: 12),
                       TextFormField(
