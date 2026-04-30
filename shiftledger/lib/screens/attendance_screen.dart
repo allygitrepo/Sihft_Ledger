@@ -1,6 +1,9 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:shiftledger/providers/company_provider.dart';
+import 'package:shiftledger/providers/department_provider.dart';
 import '../models/attendance_model.dart';
 import '../models/employee_model.dart';
 import '../providers/attendance_provider.dart';
@@ -41,6 +44,9 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
   String? _selectedDepartment;
   String _tableSearchQuery = '';
   bool _isExporting = false;
+  
+  Timer? _debounce;
+  Timer? _tableDebounce;
 
   @override
   void initState() {
@@ -53,7 +59,19 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
   @override
   void dispose() {
     _searchController.dispose();
+    _debounce?.cancel();
+    _tableDebounce?.cancel();
     super.dispose();
+  }
+
+  void _reloadAttendance() {
+    ref.read(attendanceListProvider.notifier).loadAttendance(
+      page: 1,
+      search: _tableSearchQuery,
+      startDate: _startDate,
+      endDate: _endDate,
+      department: _selectedDepartment == 'All' ? null : _selectedDepartment,
+    );
   }
 
   @override
@@ -179,7 +197,9 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
 
   Widget _buildMarkAttendanceTab() {
     final employeeState = ref.watch(employeeProvider);
-    final attendanceList = ref.watch(attendanceListProvider);
+    final listState = ref.watch(attendanceListProvider);
+    final settings = ref.watch(settingsProvider);
+    final departmentState = ref.watch(departmentProvider);
     final selectedDate = DateTime.now();
     final theme = Theme.of(context);
     final cardColor = theme.cardColor;
@@ -187,19 +207,11 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
     final isDesktop = screenWidth > 900;
 
     // Check how many employees have attendance marked for today
-    final markedEmployeeIds = attendanceList.attendanceRecords
-        .where(
-          (record) =>
-              record.date.year == selectedDate.year &&
-              record.date.month == selectedDate.month &&
-              record.date.day == selectedDate.day,
-        )
-        .map((record) => record.employeeId)
-        .toSet();
+    final markedEmployeeIds = listState.markedEmployeeIdsToday.toSet();
 
     // Check if ALL employees have attendance marked for today
     final allEmployeesMarked =
-        (employeeState.employees.length > 0) &&
+        (employeeState.employees.isNotEmpty) &&
         employeeState.employees.every(
           (emp) => markedEmployeeIds.contains(emp.id),
         );
@@ -274,17 +286,8 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
       return !markedEmployeeIds.contains(employee.id);
     }).toList();
 
-    // Filter employees based on search query
-    final filteredEmployees = unmarkedEmployees.where((employee) {
-      if (_searchQuery.isEmpty) return true;
-
-      final query = _searchQuery.toLowerCase();
-      return employee.name.toLowerCase().contains(query) ||
-          employee.employeeCode.toLowerCase().contains(query) ||
-          employee.mobileNo.toLowerCase().contains(query) ||
-          employee.department.toLowerCase().contains(query) ||
-          employee.position.toLowerCase().contains(query);
-    }).toList();
+    // Filter employees based on search query is handled by the backend!
+    final filteredEmployees = unmarkedEmployees;
 
     return Column(
       children: [
@@ -412,7 +415,81 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
                   },
                 ),
         ),
+        if (employeeState.totalPages > 1)
+          _buildEmployeePaginationControls(employeeState),
       ],
+    );
+  }
+
+  Widget _buildEmployeePaginationControls(EmployeeState state) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          IconButton(
+            onPressed: state.currentPage > 1
+                ? () => ref.read(employeeProvider.notifier).loadEmployees(
+                      page: state.currentPage - 1,
+                      search: _searchQuery,
+                    )
+                : null,
+            icon: const Icon(Icons.chevron_left),
+          ),
+          Text(
+            'Page ${state.currentPage} of ${state.totalPages}',
+            style: const TextStyle(fontWeight: FontWeight.w500),
+          ),
+          IconButton(
+            onPressed: state.currentPage < state.totalPages
+                ? () => ref.read(employeeProvider.notifier).loadEmployees(
+                      page: state.currentPage + 1,
+                      search: _searchQuery,
+                    )
+                : null,
+            icon: const Icon(Icons.chevron_right),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAttendancePaginationControls(AttendanceListState state) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          IconButton(
+            onPressed: state.currentPage > 1
+                ? () => ref.read(attendanceListProvider.notifier).loadAttendance(
+                      page: state.currentPage - 1,
+                      search: _tableSearchQuery,
+                      startDate: _startDate,
+                      endDate: _endDate,
+                      department: _selectedDepartment == 'All' ? null : _selectedDepartment,
+                    )
+                : null,
+            icon: const Icon(Icons.chevron_left),
+          ),
+          Text(
+            'Page ${state.currentPage} of ${state.totalPages}',
+            style: const TextStyle(fontWeight: FontWeight.w500),
+          ),
+          IconButton(
+            onPressed: state.currentPage < state.totalPages
+                ? () => ref.read(attendanceListProvider.notifier).loadAttendance(
+                      page: state.currentPage + 1,
+                      search: _tableSearchQuery,
+                      startDate: _startDate,
+                      endDate: _endDate,
+                      department: _selectedDepartment == 'All' ? null : _selectedDepartment,
+                    )
+                : null,
+            icon: const Icon(Icons.chevron_right),
+          ),
+        ],
+      ),
     );
   }
 
@@ -422,6 +499,13 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
       onChanged: (value) {
         setState(() {
           _searchQuery = value;
+        });
+        if (_debounce?.isActive ?? false) _debounce!.cancel();
+        _debounce = Timer(const Duration(milliseconds: 500), () {
+          ref.read(employeeProvider.notifier).loadEmployees(
+            search: _searchQuery,
+            page: 1,
+          );
         });
       },
       decoration: InputDecoration(
@@ -436,6 +520,10 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
                     _searchController.clear();
                     _searchQuery = '';
                   });
+                  ref.read(employeeProvider.notifier).loadEmployees(
+                    search: '',
+                    page: 1,
+                  );
                 },
               )
             : null,
@@ -1506,6 +1594,7 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
   Widget _buildAttendanceTableTab() {
     final listState = ref.watch(attendanceListProvider);
     final employeeState = ref.watch(employeeProvider);
+    final departmentState = ref.watch(departmentProvider);
     final theme = Theme.of(context);
     final cardColor = theme.cardColor;
     final screenWidth = MediaQuery.of(context).size.width;
@@ -1514,50 +1603,8 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
     // Only show records that have attendance marked
     var markedRecords = listState.attendanceRecords;
 
-    // Apply Filters
-    if (_startDate != null) {
-      markedRecords = markedRecords
-          .where(
-            (r) => r.date.isAfter(
-              _startDate!.subtract(const Duration(seconds: 1)),
-            ),
-          )
-          .toList();
-    }
-    if (_endDate != null) {
-      markedRecords = markedRecords
-          .where((r) => r.date.isBefore(_endDate!.add(const Duration(days: 1))))
-          .toList();
-    }
-    if (_selectedDepartment != null && _selectedDepartment != 'All') {
-      markedRecords = markedRecords.where((r) {
-        final emp = employeeState.employees.firstWhere(
-          (e) => e.id == r.employeeId,
-          orElse: () => employeeState.employees.isNotEmpty
-              ? employeeState.employees.first
-              : EmployeeModel(
-                  id: 'temp',
-                  firstName: 'N/A',
-                  lastName: 'N/A',
-                  employeeCode: 'N/A',
-                  mobileNo: '',
-                  position: 'N/A',
-                  department: 'N/A',
-                  salary: 0,
-                  createdAt: DateTime.now(),
-                  salaryOriginal: 0,
-                  salaryType: 'hourwise',
-                ),
-        );
-        return emp.department == _selectedDepartment;
-      }).toList();
-    }
-    if (_tableSearchQuery != '') {
-      final query = _tableSearchQuery.toLowerCase();
-      markedRecords = markedRecords.where((r) {
-        return (r.employeeName).toLowerCase().contains(query);
-      }).toList();
-    }
+    // Filters are now handled server-side! 
+    // We just display the records returned by the provider.
 
     return Column(
       children: [
@@ -1595,6 +1642,7 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
                           _startDate = picked.start;
                           _endDate = picked.end;
                         });
+                        _reloadAttendance();
                       }
                     },
                     icon: const Icon(Icons.date_range, size: 18),
@@ -1617,6 +1665,7 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
                           _selectedDepartment = null;
                           _tableSearchQuery = '';
                         });
+                        _reloadAttendance();
                       },
                       icon: const Icon(
                         Icons.filter_list_off,
@@ -1633,15 +1682,41 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
                     // Department Filter
                     Expanded(
                       flex: 2,
-                      child: _buildDepartmentDropdown(employeeState.employees),
+                      child: DropdownButtonFormField<String>(
+                        value: _selectedDepartment ?? 'All',
+                        decoration: InputDecoration(
+                          labelText: 'Department',
+                          isDense: true,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                        items: ['All', ...departmentState.departments.map((d) => d.departmentName)]
+                            .map((dept) => DropdownMenuItem(
+                                  value: dept,
+                                  child: Text(dept),
+                                ))
+                            .toList(),
+                        onChanged: (value) {
+                          setState(() {
+                            _selectedDepartment = value;
+                          });
+                          _reloadAttendance();
+                        },
+                      ),
                     ),
                     const SizedBox(width: 12),
                     // Search Field
                     Expanded(
                       flex: 3,
                       child: TextField(
-                        onChanged: (value) =>
-                            setState(() => _tableSearchQuery = value),
+                        onChanged: (value) {
+                          setState(() => _tableSearchQuery = value);
+                          if (_tableDebounce?.isActive ?? false) _tableDebounce!.cancel();
+                          _tableDebounce = Timer(const Duration(milliseconds: 500), () {
+                            _reloadAttendance();
+                          });
+                        },
                         decoration: InputDecoration(
                           hintText: 'Search Employee...',
                           prefixIcon: const Icon(Icons.search, size: 20),
@@ -1695,8 +1770,27 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
                       children: [
                         // Department Filter
                         Expanded(
-                          child: _buildDepartmentDropdown(
-                            employeeState.employees,
+                          child: DropdownButtonFormField<String>(
+                            value: _selectedDepartment ?? 'All',
+                            decoration: InputDecoration(
+                              labelText: 'Department',
+                              isDense: true,
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                            ),
+                            items: ['All', ..._getDepartments(employeeState.employees)]
+                                .map((dept) => DropdownMenuItem(
+                                      value: dept,
+                                      child: Text(dept),
+                                    ))
+                                .toList(),
+                            onChanged: (value) {
+                              setState(() {
+                                _selectedDepartment = value;
+                              });
+                              _reloadAttendance();
+                            },
                           ),
                         ),
                         const SizedBox(width: 12),
@@ -1740,8 +1834,13 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
                     const SizedBox(height: 12),
                     // Search Field
                     TextField(
-                      onChanged: (value) =>
-                          setState(() => _tableSearchQuery = value),
+                      onChanged: (value) {
+                        setState(() => _tableSearchQuery = value);
+                        if (_tableDebounce?.isActive ?? false) _tableDebounce!.cancel();
+                        _tableDebounce = Timer(const Duration(milliseconds: 500), () {
+                          _reloadAttendance();
+                        });
+                      },
                       decoration: InputDecoration(
                         hintText: 'Search Employee...',
                         prefixIcon: const Icon(Icons.search, size: 20),
@@ -1825,8 +1924,14 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
                   },
                 ),
         ),
+        if (listState.totalPages > 1)
+          _buildAttendancePaginationControls(listState),
       ],
     );
+  }
+
+  List<String> _getDepartments(List<EmployeeModel> employees) {
+    return employees.map((e) => e.department).toSet().toList();
   }
 
   Widget _buildAttendanceRecordCard(
@@ -3218,28 +3323,53 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
   }
 
   Future<void> _handleExport(
-    List<AttendanceModel> records,
+    List<AttendanceModel> currentRecords,
     List<EmployeeModel> employees,
   ) async {
-    ToastHelper.show('No attendance records available to export.');
-
     setState(() => _isExporting = true);
 
-    // Small delay to show "Preparing..." state
-    await Future.delayed(const Duration(milliseconds: 500));
+    try {
+      // Fetch ALL records matching current filters for export
+      final companyId = ref.read(companyProvider).company?.id;
+      final response = await AttendanceService.loadAttendance(
+        companyId: companyId,
+        page: 1,
+        limit: 10000, // Large limit for export
+        search: _tableSearchQuery,
+        startDate: _startDate,
+        endDate: _endDate,
+        department: _selectedDepartment == 'All' ? null : _selectedDepartment,
+      );
+      
+      final allRecords = response['attendance'] as List<AttendanceModel>;
 
-    final success = await AttendanceExportService.exportAttendanceToCSV(
-      records: records,
-      employees: employees,
-    );
+      if (allRecords.isEmpty) {
+        ToastHelper.show('No attendance records available to export.');
+        setState(() => _isExporting = false);
+        return;
+      }
 
-    if (mounted) {
-      setState(() => _isExporting = false);
+      // Small delay to show "Preparing..." state
+      await Future.delayed(const Duration(milliseconds: 500));
 
-      if (success) {
-        ToastHelper.success('Attendance CSV exported successfully');
-      } else {
-        ToastHelper.error('Failed to export attendance file.');
+      final success = await AttendanceExportService.exportAttendanceToCSV(
+        records: allRecords,
+        employees: employees,
+      );
+
+      if (mounted) {
+        setState(() => _isExporting = false);
+
+        if (success) {
+          ToastHelper.success('Attendance CSV exported successfully');
+        } else {
+          ToastHelper.error('Failed to export attendance file.');
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isExporting = false);
+        ToastHelper.error('Error during export: $e');
       }
     }
   }

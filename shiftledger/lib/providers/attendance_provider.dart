@@ -230,19 +230,35 @@ class AttendanceFormNotifier extends Notifier<AttendanceFormState> {
 class AttendanceListState {
   final List<AttendanceModel> attendanceRecords;
   final bool isLoading;
+  final int currentPage;
+  final int totalPages;
+  final int totalRecords;
+  final List<String> markedEmployeeIdsToday;
 
   const AttendanceListState({
     this.attendanceRecords = const [],
     this.isLoading = false,
+    this.currentPage = 1,
+    this.totalPages = 1,
+    this.totalRecords = 0,
+    this.markedEmployeeIdsToday = const [],
   });
 
   AttendanceListState copyWith({
     List<AttendanceModel>? attendanceRecords,
     bool? isLoading,
+    int? currentPage,
+    int? totalPages,
+    int? totalRecords,
+    List<String>? markedEmployeeIdsToday,
   }) {
     return AttendanceListState(
       attendanceRecords: attendanceRecords ?? this.attendanceRecords,
       isLoading: isLoading ?? this.isLoading,
+      currentPage: currentPage ?? this.currentPage,
+      totalPages: totalPages ?? this.totalPages,
+      totalRecords: totalRecords ?? this.totalRecords,
+      markedEmployeeIdsToday: markedEmployeeIdsToday ?? this.markedEmployeeIdsToday,
     );
   }
 }
@@ -266,7 +282,14 @@ class AttendanceListNotifier extends Notifier<AttendanceListState> {
     await loadAttendance();
   }
 
-  Future<void> loadAttendance({DateTime? date}) async {
+  Future<void> loadAttendance({
+    DateTime? date, 
+    int page = 1, 
+    String search = '',
+    DateTime? startDate,
+    DateTime? endDate,
+    String? department,
+  }) async {
     try {
       state = state.copyWith(isLoading: true);
       
@@ -275,19 +298,36 @@ class AttendanceListNotifier extends Notifier<AttendanceListState> {
       
       // If a specific date is provided, load only that date
       // Otherwise, load ALL attendance records
-      final List<AttendanceModel> records;
+      final Map<String, dynamic> response;
       if (date != null) {
-        records = await AttendanceService.getAttendanceByDate(
+        response = await AttendanceService.getAttendanceByDate(
           date,
           companyId: companyId,
+          page: page,
+          search: search,
         );
       } else {
-        records = await AttendanceService.loadAttendance(
+        response = await AttendanceService.loadAttendance(
           companyId: companyId,
+          page: page,
+          search: search,
+          startDate: startDate,
+          endDate: endDate,
+          department: department,
         );
       }
       
-      state = state.copyWith(attendanceRecords: records, isLoading: false);
+      // Always fetch marked ids for today to support "Mark Attendance" tab
+      final markedIds = await AttendanceService.getMarkedEmployeeIds(DateTime.now(), companyId: companyId);
+
+      state = state.copyWith(
+        attendanceRecords: response['attendance'] as List<AttendanceModel>,
+        currentPage: response['currentPage'] as int,
+        totalPages: response['totalPages'] as int,
+        totalRecords: response['totalRecords'] as int,
+        markedEmployeeIdsToday: markedIds,
+        isLoading: false,
+      );
     } catch (e) {
       print('Error loading attendance: $e');
       state = state.copyWith(attendanceRecords: [], isLoading: false);

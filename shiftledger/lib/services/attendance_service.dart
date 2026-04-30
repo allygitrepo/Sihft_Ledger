@@ -72,21 +72,41 @@ class AttendanceService {
   }
 
   /// Load all attendance records (Warning: This might be heavy if not paginated)
-  static Future<List<AttendanceModel>> loadAttendance({String? companyId}) async {
+  static Future<Map<String, dynamic>> loadAttendance({
+    String? companyId,
+    int page = 1,
+    int limit = 10,
+    String search = '',
+    DateTime? startDate,
+    DateTime? endDate,
+    String? department,
+  }) async {
     try {
       final headers = await _getAuthHeaders();
       
-      // Build URL with company_id query parameter if provided
-      String url = '${ApiConstant.baseUrl}/attendance/all';
+      // Build URL with query parameters
+      String url = '${ApiConstant.baseUrl}/attendance/all?page=$page&limit=$limit';
       if (companyId != null && companyId.isNotEmpty) {
-        url += '?company_id=$companyId';
+        url += '&company_id=$companyId';
+      }
+      if (search.isNotEmpty) {
+        url += '&search=${Uri.encodeComponent(search)}';
+      }
+      if (startDate != null) {
+        url += '&start_date=${DateFormat('yyyy-MM-dd').format(startDate)}';
+      }
+      if (endDate != null) {
+        url += '&end_date=${DateFormat('yyyy-MM-dd').format(endDate)}';
+      }
+      if (department != null && department != 'All') {
+        url += '&department=${Uri.encodeComponent(department)}';
       }
 
       final response = await ApiService.get(url, headers: headers);
 
       if (response['success'] == true && response['attendance'] != null) {
         final List<dynamic> data = response['attendance'];
-        return data.map((json) {
+        final records = data.map((json) {
           final employeeData = json['Employee'];
           final employeeStr = employeeData != null 
               ? (employeeData['full_name'] ?? employeeData['name'] ?? 'Unknown')
@@ -120,58 +140,52 @@ class AttendanceService {
                 double.tryParse(json['total_salary']?.toString() ?? '0') ?? 0.0,
           );
         }).toList();
+
+        return {
+          'attendance': records,
+          'totalPages': response['totalPages'] ?? 1,
+          'currentPage': response['currentPage'] ?? 1,
+          'totalRecords': response['totalRecords'] ?? records.length,
+        };
       }
-      return [];
+      return {'attendance': <AttendanceModel>[], 'totalPages': 1, 'currentPage': 1, 'totalRecords': 0};
     } catch (e) {
       print('Error loading all attendance: $e');
-      return [];
+      return {'attendance': <AttendanceModel>[], 'totalPages': 1, 'currentPage': 1, 'totalRecords': 0};
     }
   }
 
-  /// Get attendance by employee and date range
-  static Future<List<AttendanceModel>> getAttendanceByEmployeeAndDateRange(
-    String employeeId,
-    DateTime startDate,
-    DateTime endDate,
-  ) async {
-    // Currently fetching all by employee and filtering locally to match previous interface
-    final records = await getAttendanceByEmployee(employeeId);
-    return records.where((r) {
-      return r.date.isAfter(startDate.subtract(const Duration(days: 1))) &&
-          r.date.isBefore(endDate.add(const Duration(days: 1)));
-    }).toList();
-  }
-
-  /// Get today's attendance
-  static Future<List<AttendanceModel>> getTodayAttendance() async {
-    return getAttendanceByDate(DateTime.now());
-  }
-
-  /// Get attendance by date for the company
-  static Future<List<AttendanceModel>> getAttendanceByDate(
+  /// Get attendance for a specific date
+  static Future<Map<String, dynamic>> getAttendanceByDate(
     DateTime date, {
     String? companyId,
+    int page = 1,
+    int limit = 10,
+    String search = '',
   }) async {
     try {
       final headers = await _getAuthHeaders();
-      final formattedDate = DateFormat('yyyy-MM-dd').format(date);
+      final dateStr = DateFormat('yyyy-MM-dd').format(date);
       
-      // Build URL with company_id query parameter if provided
-      String url = '${ApiConstant.baseUrl}/attendance/date/$formattedDate';
+      // Build URL with query parameters
+      String url = '${ApiConstant.baseUrl}/attendance/date/$dateStr?page=$page&limit=$limit';
       if (companyId != null && companyId.isNotEmpty) {
-        url += '?company_id=$companyId';
+        url += '&company_id=$companyId';
+      }
+      if (search.isNotEmpty) {
+        url += '&search=${Uri.encodeComponent(search)}';
       }
 
       final response = await ApiService.get(url, headers: headers);
 
       if (response['success'] == true && response['attendance'] != null) {
         final List<dynamic> data = response['attendance'];
-        return data.map((json) {
+        final records = data.map((json) {
           final employeeData = json['Employee'];
           final employeeStr = employeeData != null 
               ? (employeeData['full_name'] ?? employeeData['name'] ?? 'Unknown')
               : 'Unknown';
-
+          
           return AttendanceModel(
             id: json['id'].toString(),
             employeeId: json['employee_id'].toString(),
@@ -191,22 +205,48 @@ class AttendanceService {
             workSalary:
                 double.tryParse(json['work_salary']?.toString() ?? '0') ?? 0.0,
             overtimeHours:
-                double.tryParse(json['overtime_hours']?.toString() ?? '0') ??
-                0.0,
+                double.tryParse(json['overtime_hours']?.toString() ?? '0') ?? 0.0,
             overtimeSalary:
-                double.tryParse(json['overtime_salary']?.toString() ?? '0') ??
-                0.0,
+                double.tryParse(json['overtime_salary']?.toString() ?? '0') ?? 0.0,
             totalSalary:
                 double.tryParse(json['total_salary']?.toString() ?? '0') ?? 0.0,
           );
         }).toList();
+
+        return {
+          'attendance': records,
+          'totalPages': response['totalPages'] ?? 1,
+          'currentPage': response['currentPage'] ?? 1,
+          'totalRecords': response['totalRecords'] ?? records.length,
+        };
       }
-      return [];
+      return {'attendance': <AttendanceModel>[], 'totalPages': 1, 'currentPage': 1, 'totalRecords': 0};
     } catch (e) {
-      print('Error loading attendance by date: $e');
-      return [];
+      print('Error fetching attendance by date: $e');
+      return {'attendance': <AttendanceModel>[], 'totalPages': 1, 'currentPage': 1, 'totalRecords': 0};
     }
   }
+
+  /// Get attendance by employee and date range
+  static Future<List<AttendanceModel>> getAttendanceByEmployeeAndDateRange(
+    String employeeId,
+    DateTime startDate,
+    DateTime endDate,
+  ) async {
+    // Currently fetching all by employee and filtering locally to match previous interface
+    final records = await getAttendanceByEmployee(employeeId);
+    return records.where((r) {
+      return r.date.isAfter(startDate.subtract(const Duration(days: 1))) &&
+          r.date.isBefore(endDate.add(const Duration(days: 1)));
+    }).toList();
+  }
+
+  /// Get today's attendance
+  static Future<Map<String, dynamic>> getTodayAttendance() async {
+    return getAttendanceByDate(DateTime.now());
+  }
+
+
 
   /// Parse backend status to frontend enum
   static AttendanceStatus _parseStatusFromBackend(String? status) {
@@ -266,13 +306,40 @@ class AttendanceService {
     }
   }
 
+  /// Get marked employee IDs by date for the company
+  static Future<List<String>> getMarkedEmployeeIds(
+    DateTime date, {
+    String? companyId,
+  }) async {
+    try {
+      final headers = await _getAuthHeaders();
+      final formattedDate = DateFormat('yyyy-MM-dd').format(date);
+      
+      String url = '${ApiConstant.baseUrl}/attendance/marked-ids/$formattedDate';
+      if (companyId != null && companyId.isNotEmpty) {
+        url += '?company_id=$companyId';
+      }
+
+      final response = await ApiService.get(url, headers: headers);
+
+      if (response['success'] == true && response['markedIds'] != null) {
+        final List<dynamic> data = response['markedIds'];
+        return data.map((id) => id.toString()).toList();
+      }
+      return [];
+    } catch (e) {
+      print('Error loading marked employee IDs by date: $e');
+      return [];
+    }
+  }
+
   /// Check if attendance exists for employee on date
   static Future<bool> checkAttendanceExists(
     String employeeId,
     DateTime date,
   ) async {
-    final records = await getAttendanceByDate(date);
-    return records.any((r) => r.employeeId == employeeId);
+    final markedIds = await getMarkedEmployeeIds(date);
+    return markedIds.contains(employeeId);
   }
 
   /// Clear all attendance (local cleanup usually, but we don't have local anymore)
