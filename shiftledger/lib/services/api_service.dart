@@ -190,10 +190,20 @@ class ApiService {
 
   static Future<Map<String, dynamic>> getDepartments(
     String companyId,
-    String token,
-  ) async {
+    String token, {
+    int? page,
+    int? limit,
+    String? search,
+  }) async {
+    final queryParams = [
+      'company_id=$companyId',
+      if (page != null) 'page=$page',
+      if (limit != null) 'limit=$limit',
+      if (search != null && search.isNotEmpty) 'search=${Uri.encodeComponent(search)}',
+    ].join('&');
+
     return await get(
-      '${ApiConstant.departmentsBase}?company_id=$companyId',
+      '${ApiConstant.departmentsBase}?$queryParams',
       headers: _authHeader(token),
     );
   }
@@ -234,11 +244,23 @@ class ApiService {
   // --- Designations ---
 
   static Future<Map<String, dynamic>> getDesignations(
-    String departmentId,
-    String token,
-  ) async {
+    String token, {
+    String? departmentId,
+    String? companyId,
+    int? page,
+    int? limit,
+    String? search,
+  }) async {
+    final queryParams = [
+      if (departmentId != null) 'department_id=$departmentId',
+      if (companyId != null) 'company_id=$companyId',
+      if (page != null) 'page=$page',
+      if (limit != null) 'limit=$limit',
+      if (search != null && search.isNotEmpty) 'search=${Uri.encodeComponent(search)}',
+    ].join('&');
+
     return await get(
-      '${ApiConstant.designationsBase}?department_id=$departmentId',
+      '${ApiConstant.designationsBase}?$queryParams',
       headers: _authHeader(token),
     );
   }
@@ -246,7 +268,7 @@ class ApiService {
   static Future<Map<String, dynamic>> createDesignation({
     required String departmentId,
     required String designationName,
-    required String token,
+    required String token, required String companyId,
   }) async {
     return await post(ApiConstant.designationsBase, {
       'department_id': departmentId,
@@ -280,10 +302,20 @@ class ApiService {
 
   static Future<Map<String, dynamic>> getEmployees(
     String companyId,
-    String token,
-  ) async {
+    String token, {
+    int page = 1,
+    int limit = 10,
+    String search = '',
+  }) async {
+    final queryParams = [
+      'company_id=$companyId',
+      'page=$page',
+      'limit=$limit',
+      if (search.isNotEmpty) 'search=${Uri.encodeComponent(search)}',
+    ].join('&');
+
     return await get(
-      '${ApiConstant.employeesBase}?company_id=$companyId',
+      '${ApiConstant.employeesBase}?$queryParams',
       headers: _authHeader(token),
     );
   }
