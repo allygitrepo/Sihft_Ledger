@@ -42,7 +42,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         await ref.read(payrollProvider.notifier).loadSavedPayroll();
         await ref.read(attendanceListProvider.notifier).loadAttendance();
         await ref.read(departmentProvider.notifier).loadDepartments();
-        await ref.read(designationProvider.notifier).loadAllDesignations();
+        await ref.read(designationProvider.notifier).loadDesignations();
       },
       child: ListView(
         padding: EdgeInsets.all(horizontalPadding),
