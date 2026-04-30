@@ -193,10 +193,8 @@ class _PayrollScreenState extends ConsumerState<PayrollScreen> {
 
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
-      child: SingleChildScrollView(
-        child: Container(
-          width: double.infinity,
-          color: cardColor,
+      child: Container(
+        color: cardColor,
           child: DataTable(
             headingRowColor: WidgetStateProperty.all(
               theme.brightness == Brightness.dark
@@ -218,7 +216,7 @@ class _PayrollScreenState extends ConsumerState<PayrollScreen> {
             columns: const [
               DataColumn(
                 label: Text(
-                  'Employee ID',
+                  'Sr no',
                   style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
                 ),
               ),
@@ -271,10 +269,12 @@ class _PayrollScreenState extends ConsumerState<PayrollScreen> {
                 numeric: true,
               ),
             ],
-            rows: payrollRecords.map((payroll) {
+            rows: payrollRecords.asMap().entries.map((entry) {
+              final index = entry.key;
+              final payroll = entry.value;
               return DataRow(
                 cells: [
-                  // Employee ID
+                  // Sr no
                   DataCell(
                     Container(
                       padding: const EdgeInsets.symmetric(
@@ -286,7 +286,7 @@ class _PayrollScreenState extends ConsumerState<PayrollScreen> {
                         borderRadius: BorderRadius.circular(6),
                       ),
                       child: SelectableText(
-                        payroll.employeeId,
+                        '${index + 1}',
                         style: const TextStyle(
                           fontWeight: FontWeight.w600,
                           color: AppColors.primary,
@@ -410,7 +410,6 @@ class _PayrollScreenState extends ConsumerState<PayrollScreen> {
             }).toList(),
           ),
         ),
-      ),
     );
   }
 

@@ -1,4 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shiftledger/models/attendance_model.dart';
+import 'package:shiftledger/providers/company_provider.dart';
 import '../models/payroll_model.dart';
 import '../services/payroll_service.dart';
 import '../services/attendance_service.dart';
@@ -113,8 +115,16 @@ class PayrollNotifier extends Notifier<PayrollState> {
     state = state.copyWith(isLoading: true);
 
     try {
-      // Load all attendance records
-      final attendanceRecords = await AttendanceService.loadAttendance();
+      // Load all attendance records for the period
+      final companyId = ref.read(companyProvider).company?.id;
+      final response = await AttendanceService.loadAttendance(
+        companyId: companyId,
+        startDate: state.startDate,
+        endDate: state.endDate,
+        limit: 10000, // Fetch a large enough number to cover all records for payroll
+      );
+      
+      final attendanceRecords = response['attendance'] as List<AttendanceModel>;
 
       // Generate payroll using the service
       final payrollList = PayrollService.generatePayroll(
