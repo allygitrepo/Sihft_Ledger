@@ -1,8 +1,8 @@
 import 'dart:convert';
 
 class DepartmentModel {
-  final String id;
-  final String companyId;
+  final int id;
+  final int companyId;
   final String departmentName;
   final DateTime createdAt;
   final DateTime updatedAt;
@@ -39,9 +39,15 @@ class DepartmentModel {
       }
     }
 
+    int parseId(dynamic id) {
+      if (id is int) return id;
+      if (id is String) return int.tryParse(id) ?? 0;
+      return 0;
+    }
+
     return DepartmentModel(
-      id: map['id']?.toString() ?? '',
-      companyId: map['company_id']?.toString() ?? '',
+      id: parseId(map['id']),
+      companyId: parseId(map['company_id']),
       departmentName: map['department_name'] ?? 'Unknown',
       createdAt: parseDate(map['created_at']),
       updatedAt: parseDate(map['updated_at']),
@@ -55,8 +61,8 @@ class DepartmentModel {
       DepartmentModel.fromMap(json.decode(source));
 
   DepartmentModel copyWith({
-    String? id,
-    String? companyId,
+    int? id,
+    int? companyId,
     String? departmentName,
     DateTime? createdAt,
     DateTime? updatedAt,
