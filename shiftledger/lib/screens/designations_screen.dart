@@ -1,4 +1,6 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:collection/collection.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import '../models/designation_model.dart';
@@ -19,6 +21,7 @@ class DesignationsScreen extends ConsumerStatefulWidget {
 class _DesignationsScreenState extends ConsumerState<DesignationsScreen> {
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
+  Timer? _debounce;
 
   @override
   void initState() {
@@ -29,6 +32,7 @@ class _DesignationsScreenState extends ConsumerState<DesignationsScreen> {
   @override
   void dispose() {
     _searchController.dispose();
+    _debounce?.cancel();
     super.dispose();
   }
 
@@ -40,12 +44,7 @@ class _DesignationsScreenState extends ConsumerState<DesignationsScreen> {
     final screenWidth = MediaQuery.of(context).size.width;
     final isDesktop = screenWidth > 800;
 
-    final filteredDesignations = designationState.designations.where((desig) {
-      if (_searchQuery.isEmpty) return true;
-      return desig.designationName.toLowerCase().contains(
-        _searchQuery.toLowerCase(),
-      );
-    }).toList();
+    final filteredDesignations = designationState.designations;
 
     return Scaffold(
       appBar: isDesktop
@@ -57,7 +56,7 @@ class _DesignationsScreenState extends ConsumerState<DesignationsScreen> {
           children: [
             _buildHeader(context, theme, departmentState.departments),
             Expanded(
-              child: designationState.isLoading || departmentState.isLoading
+              child: designationState.isLoading && designationState.designations.isEmpty
                   ? const Center(child: AppLoader())
                   : _buildContent(
                       context,
@@ -67,6 +66,8 @@ class _DesignationsScreenState extends ConsumerState<DesignationsScreen> {
                       isDesktop,
                     ),
             ),
+            if (designationState.totalPages > 1)
+              _buildPaginationControls(designationState),
           ],
         ),
       ),
@@ -125,6 +126,13 @@ class _DesignationsScreenState extends ConsumerState<DesignationsScreen> {
                 setState(() {
                   _searchQuery = value;
                 });
+                if (_debounce?.isActive ?? false) _debounce!.cancel();
+                _debounce = Timer(const Duration(milliseconds: 500), () {
+                  ref.read(designationProvider.notifier).loadDesignations(
+                    search: _searchQuery,
+                    page: 1,
+                  );
+                });
               },
             ),
           ),
@@ -132,7 +140,7 @@ class _DesignationsScreenState extends ConsumerState<DesignationsScreen> {
           IconButton(
             onPressed: () {
               ref.read(departmentProvider.notifier).loadDepartments();
-              ref.read(designationProvider.notifier).loadAllDesignations();
+              ref.read(designationProvider.notifier).loadDesignations();
             },
             icon: const Icon(Icons.refresh, color: AppColors.primary),
             tooltip: 'Refresh',
@@ -157,6 +165,39 @@ class _DesignationsScreenState extends ConsumerState<DesignationsScreen> {
                 borderRadius: BorderRadius.circular(12),
               ),
             ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPaginationControls(DesignationState state) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          IconButton(
+            onPressed: state.currentPage > 1
+                ? () => ref.read(designationProvider.notifier).loadDesignations(
+                      page: state.currentPage - 1,
+                      search: _searchQuery,
+                    )
+                : null,
+            icon: const Icon(Icons.chevron_left),
+          ),
+          Text(
+            'Page ${state.currentPage} of ${state.totalPages}',
+            style: const TextStyle(fontWeight: FontWeight.w500),
+          ),
+          IconButton(
+            onPressed: state.currentPage < state.totalPages
+                ? () => ref.read(designationProvider.notifier).loadDesignations(
+                      page: state.currentPage + 1,
+                      search: _searchQuery,
+                    )
+                : null,
+            icon: const Icon(Icons.chevron_right),
           ),
         ],
       ),
@@ -203,7 +244,7 @@ class _DesignationsScreenState extends ConsumerState<DesignationsScreen> {
               ElevatedButton(
                 onPressed: () {
                   ref.read(departmentProvider.notifier).loadDepartments();
-                  ref.read(designationProvider.notifier).loadAllDesignations();
+                  ref.read(designationProvider.notifier).loadDesignations();
                 },
                 child: const Text('Retry'),
               ),
@@ -222,8 +263,8 @@ class _DesignationsScreenState extends ConsumerState<DesignationsScreen> {
           final dept = departments.firstWhere(
             (d) => d.id == desig.departmentId,
             orElse: () => DepartmentModel(
-              id: '',
-              companyId: '',
+              id: 0,
+              companyId: 0,
               departmentName: 'Unknown',
               createdAt: DateTime.now(),
               updatedAt: DateTime.now(),
@@ -332,8 +373,8 @@ class _DesignationsScreenState extends ConsumerState<DesignationsScreen> {
                     final dept = departments.firstWhere(
                       (d) => d.id == desig.departmentId,
                       orElse: () => DepartmentModel(
-                        id: '',
-                        companyId: '',
+                        id: 0,
+                        companyId: 0,
                         departmentName: 'Unknown',
                         createdAt: DateTime.now(),
                         updatedAt: DateTime.now(),
@@ -448,7 +489,7 @@ class _DesignationsScreenState extends ConsumerState<DesignationsScreen> {
     final nameController = TextEditingController(
       text: designation?.designationName ?? '',
     );
-    String? selectedDepartmentId =
+    int? selectedDepartmentId =
         designation?.departmentId ??
         (departments.isNotEmpty ? departments.first.id : null);
     bool status = designation?.status ?? true;
@@ -502,7 +543,7 @@ class _DesignationsScreenState extends ConsumerState<DesignationsScreen> {
                       ],
                     ),
                     const SizedBox(height: 24),
-                    DropdownButtonFormField<String>(
+                    DropdownButtonFormField<int>(
                       value: selectedDepartmentId,
                       decoration: InputDecoration(
                         labelText: 'Department',

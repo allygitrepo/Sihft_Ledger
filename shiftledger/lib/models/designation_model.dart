@@ -1,9 +1,9 @@
 import 'dart:convert';
 
 class DesignationModel {
-  final String id;
-  final String companyId;
-  final String departmentId;
+  final int id;
+  final int companyId;
+  final int departmentId;
   final String designationName;
   final DateTime createdAt;
   final DateTime updatedAt;
@@ -42,10 +42,16 @@ class DesignationModel {
       }
     }
 
+    int parseId(dynamic id) {
+      if (id is int) return id;
+      if (id is String) return int.tryParse(id) ?? 0;
+      return 0;
+    }
+
     return DesignationModel(
-      id: map['id']?.toString() ?? '',
-      companyId: map['company_id']?.toString() ?? '',
-      departmentId: map['department_id']?.toString() ?? '',
+      id: parseId(map['id']),
+      companyId: parseId(map['company_id']),
+      departmentId: parseId(map['department_id']),
       designationName: map['designation_name'] ?? 'Unknown',
       createdAt: parseDate(map['created_at']),
       updatedAt: parseDate(map['updated_at']),
@@ -59,9 +65,9 @@ class DesignationModel {
       DesignationModel.fromMap(json.decode(source));
 
   DesignationModel copyWith({
-    String? id,
-    String? companyId,
-    String? departmentId,
+    int? id,
+    int? companyId,
+    int? departmentId,
     String? designationName,
     DateTime? createdAt,
     DateTime? updatedAt,
