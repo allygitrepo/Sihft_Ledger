@@ -1,4 +1,11 @@
 const Department = require("./department.model");
+const Designation = require("../designation/designation.model");
+const Employee = require("../employee/employee.model");
+const Attendance = require("../attendance/attendance.model");
+const Salary = require("../salary/salary.model");
+const EmployeeSalary = require("../employee_salary/employee_salary.model");
+const EmployeeOvertimeConfig = require("../employee_overtime_config/employee_overtime_config.model");
+const sequelize = require("../../config/db");
 
 const departmentController = {
     create: async (req, res) => {
@@ -23,10 +30,31 @@ const departmentController = {
 
     getAll: async (req, res) => {
         try {
-            const { company_id } = req.query;
+            const { company_id, page = 1, limit = 10, search = '' } = req.query;
             const whereClause = company_id ? { company_id } : {};
-            const departments = await Department.findAll({ where: whereClause });
-            return res.status(200).json({ departments });
+
+            if (search) {
+                const { Op } = require("sequelize");
+                whereClause.department_name = { [Op.like]: `%${search}%` };
+            }
+
+            const pageNum = parseInt(page);
+            const limitNum = parseInt(limit);
+            const offset = (pageNum - 1) * limitNum;
+
+            const { count, rows: departments } = await Department.findAndCountAll({
+                where: whereClause,
+                limit: limitNum,
+                offset: offset,
+                order: [['created_at', 'DESC']]
+            });
+
+            return res.status(200).json({ 
+                departments,
+                totalRecords: count,
+                totalPages: Math.ceil(count / limitNum),
+                currentPage: pageNum
+            });
         } catch (error) {
             console.error(error);
             return res.status(500).json({ message: "Internal server error" });

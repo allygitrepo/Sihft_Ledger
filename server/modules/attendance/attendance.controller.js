@@ -1,3 +1,4 @@
+const { Op } = require("sequelize");
 const Attendance = require("./attendance.model");
 const Employee = require("../employee/employee.model");
 
@@ -96,24 +97,41 @@ const attendanceController = {
     getByDate: async (req, res) => {
         try {
             const { date } = req.params;
-            const { company_id } = req.query;
+            const { company_id, page = 1, limit = 10, search = '' } = req.query;
+            const offset = (page - 1) * limit;
             
             // Build where clause for Employee
             const employeeWhere = { status: true };
             if (company_id) {
                 employeeWhere.company_id = company_id;
             }
+            if (search) {
+                employeeWhere[Op.or] = [
+                    { full_name: { [Op.like]: `%${search}%` } },
+                    { employee_code: { [Op.like]: `%${search}%` } }
+                ];
+            }
 
-            const attendance = await Attendance.findAll({
+            const { count, rows } = await Attendance.findAndCountAll({
                 where: { date, status: true },
                 include: [{
                     model: Employee,
-                    attributes: ['id', 'full_name', 'company_id'],
+                    attributes: ['id', 'full_name', 'company_id', 'employee_code'],
                     where: employeeWhere,
                     required: true // INNER JOIN to ensure only employees from specified company
-                }]
+                }],
+                order: [['createdAt', 'DESC']],
+                limit: parseInt(limit),
+                offset: parseInt(offset)
             });
-            return res.status(200).json({ success: true, attendance });
+            
+            return res.status(200).json({ 
+                success: true, 
+                attendance: rows,
+                totalPages: Math.ceil(count / limit),
+                currentPage: parseInt(page),
+                totalRecords: count
+            });
         } catch (error) {
             console.error("Error fetching attendance by date:", error);
             return res.status(500).json({ success: false, message: "Internal server error" });
@@ -191,6 +209,65 @@ const attendanceController = {
 
     getAll: async (req, res) => {
         try {
+            const { company_id, page = 1, limit = 10, search = '', start_date, end_date, department } = req.query;
+            const offset = (page - 1) * limit;
+            
+            // Build where clause for Employee
+            const employeeWhere = { status: true };
+            if (company_id) {
+                employeeWhere.company_id = company_id;
+            }
+            if (department && department !== 'All') {
+                employeeWhere.department = department;
+            }
+            if (search) {
+                employeeWhere[Op.or] = [
+                    { full_name: { [Op.like]: `%${search}%` } },
+                    { employee_code: { [Op.like]: `%${search}%` } }
+                ];
+            }
+
+            // Build where clause for Attendance
+            const attendanceWhere = { status: true };
+            if (start_date && end_date) {
+                attendanceWhere.date = {
+                    [Op.between]: [start_date, end_date]
+                };
+            } else if (start_date) {
+                attendanceWhere.date = { [Op.gte]: start_date };
+            } else if (end_date) {
+                attendanceWhere.date = { [Op.lte]: end_date };
+            }
+
+            const { count, rows } = await Attendance.findAndCountAll({
+                where: attendanceWhere,
+                include: [{
+                    model: Employee,
+                    attributes: ['id', 'full_name', 'company_id', 'employee_code'],
+                    where: employeeWhere,
+                    required: true // INNER JOIN to ensure only employees from specified company
+                }],
+                order: [['date', 'DESC']],
+                limit: parseInt(limit),
+                offset: parseInt(offset)
+            });
+            
+            return res.status(200).json({ 
+                success: true, 
+                attendance: rows,
+                totalPages: Math.ceil(count / limit),
+                currentPage: parseInt(page),
+                totalRecords: count
+            });
+        } catch (error) {
+            console.error("Error fetching all attendance:", error);
+            return res.status(500).json({ success: false, message: "Internal server error" });
+        }
+    },
+
+    getMarkedIdsByDate: async (req, res) => {
+        try {
+            const { date } = req.params;
             const { company_id } = req.query;
             
             // Build where clause for Employee
@@ -200,19 +277,21 @@ const attendanceController = {
             }
 
             const attendance = await Attendance.findAll({
-                where: { status: true },
+                where: { date, status: true },
+                attributes: ['employee_id'],
                 include: [{
                     model: Employee,
-                    attributes: ['id', 'full_name', 'company_id'],
+                    attributes: [],
                     where: employeeWhere,
-                    required: true // INNER JOIN to ensure only employees from specified company
-                }],
-                order: [['date', 'DESC']],
-                limit: 500 // Safety limit
+                    required: true
+                }]
             });
-            return res.status(200).json({ success: true, attendance });
+            
+            const markedIds = attendance.map(a => a.employee_id.toString());
+            
+            return res.status(200).json({ success: true, markedIds });
         } catch (error) {
-            console.error("Error fetching all attendance:", error);
+            console.error("Error fetching marked ids by date:", error);
             return res.status(500).json({ success: false, message: "Internal server error" });
         }
     }

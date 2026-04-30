@@ -8,6 +8,7 @@ router.post("/clock-out", authMiddleware, attendanceController.clockOut);
 router.post("/mark", authMiddleware, attendanceController.mark);
 router.get("/all", authMiddleware, attendanceController.getAll);
 router.get("/employee/:employee_id", authMiddleware, attendanceController.getByEmployee);
+router.get("/marked-ids/:date", authMiddleware, attendanceController.getMarkedIdsByDate);
 router.get("/date/:date", authMiddleware, attendanceController.getByDate);
 router.put("/status/:id", authMiddleware, attendanceController.updateStatus);
 

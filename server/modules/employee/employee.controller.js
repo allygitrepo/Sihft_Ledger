@@ -82,19 +82,40 @@ const employeeController = {
 
     getAll: async (req, res) => {
         try {
-            const { company_id, department_id } = req.query;
+            const { company_id, department_id, page = 1, limit = 10, search = '' } = req.query;
             const whereClause = {};
             if (company_id) whereClause.company_id = company_id;
             if (department_id) whereClause.department_id = department_id;
 
-            const employees = await Employee.findAll({
+            if (search) {
+                whereClause[Op.or] = [
+                    { full_name: { [Op.like]: `%${search}%` } },
+                    { employee_code: { [Op.like]: `%${search}%` } },
+                    { phone: { [Op.like]: `%${search}%` } },
+                    { '$Department.department_name$': { [Op.like]: `%${search}%` } },
+                    { '$Designation.designation_name$': { [Op.like]: `%${search}%` } }
+                ];
+            }
+
+            const pageNum = parseInt(page);
+            const limitNum = parseInt(limit);
+            const offset = (pageNum - 1) * limitNum;
+
+            const { count, rows: employees } = await Employee.findAndCountAll({
                 where: whereClause,
+                limit: limitNum,
+                offset: offset,
                 include: [
                     { model: Department, attributes: ['department_name'] },
                     { model: Designation, attributes: ['designation_name'] }
                 ]
             });
-            return res.status(200).json({ employees });
+            return res.status(200).json({ 
+                employees,
+                totalRecords: count,
+                totalPages: Math.ceil(count / limitNum),
+                currentPage: pageNum
+            });
         } catch (error) {
             console.error(error);
             return res.status(500).json({ message: "Internal server error" });
