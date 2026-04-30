@@ -80,8 +80,11 @@ class SidebarNavigation extends ConsumerWidget {
                 children: [
                   _buildMenuTile(
                     context: context,
+                    ref: ref,
                     icon: Icons.home,
                     label: 'Home',
+                    route: AppRoutes.dashboard,
+                    navIndex: 0,
                     onTap: () {
                       // Reset navigation index and go to dashboard
                       ref.read(navigationProvider.notifier).setIndex(0);
@@ -108,8 +111,10 @@ class SidebarNavigation extends ConsumerWidget {
                   ),
                   _buildMenuTile(
                     context: context,
+                    ref: ref,
                     icon: Icons.people,
                     label: 'Employees',
+                    route: AppRoutes.employees,
                     onTap: () {
                       Navigator.pushReplacementNamed(
                         context,
@@ -119,8 +124,10 @@ class SidebarNavigation extends ConsumerWidget {
                   ),
                   _buildMenuTile(
                     context: context,
+                    ref: ref,
                     icon: Icons.business,
                     label: 'Departments',
+                    route: AppRoutes.departments,
                     onTap: () {
                       Navigator.pushReplacementNamed(
                         context,
@@ -130,8 +137,10 @@ class SidebarNavigation extends ConsumerWidget {
                   ),
                   _buildMenuTile(
                     context: context,
+                    ref: ref,
                     icon: Icons.badge,
                     label: 'Designations',
+                    route: AppRoutes.designations,
                     onTap: () {
                       Navigator.pushReplacementNamed(
                         context,
@@ -141,8 +150,10 @@ class SidebarNavigation extends ConsumerWidget {
                   ),
                   _buildMenuTile(
                     context: context,
+                    ref: ref,
                     icon: Icons.access_time,
                     label: 'Attendance',
+                    route: AppRoutes.attendance,
                     onTap: () {
                       Navigator.pushReplacementNamed(
                         context,
@@ -152,8 +163,10 @@ class SidebarNavigation extends ConsumerWidget {
                   ),
                   _buildMenuTile(
                     context: context,
+                    ref: ref,
                     icon: Icons.payment,
                     label: 'Payroll',
+                    route: AppRoutes.payroll,
                     onTap: () {
                       Navigator.pushReplacementNamed(
                         context,
@@ -178,24 +191,31 @@ class SidebarNavigation extends ConsumerWidget {
                   ),
                   _buildMenuTile(
                     context: context,
+                    ref: ref,
                     icon: Icons.account_balance_wallet,
                     label: 'Salary Configuration',
+                    route: AppRoutes.salaryConfiguration,
                     onTap: () {
-                      Navigator.pushNamed(context, '/salary-configuration');
+                      Navigator.pushNamed(context, AppRoutes.salaryConfiguration);
                     },
                   ),
                   _buildMenuTile(
                     context: context,
+                    ref: ref,
                     icon: Icons.timer,
                     label: 'Overtime Configuration',
+                    route: AppRoutes.overtimeConfiguration,
                     onTap: () {
-                      Navigator.pushNamed(context, '/overtime-configuration');
+                      Navigator.pushNamed(context, AppRoutes.overtimeConfiguration);
                     },
                   ),
                   _buildMenuTile(
                     context: context,
+                    ref: ref,
                     icon: Icons.settings,
                     label: 'Settings',
+                    route: AppRoutes.dashboard,
+                    navIndex: 2,
                     onTap: () {
                       // Reset navigation index and go to dashboard settings
                       ref.read(navigationProvider.notifier).setIndex(2);
@@ -222,8 +242,10 @@ class SidebarNavigation extends ConsumerWidget {
                   ),
                   _buildMenuTile(
                     context: context,
+                    ref: ref,
                     icon: Icons.person,
                     label: 'Profile',
+                    route: AppRoutes.profile,
                     onTap: () {
                       Navigator.pushReplacementNamed(
                         context,
@@ -233,8 +255,10 @@ class SidebarNavigation extends ConsumerWidget {
                   ),
                   _buildMenuTile(
                     context: context,
+                    ref: ref,
                     icon: Icons.info,
                     label: 'About Us',
+                    route: AppRoutes.aboutUs,
                     onTap: () {
                       Navigator.pushReplacementNamed(
                         context,
@@ -248,6 +272,7 @@ class SidebarNavigation extends ConsumerWidget {
             const Divider(height: 1),
             _buildMenuTile(
               context: context,
+              ref: ref,
               icon: Icons.logout,
               label: 'Logout',
               onTap: () async {
@@ -293,17 +318,58 @@ class SidebarNavigation extends ConsumerWidget {
 
   Widget _buildMenuTile({
     required BuildContext context,
+    required WidgetRef ref,
     required IconData icon,
     required String label,
     required VoidCallback onTap,
+    String? route,
+    int? navIndex,
   }) {
     final theme = Theme.of(context);
-    final iconColor = theme.iconTheme.color ?? Colors.grey[600];
+    final currentRoute = ModalRoute.of(context)?.settings.name;
+    final currentIndex = ref.watch(navigationProvider);
 
-    return ListTile(
-      leading: Icon(icon, color: iconColor),
-      title: Text(label),
-      onTap: onTap,
+    bool isSelected = false;
+    if (route != null && currentRoute == route) {
+      if (navIndex != null) {
+        if (currentIndex == navIndex) {
+          isSelected = true;
+        }
+      } else {
+        isSelected = true;
+      }
+    }
+
+    final iconColor = isSelected 
+        ? AppColors.primary 
+        : (theme.iconTheme.color ?? Colors.grey[600]);
+        
+    final textColor = isSelected 
+        ? AppColors.primary 
+        : (theme.textTheme.bodyLarge?.color ?? Colors.black87);
+
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      decoration: BoxDecoration(
+        color: isSelected 
+            ? AppColors.primary.withValues(alpha: 0.15) 
+            : Colors.transparent,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: ListTile(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
+        leading: Icon(icon, color: iconColor),
+        title: Text(
+          label,
+          style: TextStyle(
+            color: textColor,
+            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+          ),
+        ),
+        onTap: onTap,
+      ),
     );
   }
 }
