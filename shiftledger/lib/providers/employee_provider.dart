@@ -16,6 +16,9 @@ class EmployeeState {
   final bool isParsingCSV;
   final bool isImporting;
   final String? error;
+  final int currentPage;
+  final int totalPages;
+  final int totalRecords;
 
   const EmployeeState({
     this.employees = const [],
@@ -23,6 +26,9 @@ class EmployeeState {
     this.isParsingCSV = false,
     this.isImporting = false,
     this.error,
+    this.currentPage = 1,
+    this.totalPages = 1,
+    this.totalRecords = 0,
   });
 
   EmployeeState copyWith({
@@ -31,6 +37,9 @@ class EmployeeState {
     bool? isParsingCSV,
     bool? isImporting,
     String? error,
+    int? currentPage,
+    int? totalPages,
+    int? totalRecords,
   }) {
     return EmployeeState(
       employees: employees ?? this.employees,
@@ -38,6 +47,9 @@ class EmployeeState {
       isParsingCSV: isParsingCSV ?? this.isParsingCSV,
       isImporting: isImporting ?? this.isImporting,
       error: error ?? this.error,
+      currentPage: currentPage ?? this.currentPage,
+      totalPages: totalPages ?? this.totalPages,
+      totalRecords: totalRecords ?? this.totalRecords,
     );
   }
 }
@@ -67,7 +79,7 @@ class EmployeeNotifier extends Notifier<EmployeeState> {
     }
   }
 
-  Future<void> loadEmployees() async {
+  Future<void> loadEmployees({int page = 1, int limit = 10, String search = ''}) async {
     final token = ref.read(authProvider).token;
     final companyId = ref.read(companyProvider).company?.id;
 
@@ -80,14 +92,27 @@ class EmployeeNotifier extends Notifier<EmployeeState> {
     print('[EmployeeProvider] Fetching employees for company: $companyId');
 
     try {
-      final response = await ApiService.getEmployees(companyId, token);
+      final response = await ApiService.getEmployees(
+        companyId, 
+        token, 
+        page: page, 
+        limit: limit, 
+        search: search
+      );
 
       if (response['success'] == true) {
         final List<dynamic> employeesJson = response['employees'] ?? [];
         final employees = employeesJson
             .map((json) => EmployeeModel.fromJson(json))
             .toList();
-        state = state.copyWith(employees: employees, isLoading: false);
+            
+        state = state.copyWith(
+          employees: employees, 
+          isLoading: false,
+          currentPage: response['currentPage'] ?? 1,
+          totalPages: response['totalPages'] ?? 1,
+          totalRecords: response['totalRecords'] ?? employees.length,
+        );
         print(
           '[EmployeeProvider] Successfully loaded ${employees.length} employees',
         );
@@ -264,9 +289,9 @@ class EmployeeNotifier extends Notifier<EmployeeState> {
               employee.department.toLowerCase(),
         );
         if (matches.isNotEmpty) {
-          resolvedDeptId = int.tryParse(matches.first.id);
+          resolvedDeptId = matches.first.id;
         } else if (departments.isNotEmpty) {
-          resolvedDeptId = int.tryParse(departments.first.id);
+          resolvedDeptId = departments.first.id;
         }
       }
 
@@ -279,9 +304,9 @@ class EmployeeNotifier extends Notifier<EmployeeState> {
               employee.position.toLowerCase(),
         );
         if (matches.isNotEmpty) {
-          resolvedDesigId = int.tryParse(matches.first.id);
+          resolvedDesigId = matches.first.id;
         } else if (designations.isNotEmpty) {
-          resolvedDesigId = int.tryParse(designations.first.id);
+          resolvedDesigId = designations.first.id;
         }
       }
 

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:collection/collection.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 import 'package:file_picker/file_picker.dart';
@@ -7,6 +8,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'dart:typed_data';
 import 'dart:convert';
 import 'dart:developer' as developer;
+import 'dart:async';
 import '../providers/employee_provider.dart';
 import '../providers/settings_provider.dart';
 import '../providers/department_provider.dart';
@@ -31,12 +33,13 @@ class EmployeesScreen extends ConsumerStatefulWidget {
 
 class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
+  Timer? _debounce;
   String? _editingEmployeeId;
   final Map<String, TextEditingController> _editControllers = {};
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
-  String? _selectedEditDepartmentId;
-  String? _selectedEditDesignationId;
+  int? _selectedEditDepartmentId;
+  int? _selectedEditDesignationId;
 
   @override
   void dispose() {
@@ -45,6 +48,7 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
       controller.dispose();
     }
     _searchController.dispose();
+    _debounce?.cancel();
     super.dispose();
   }
 
@@ -55,8 +59,8 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
       _editControllers['mobile'] = TextEditingController(
         text: employee.mobileNo,
       );
-      _selectedEditDepartmentId = employee.departmentId?.toString();
-      _selectedEditDesignationId = employee.designationId?.toString();
+      _selectedEditDepartmentId = employee.departmentId;
+      _selectedEditDesignationId = employee.designationId;
 
       // If IDs are null, try to find them from names (fallback)
       if (_selectedEditDepartmentId == null) {
@@ -83,7 +87,7 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
       if (_selectedEditDepartmentId != null) {
         ref
             .read(designationProvider.notifier)
-            .loadDesignations(_selectedEditDepartmentId!);
+            .loadDesignations(departmentId: _selectedEditDepartmentId!);
       }
 
       _editControllers['salary'] = TextEditingController(
@@ -103,6 +107,9 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
       _editControllers.clear();
     });
   }
+
+
+  
 
   void _saveEditing(EmployeeModel originalEmployee) {
     if (_selectedEditDepartmentId == null ||
@@ -148,8 +155,8 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
       mobileNo: _editControllers['mobile']!.text,
       position: posName,
       department: deptName,
-      departmentId: int.tryParse(_selectedEditDepartmentId!),
-      designationId: int.tryParse(_selectedEditDesignationId!),
+      departmentId: _selectedEditDepartmentId,
+      designationId: _selectedEditDesignationId,
       salary: newSalary,
       salaryOriginal: newSalary,
       salaryType: conversion['salaryType'] as String,
@@ -186,16 +193,8 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
     final cardColor = theme.cardColor;
     final subtitleColor = theme.textTheme.bodySmall?.color ?? Colors.grey;
 
-    // Filter employees based on search query
-    final filteredEmployees = employeeState.employees.where((employee) {
-      if (_searchQuery.isEmpty) return true;
-      final query = _searchQuery.toLowerCase();
-      return employee.name.toLowerCase().contains(query) ||
-          employee.employeeCode.toLowerCase().contains(query) ||
-          employee.mobileNo.contains(query) ||
-          employee.position.toLowerCase().contains(query) ||
-          employee.department.toLowerCase().contains(query);
-    }).toList();
+    // Use employees directly from state (already paginated and searched)
+    final filteredEmployees = employeeState.employees;
 
     // Desktop: Table View
     if (isDesktop) {
@@ -247,6 +246,13 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
                                 onChanged: (value) {
                                   setState(() {
                                     _searchQuery = value;
+                                  });
+                                  if (_debounce?.isActive ?? false) _debounce!.cancel();
+                                  _debounce = Timer(const Duration(milliseconds: 500), () {
+                                    ref.read(employeeProvider.notifier).loadEmployees(
+                                      search: _searchQuery,
+                                      page: 1,
+                                    );
                                   });
                                 },
                               ),
@@ -339,8 +345,8 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
                             const SizedBox(width: 8),
                             Text(
                               _searchQuery.isEmpty
-                                  ? '${employeeState.employees.length} total employees'
-                                  : 'Found ${filteredEmployees.length} of ${employeeState.employees.length} employees',
+                                  ? '${employeeState.totalRecords} total employees'
+                                  : 'Found ${employeeState.totalRecords} employees',
                               style: TextStyle(
                                 fontSize: 14,
                                 color: subtitleColor,
@@ -388,6 +394,8 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
                             child: _buildDesktopTable(filteredEmployees),
                           ),
                   ),
+                  if (employeeState.totalPages > 1)
+                    _buildPaginationControls(employeeState),
                 ],
               ),
       );
@@ -492,6 +500,13 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
                       setState(() {
                         _searchQuery = value;
                       });
+                      if (_debounce?.isActive ?? false) _debounce!.cancel();
+                      _debounce = Timer(const Duration(milliseconds: 500), () {
+                        ref.read(employeeProvider.notifier).loadEmployees(
+                          search: _searchQuery,
+                          page: 1,
+                        );
+                      });
                     },
                   ),
                 ),
@@ -506,7 +521,7 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
                         Icon(Icons.people, color: AppColors.primary, size: 18),
                         const SizedBox(width: 8),
                         Text(
-                          'Found ${filteredEmployees.length} of ${employeeState.employees.length} employees',
+                          'Found ${employeeState.totalRecords} employees',
                           style: TextStyle(
                             fontSize: 13,
                             color: subtitleColor,
@@ -549,8 +564,43 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
                           },
                         ),
                 ),
+                if (employeeState.totalPages > 1)
+                  _buildPaginationControls(employeeState),
               ],
             ),
+    );
+  }
+
+  Widget _buildPaginationControls(EmployeeState state) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          IconButton(
+            onPressed: state.currentPage > 1
+                ? () => ref.read(employeeProvider.notifier).loadEmployees(
+                      page: state.currentPage - 1,
+                      search: _searchQuery,
+                    )
+                : null,
+            icon: const Icon(Icons.chevron_left),
+          ),
+          Text(
+            'Page ${state.currentPage} of ${state.totalPages}',
+            style: const TextStyle(fontWeight: FontWeight.w500),
+          ),
+          IconButton(
+            onPressed: state.currentPage < state.totalPages
+                ? () => ref.read(employeeProvider.notifier).loadEmployees(
+                      page: state.currentPage + 1,
+                      search: _searchQuery,
+                    )
+                : null,
+            icon: const Icon(Icons.chevron_right),
+          ),
+        ],
+      ),
     );
   }
 
@@ -703,7 +753,7 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
                 isEditing
                     ? SizedBox(
                         width: 160,
-                        child: DropdownButtonFormField<String>(
+                        child: DropdownButtonFormField<int>(
                           value: _selectedEditDepartmentId,
                           isExpanded: true,
                           isDense: true,
@@ -742,7 +792,7 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
                             if (value != null) {
                               ref
                                   .read(designationProvider.notifier)
-                                  .loadDesignations(value);
+                                  .loadDesignations(departmentId: value);
                             }
                           },
                         ),
@@ -774,7 +824,7 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
                 isEditing
                     ? SizedBox(
                         width: 160,
-                        child: DropdownButtonFormField<String>(
+                        child: DropdownButtonFormField<int>(
                           value: _selectedEditDesignationId,
                           isExpanded: true,
                           isDense: true,
@@ -1150,7 +1200,7 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
 
     return Center(
       child: Container(
-        constraints: const BoxConstraints(maxWidth: 500),
+        constraints: const BoxConstraints(maxWidth: 600),
         padding: const EdgeInsets.all(32),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -1194,12 +1244,14 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
             const SizedBox(height: 40),
             // Actions
             if (isDesktop)
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
+              Wrap(
+                alignment: WrapAlignment.center,
+                spacing: 16,
+                runSpacing: 16,
                 children: [
                   _buildAddButton(context),
-                  const SizedBox(width: 16),
                   _buildImportButton(context),
+                  _buildDownloadTemplateButton(context),
                 ],
               )
             else
@@ -1209,6 +1261,8 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
                   _buildAddButton(context),
                   const SizedBox(height: 12),
                   _buildImportButton(context),
+                  const SizedBox(height: 12),
+                  _buildDownloadTemplateButton(context),
                 ],
               ),
             if (isLoading) ...[
@@ -1257,14 +1311,28 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
     );
   }
 
+  Widget _buildDownloadTemplateButton(BuildContext context) {
+    return OutlinedButton.icon(
+      onPressed: () => _downloadCSVTemplate(context),
+      icon: const Icon(Icons.download, size: 20),
+      label: const Text('Template CSV'),
+      style: OutlinedButton.styleFrom(
+        foregroundColor: Colors.orange,
+        side: const BorderSide(color: Colors.orange, width: 1.5),
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      ),
+    );
+  }
+
   void _showAddEmployeeForm(BuildContext context) {
     final nameController = TextEditingController();
     final mobileController = TextEditingController();
     final salaryController = TextEditingController();
     final formKey = GlobalKey<FormState>();
 
-    String? selectedDepartmentId;
-    String? selectedDesignationId;
+    int? selectedDepartmentId;
+    int? selectedDesignationId;
     DateTime selectedJoinDate = DateTime.now();
     bool isStatusActive = true;
 
@@ -1337,7 +1405,7 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
                         ),
                         const SizedBox(height: 16),
                         // Department Dropdown
-                        DropdownButtonFormField<String>(
+                        DropdownButtonFormField<int>(
                           value: selectedDepartmentId,
                           decoration: const InputDecoration(
                             labelText: 'Department',
@@ -1359,7 +1427,7 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
                             if (value != null) {
                               ref
                                   .read(designationProvider.notifier)
-                                  .loadDesignations(value);
+                                  .loadDesignations(departmentId: value);
                             }
                           },
                           validator: (value) => value == null
@@ -1368,7 +1436,7 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
                         ),
                         const SizedBox(height: 16),
                         // Designation Dropdown (filtered by selected department)
-                        DropdownButtonFormField<String>(
+                        DropdownButtonFormField<int>(
                           value: selectedDesignationId,
                           decoration: InputDecoration(
                             labelText: 'Designation / Position',
@@ -1389,7 +1457,8 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
                               : allDesignations
                                   .where(
                                     (d) =>
-                                        d.departmentId == selectedDepartmentId &&
+                                        d.departmentId ==
+                                            selectedDepartmentId &&
                                         d.status,
                                   )
                                   .map((desig) {
@@ -1466,12 +1535,17 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
                         ElevatedButton(
                           onPressed: () {
                             if (formKey.currentState!.validate()) {
-                              final dept = departments.firstWhere(
+                              final dept = departments.firstWhereOrNull(
                                 (d) => d.id == selectedDepartmentId,
                               );
-                              final desig = allDesignations.firstWhere(
+                              final desig = allDesignations.firstWhereOrNull(
                                 (d) => d.id == selectedDesignationId,
                               );
+
+                              if (dept == null || desig == null) {
+                                ToastHelper.error('Selected department or designation not found');
+                                return;
+                              }
                               _addEmployeeManually(
                                 context,
                                 nameController.text,
@@ -1551,8 +1625,8 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
     String position,
     String department,
     double salary,
-    String departmentId,
-    String designationId,
+    int departmentId,
+    int designationId,
     bool status,
     DateTime joinDate,
   ) {
@@ -1586,8 +1660,8 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
       mobileNo: mobileNo,
       position: position,
       department: department,
-      departmentId: int.tryParse(departmentId),
-      designationId: int.tryParse(designationId),
+      departmentId: departmentId,
+      designationId: designationId,
       salary: salary,
       salaryOriginal: salary,
       salaryType: conversion['salaryType'] as String,
@@ -1608,7 +1682,7 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
     if (employee.departmentId != null) {
       ref
           .read(designationProvider.notifier)
-          .loadDesignations(employee.departmentId.toString());
+          .loadDesignations(departmentId: employee.departmentId);
     }
 
     final firstNameController = TextEditingController(text: employee.firstName);
@@ -1625,16 +1699,14 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
     final departments = ref.read(departmentProvider).departments;
 
     // Direct ID matching
-    String? selectedDepartmentId = employee.departmentId?.toString();
-    String? selectedDesignationId = employee.designationId?.toString();
+    int? selectedDepartmentId = employee.departmentId;
+    int? selectedDesignationId = employee.designationId;
 
     // Fallback if IDs are null but names exist
     if (selectedDepartmentId == null) {
       selectedDepartmentId = departments
-          .cast<dynamic>()
-          .firstWhere(
-            (d) => d.departmentName == employee.department,
-            orElse: () => null,
+          .firstWhereOrNull(
+            (d) => d.departmentName.trim() == employee.department.trim(),
           )
           ?.id;
     }
@@ -1642,10 +1714,8 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
     if (selectedDesignationId == null) {
       final allDesignations = ref.read(designationProvider).designations;
       selectedDesignationId = allDesignations
-          .cast<dynamic>()
-          .firstWhere(
-            (d) => d.designationName == employee.position,
-            orElse: () => null,
+          .firstWhereOrNull(
+            (d) => d.designationName.trim() == employee.position.trim(),
           )
           ?.id;
     }
@@ -1700,7 +1770,7 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
                       ),
                       const SizedBox(height: 12),
                       // Department Dropdown
-                      DropdownButtonFormField<String>(
+                      DropdownButtonFormField<int>(
                         value: selectedDepartmentId,
                         decoration: const InputDecoration(
                           labelText: 'Department',
@@ -1710,7 +1780,8 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
                         ),
                         items: departments
                             .where(
-                              (d) => d.status || d.id == selectedDepartmentId,
+                              (d) =>
+                                  d.status || d.id == selectedDepartmentId,
                             )
                             .map((dept) {
                               return DropdownMenuItem(
@@ -1727,7 +1798,7 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
                           if (value != null) {
                             ref
                                 .read(designationProvider.notifier)
-                                .loadDesignations(value);
+                                .loadDesignations(departmentId: value);
                           }
                         },
                         validator: (value) =>
@@ -1735,7 +1806,7 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
                       ),
                       const SizedBox(height: 12),
                       // Designation Dropdown (filtered by selected department)
-                      DropdownButtonFormField<String>(
+                      DropdownButtonFormField<int>(
                         value: selectedDesignationId,
                         decoration: InputDecoration(
                           labelText: 'Designation / Position',
@@ -1756,8 +1827,10 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
                             : allDesignations
                                 .where(
                                   (d) =>
-                                      d.departmentId == selectedDepartmentId &&
-                                      (d.status || d.id == selectedDesignationId),
+                                      d.departmentId ==
+                                          selectedDepartmentId &&
+                                      (d.status ||
+                                          d.id == selectedDesignationId),
                                 )
                                 .map((desig) {
                                   return DropdownMenuItem(
@@ -1841,12 +1914,17 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
                   onPressed: () {
                     if (formKey.currentState!.validate()) {
                       final newSalary = double.parse(salaryController.text);
-                      final dept = departments.firstWhere(
+                      final dept = departments.firstWhereOrNull(
                         (d) => d.id == selectedDepartmentId,
                       );
-                      final desig = allDesignations.firstWhere(
+                      final desig = allDesignations.firstWhereOrNull(
                         (d) => d.id == selectedDesignationId,
                       );
+
+                      if (dept == null || desig == null) {
+                        ToastHelper.error('Department or Position not found');
+                        return;
+                      }
 
                       // Get settings and convert salary
                       final settings = ref.read(settingsProvider);
