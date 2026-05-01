@@ -16,9 +16,26 @@ const departmentController = {
                 return res.status(400).json({ message: "Company ID and department name are required" });
             }
 
+            const { Op } = require("sequelize");
+            const existing = await Department.findOne({
+                where: {
+                    company_id,
+                    department_name: { [Op.iLike]: department_name.trim() }
+                }
+            });
+
+            if (existing) {
+                if (existing.status) {
+                    return res.status(400).json({ message: "Department already exists" });
+                } else {
+                    await existing.update({ status: true });
+                    return res.status(200).json({ message: "Department reactivated successfully", department: existing });
+                }
+            }
+
             const department = await Department.create({
                 company_id,
-                department_name
+                department_name: department_name.trim()
             });
 
             return res.status(201).json({ message: "Department created successfully", department });

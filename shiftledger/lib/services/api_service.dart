@@ -353,6 +353,65 @@ class ApiService {
     );
   }
 
+  static Future<Map<String, dynamic>> importEmployeesCSV(
+    String companyId,
+    List<int> bytes,
+    String filename,
+    String token,
+  ) async {
+    try {
+      final request = http.MultipartRequest(
+        'POST',
+        Uri.parse('${ApiConstant.employeesBase}/import'),
+      );
+      request.headers.addAll({
+        'Authorization': 'Bearer $token',
+      });
+      request.fields['company_id'] = companyId;
+      request.files.add(
+        http.MultipartFile.fromBytes(
+          'file',
+          bytes,
+          filename: filename,
+        ),
+      );
+
+      final streamedResponse = await request.send();
+      final response = await http.Response.fromStream(streamedResponse);
+      return _handleResponse(response);
+    } catch (e) {
+      return {'success': false, 'message': 'Connection error: $e'};
+    }
+  }
+
+  static Future<Map<String, dynamic>> bulkUpsertEmployees(
+    String companyId,
+    List<Map<String, dynamic>> employees,
+    String token,
+  ) async {
+    return await post(
+      '${ApiConstant.employeesBase}/bulk',
+      {
+        'company_id': companyId,
+        'employees': employees,
+      },
+      headers: _authHeader(token),
+    );
+  }
+
+  static Future<http.Response> exportEmployeesCSV(
+    String companyId,
+    String token,
+  ) async {
+    final url = '${ApiConstant.employeesBase}/export?company_id=$companyId';
+    return await http.get(
+      Uri.parse(url),
+      headers: {
+        'Authorization': 'Bearer $token',
+      },
+    );
+  }
+
   // --- Salary Configuration ---
 
   static Future<Map<String, dynamic>> getSalaryConfig(

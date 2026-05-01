@@ -133,6 +133,36 @@ class DepartmentNotifier extends Notifier<DepartmentState> {
       return false;
     }
   }
+
+  Future<bool> updateDepartment(DepartmentModel department) async {
+    final token = ref.read(authProvider).token;
+    if (token == null) return false;
+
+    state = state.copyWith(isLoading: true);
+    final response = await ApiService.updateDepartment(
+      id: department.id.toString(),
+      departmentName: department.departmentName,
+      status: department.status,
+      token: token,
+    );
+
+    if (response['success'] == true) {
+      await loadDepartments();
+      return true;
+    } else {
+      state = state.copyWith(
+        isLoading: false,
+        error: response['message'] ?? 'Failed to update department',
+      );
+      return false;
+    }
+  }
+
+  Future<void> toggleStatus(int id) async {
+    final department = state.departments.firstWhere((d) => d.id == id);
+    final updated = department.copyWith(status: !department.status);
+    await updateDepartment(updated);
+  }
 }
 
 final departmentProvider = NotifierProvider<DepartmentNotifier, DepartmentState>(() {

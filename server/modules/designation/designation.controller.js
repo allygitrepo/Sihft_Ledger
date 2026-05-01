@@ -17,9 +17,25 @@ const designationController = {
                 return res.status(400).json({ message: "Department ID and designation name are required" });
             }
 
+            const existing = await Designation.findOne({
+                where: {
+                    department_id,
+                    designation_name: { [Op.iLike]: designation_name.trim() }
+                }
+            });
+
+            if (existing) {
+                if (existing.status) {
+                    return res.status(400).json({ message: "Designation already exists in this department" });
+                } else {
+                    await existing.update({ status: true });
+                    return res.status(200).json({ message: "Designation reactivated successfully", designation: existing });
+                }
+            }
+
             const designation = await Designation.create({
                 department_id,
-                designation_name
+                designation_name: designation_name.trim()
             });
 
             return res.status(201).json({ message: "Designation created successfully", designation });
