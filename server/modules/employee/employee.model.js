@@ -18,7 +18,7 @@ const Employee = sequelize.define("Employees",
         },
         department_id: {
             type: DataTypes.INTEGER,
-            allowNull: false,
+            allowNull: true,
             references: {
                 model: Department,
                 key: 'id'
@@ -26,7 +26,7 @@ const Employee = sequelize.define("Employees",
         },
         designation_id: {
             type: DataTypes.INTEGER,
-            allowNull: false,
+            allowNull: true,
             references: {
                 model: Designation,
                 key: 'id'
@@ -44,6 +44,17 @@ const Employee = sequelize.define("Employees",
         phone: { type: DataTypes.STRING, allowNull: false, unique: true },
         employee_code: { type: DataTypes.STRING, allowNull: true, unique: true },
         monthly_salary: { type: DataTypes.DECIMAL(10, 2), defaultValue: 0.00 },
+        hourly_rate: { type: DataTypes.DECIMAL(10, 2), allowNull: true },
+        daily_rate: { type: DataTypes.DECIMAL(10, 2), allowNull: true },
+        employee_type: { 
+            type: DataTypes.ENUM('hourly', 'daily'), 
+            defaultValue: 'hourly' 
+        },
+        overtime_rate: { type: DataTypes.DECIMAL(10, 2), defaultValue: 0.00 },
+        overtime_type: { 
+            type: DataTypes.ENUM('none', 'hourwise', 'slotwise'), 
+            defaultValue: 'none' 
+        },
         join_date: {
             type: DataTypes.DATEONLY,
             allowNull: false,

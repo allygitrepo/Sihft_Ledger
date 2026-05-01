@@ -3,8 +3,14 @@ const router = express.Router();
 const authMiddleware = require("../../middlewares/auth.middleware");
 const employeeController = require("./employee.controller");
 
+const multer = require("multer");
+const upload = multer({ dest: "uploads/" });
+
 router.post("/", authMiddleware, employeeController.create);
 router.get("/", authMiddleware, employeeController.getAll);
+router.get("/export", authMiddleware, employeeController.exportCSV);
+router.post("/import", authMiddleware, upload.single("file"), employeeController.importCSV);
+router.post("/bulk", authMiddleware, employeeController.bulkUpsert);
 router.get("/:id", authMiddleware, employeeController.getById);
 router.put("/:id", authMiddleware, employeeController.update);
 router.delete("/:id", authMiddleware, employeeController.delete);

@@ -1,6 +1,7 @@
 import 'employee_model.dart';
 
 class CsvEmployeePreview {
+  String? id; // Database ID if existing
   final String employeeCode;
   final String firstName;
   final String lastName;
@@ -8,6 +9,7 @@ class CsvEmployeePreview {
   final String position;
   final String department;
   final double salary;
+  bool? isExisting;
 
   // Configurable fields
   EmployeeType employeeType;
@@ -19,6 +21,7 @@ class CsvEmployeePreview {
   List<OvertimeSlot> overtimeSlots;
 
   CsvEmployeePreview({
+    this.id,
     required this.employeeCode,
     required this.firstName,
     required this.lastName,
@@ -37,7 +40,7 @@ class CsvEmployeePreview {
 
   EmployeeModel toEmployeeModel() {
     return EmployeeModel(
-      id: DateTime.now().millisecondsSinceEpoch.toString() + employeeCode,
+      id: id ?? (DateTime.now().millisecondsSinceEpoch.toString() + employeeCode),
       firstName: firstName,
       lastName: lastName,
       employeeCode: employeeCode,
@@ -58,6 +61,7 @@ class CsvEmployeePreview {
   }
 
   CsvEmployeePreview copyWith({
+    String? id,
     String? employeeCode,
     String? firstName,
     String? lastName,
@@ -74,6 +78,7 @@ class CsvEmployeePreview {
     List<OvertimeSlot>? overtimeSlots,
   }) {
     return CsvEmployeePreview(
+      id: id ?? this.id,
       employeeCode: employeeCode ?? this.employeeCode,
       firstName: firstName ?? this.firstName,
       lastName: lastName ?? this.lastName,

@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
@@ -6,8 +7,10 @@ import '../models/csv_employee_preview.dart';
 import '../models/employee_model.dart';
 import '../utills/app_colors.dart';
 import '../services/csv_import_service.dart';
+import '../services/excel_import_service.dart';
 import '../providers/employee_provider.dart';
 import '../providers/settings_provider.dart';
+import 'dart:typed_data';
 
 class CsvPreviewDialog extends ConsumerStatefulWidget {
   final PlatformFile file;
@@ -32,59 +35,72 @@ class _CsvPreviewDialogState extends ConsumerState<CsvPreviewDialog> {
 
   Future<void> _parseCSV() async {
     try {
-      // Read file content
-      String content;
-      if (widget.file.bytes != null) {
-        content = String.fromCharCodes(widget.file.bytes!);
-      } else if (widget.file.path != null) {
-        final file = File(widget.file.path!);
-        content = await file.readAsString();
-      } else {
-        throw Exception('Unable to read file content');
-      }
-
       final settings = ref.read(settingsProvider);
-      final parsedPreviews = await CsvImportService.parseCSV(content, settings);
+      List<CsvEmployeePreview> parsedPreviews = [];
+
+      final String extension = widget.file.extension?.toLowerCase() ?? '';
+      
+      if (extension == 'xlsx' || extension == 'xls') {
+        final Uint8List bytes = widget.file.bytes ?? await File(widget.file.path!).readAsBytes();
+        parsedPreviews = await ExcelImportService.parseExcel(bytes, settings);
+      } else {
+        // Read file content as string for CSV
+        String content;
+        if (widget.file.bytes != null) {
+          try {
+            content = utf8.decode(widget.file.bytes!);
+          } catch (e) {
+            content = latin1.decode(widget.file.bytes!);
+          }
+        } else if (widget.file.path != null) {
+          final file = File(widget.file.path!);
+          content = await file.readAsString();
+        } else {
+          throw Exception('Unable to read file content');
+        }
+        parsedPreviews = await CsvImportService.parseCSV(content, settings);
+      }
 
       if (parsedPreviews.isEmpty) {
         if (mounted) {
           setState(() {
             _isParsing = false;
-            _errorMessage = 'No employee data found in CSV file.';
+            _errorMessage = 'No employee data found in file.';
           });
         }
         return;
       }
 
-      // Check for duplicates
+      // Don't filter duplicates - we want to allow updating existing records
+      // Just identify them for UI visualization
       final existingEmployees = ref.read(employeeProvider).employees;
-      final newPreviews = <CsvEmployeePreview>[];
-      final duplicatePreviews = <CsvEmployeePreview>[];
-
+      
       for (final preview in parsedPreviews) {
-        final isDuplicate = existingEmployees.any(
-          (e) =>
-              e.employeeCode.toLowerCase() ==
-              preview.employeeCode.toLowerCase(),
-        );
-        if (isDuplicate) {
-          duplicatePreviews.add(preview);
+        // Find existing employee to get their actual ID
+        final existing = existingEmployees.where((e) =>
+          e.employeeCode.toLowerCase() == preview.employeeCode.toLowerCase() ||
+          (e.mobileNo.isNotEmpty && preview.mobileNo.isNotEmpty && e.mobileNo == preview.mobileNo)
+        ).firstOrNull;
+
+        if (existing != null) {
+          preview.id = existing.id;
+          preview.isExisting = true;
         } else {
-          // Initialize rates
-          if (preview.hourlyRate == null) {
-            preview.hourlyRate = preview.salary / 208;
-          }
-          if (preview.dailyRate == null) {
-            preview.dailyRate = preview.salary / 26;
-          }
-          newPreviews.add(preview);
+          preview.isExisting = false;
+        }
+        
+        // Initialize rates if missing
+        if (preview.hourlyRate == null) {
+          preview.hourlyRate = preview.salary / 208;
+        }
+        if (preview.dailyRate == null) {
+          preview.dailyRate = preview.salary / 26;
         }
       }
 
       if (mounted) {
         setState(() {
-          _previews = newPreviews;
-          _duplicates = duplicatePreviews;
+          _previews = parsedPreviews;
           _isParsing = false;
         });
       }
@@ -92,7 +108,7 @@ class _CsvPreviewDialogState extends ConsumerState<CsvPreviewDialog> {
       if (mounted) {
         setState(() {
           _isParsing = false;
-          _errorMessage = 'Error parsing CSV: ${e.toString()}';
+          _errorMessage = 'Error parsing file: ${e.toString()}';
         });
       }
     }
@@ -125,7 +141,9 @@ class _CsvPreviewDialogState extends ConsumerState<CsvPreviewDialog> {
                   const SizedBox(width: 12),
                   Expanded(
                     child: Text(
-                      'CSV Import Preview',
+                      widget.file.extension?.toLowerCase() == 'csv' 
+                        ? 'CSV Import Preview' 
+                        : 'Excel Import Preview',
                       style: TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
@@ -248,21 +266,21 @@ class _CsvPreviewDialogState extends ConsumerState<CsvPreviewDialog> {
           ),
           const SizedBox(height: 12),
           Text(
-            'Total in CSV: ${_previews.length + _duplicates.length}',
+            'Total to process: ${_previews.length}',
             style: TextStyle(color: theme.textTheme.bodyMedium?.color),
           ),
           Text(
-            '✅ New employees: ${_previews.length}',
+            '✅ Records found: ${_previews.length}',
             style: const TextStyle(
               color: Colors.green,
               fontWeight: FontWeight.bold,
             ),
           ),
-          if (_duplicates.length > 0)
+          if (_previews.any((p) => p.isExisting ?? false))
             Text(
-              '⚠️  Duplicates (will be skipped): ${_duplicates.length}',
+              'ℹ️  Includes ${_previews.where((p) => p.isExisting ?? false).length} existing records (will be updated)',
               style: const TextStyle(
-                color: Colors.orange,
+                color: Colors.blue,
                 fontWeight: FontWeight.bold,
               ),
             ),
@@ -295,21 +313,6 @@ class _CsvPreviewDialogState extends ConsumerState<CsvPreviewDialog> {
 
         // Employee cards
         ..._previews.map((preview) => _buildEmployeeCard(preview, theme)),
-
-        // Duplicates
-        if (_duplicates.length > 0) ...[
-          const SizedBox(height: 16),
-          const Text(
-            'Duplicates (Will be skipped)',
-            style: TextStyle(
-              fontWeight: FontWeight.bold,
-              fontSize: 14,
-              color: Colors.orange,
-            ),
-          ),
-          const SizedBox(height: 8),
-          ..._duplicates.map((preview) => _buildDuplicateCard(preview, theme)),
-        ],
       ],
     );
   }
@@ -321,8 +324,10 @@ class _CsvPreviewDialogState extends ConsumerState<CsvPreviewDialog> {
         children: [
           const CircularProgressIndicator(),
           const SizedBox(height: 20),
-          Text(
-            'Parsing CSV file...',
+            Text(
+              widget.file.extension?.toLowerCase() == 'csv' 
+                ? 'Parsing CSV file...' 
+                : 'Parsing Excel file...',
             style: TextStyle(color: Colors.grey[600]),
           ),
           const SizedBox(height: 8),
@@ -370,13 +375,17 @@ class _CsvPreviewDialogState extends ConsumerState<CsvPreviewDialog> {
       margin: const EdgeInsets.only(bottom: 12),
       child: ExpansionTile(
         leading: CircleAvatar(
-          backgroundColor: preview.employeeType == EmployeeType.hourly
-              ? Colors.blue
-              : Colors.green,
+          backgroundColor: (preview.isExisting ?? false)
+              ? Colors.blue.shade700
+              : (preview.employeeType == EmployeeType.hourly
+                  ? Colors.blue
+                  : Colors.green),
           child: Icon(
-            preview.employeeType == EmployeeType.hourly
-                ? Icons.access_time
-                : Icons.calendar_today,
+            (preview.isExisting ?? false)
+                ? Icons.update
+                : (preview.employeeType == EmployeeType.hourly
+                    ? Icons.access_time
+                    : Icons.calendar_today),
             color: Colors.white,
             size: 20,
           ),

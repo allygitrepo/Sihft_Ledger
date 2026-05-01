@@ -5,6 +5,9 @@ import 'package:intl/intl.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:file_saver/file_saver.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:shiftledger/providers/auth_provider.dart';
+import 'package:shiftledger/providers/company_provider.dart';
+import 'package:shiftledger/services/api_service.dart';
 import 'dart:typed_data';
 import 'dart:convert';
 import 'dart:developer' as developer;
@@ -66,9 +69,7 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
       if (_selectedEditDepartmentId == null) {
         final departments = ref.read(departmentProvider).departments;
         _selectedEditDepartmentId = departments
-            .where(
-              (d) => d.departmentName.trim() == employee.department.trim(),
-            )
+            .where((d) => d.departmentName.trim() == employee.department.trim())
             .firstOrNull
             ?.id;
       }
@@ -76,9 +77,7 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
       if (_selectedEditDesignationId == null) {
         final allDesignations = ref.read(designationProvider).designations;
         _selectedEditDesignationId = allDesignations
-            .where(
-              (d) => d.designationName.trim() == employee.position.trim(),
-            )
+            .where((d) => d.designationName.trim() == employee.position.trim())
             .firstOrNull
             ?.id;
       }
@@ -108,15 +107,8 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
     });
   }
 
-
-  
-
   void _saveEditing(EmployeeModel originalEmployee) {
-    if (_selectedEditDepartmentId == null ||
-        _selectedEditDesignationId == null) {
-      ToastHelper.error('Position and Department are required');
-      return;
-    }
+    // Department and Position are no longer strictly required
 
     final newSalary =
         double.tryParse(_editControllers['salary']!.text) ??
@@ -135,13 +127,15 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
     final departments = ref.read(departmentProvider).departments;
     final designations = ref.read(designationProvider).designations;
 
-    final deptName = departments
+    final deptName =
+        departments
             .where((d) => d.id == _selectedEditDepartmentId)
             .firstOrNull
             ?.departmentName ??
         originalEmployee.department;
 
-    final posName = designations
+    final posName =
+        designations
             .where((d) => d.id == _selectedEditDesignationId)
             .firstOrNull
             ?.designationName ??
@@ -247,13 +241,19 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
                                   setState(() {
                                     _searchQuery = value;
                                   });
-                                  if (_debounce?.isActive ?? false) _debounce!.cancel();
-                                  _debounce = Timer(const Duration(milliseconds: 500), () {
-                                    ref.read(employeeProvider.notifier).loadEmployees(
-                                      search: _searchQuery,
-                                      page: 1,
-                                    );
-                                  });
+                                  if (_debounce?.isActive ?? false)
+                                    _debounce!.cancel();
+                                  _debounce = Timer(
+                                    const Duration(milliseconds: 500),
+                                    () {
+                                      ref
+                                          .read(employeeProvider.notifier)
+                                          .loadEmployees(
+                                            search: _searchQuery,
+                                            page: 1,
+                                          );
+                                    },
+                                  );
                                 },
                               ),
                             ),
@@ -296,10 +296,10 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
                                   ),
                                 ),
                                 const SizedBox(width: 12),
-                                OutlinedButton.icon(
-                                  onPressed: () => _pickAndImportCSV(context),
-                                  icon: const Icon(Icons.upload_file, size: 20),
-                                  label: const Text('Import CSV'),
+                                  OutlinedButton.icon(
+                                    onPressed: () => _pickAndImportCSV(context),
+                                    icon: const Icon(Icons.upload_file, size: 20),
+                                    label: const Text('Import Employees'),
                                   style: OutlinedButton.styleFrom(
                                     foregroundColor: Colors.green,
                                     side: const BorderSide(color: Colors.green),
@@ -314,9 +314,23 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
                                 ),
                                 const SizedBox(width: 12),
                                 IconButton(
+                                  onPressed: () => _exportData(context),
+                                  icon: const Icon(Icons.download),
+                                  tooltip: 'Export Employees CSV',
+                                  style: IconButton.styleFrom(
+                                    foregroundColor: AppColors.primary,
+                                    side: BorderSide(color: AppColors.primary),
+                                    padding: const EdgeInsets.all(16),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                IconButton(
                                   onPressed: () =>
                                       _downloadCSVTemplate(context),
-                                  icon: const Icon(Icons.download),
+                                  icon: const Icon(Icons.description_outlined),
                                   tooltip: 'Download CSV Template',
                                   style: IconButton.styleFrom(
                                     foregroundColor: Colors.orange,
@@ -423,6 +437,9 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
                 case 'import':
                   _pickAndImportCSV(context);
                   break;
+                case 'export':
+                  _exportData(context);
+                  break;
                 case 'template':
                   _downloadCSVTemplate(context);
                   break;
@@ -445,7 +462,17 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
                   children: [
                     Icon(Icons.upload_file, size: 20, color: Colors.green),
                     SizedBox(width: 12),
-                    Text('Import CSV'),
+                    Text('Import Employees'),
+                  ],
+                ),
+              ),
+              const PopupMenuItem(
+                value: 'export',
+                child: Row(
+                  children: [
+                    Icon(Icons.download, size: 20, color: AppColors.primary),
+                    SizedBox(width: 12),
+                    Text('Export CSV'),
                   ],
                 ),
               ),
@@ -453,7 +480,11 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
                 value: 'template',
                 child: Row(
                   children: [
-                    Icon(Icons.download, size: 20, color: Colors.orange),
+                    Icon(
+                      Icons.description_outlined,
+                      size: 20,
+                      color: Colors.orange,
+                    ),
                     SizedBox(width: 12),
                     Text('Download Template'),
                   ],
@@ -502,10 +533,9 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
                       });
                       if (_debounce?.isActive ?? false) _debounce!.cancel();
                       _debounce = Timer(const Duration(milliseconds: 500), () {
-                        ref.read(employeeProvider.notifier).loadEmployees(
-                          search: _searchQuery,
-                          page: 1,
-                        );
+                        ref
+                            .read(employeeProvider.notifier)
+                            .loadEmployees(search: _searchQuery, page: 1);
                       });
                     },
                   ),
@@ -579,10 +609,12 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
         children: [
           IconButton(
             onPressed: state.currentPage > 1
-                ? () => ref.read(employeeProvider.notifier).loadEmployees(
-                      page: state.currentPage - 1,
-                      search: _searchQuery,
-                    )
+                ? () => ref
+                      .read(employeeProvider.notifier)
+                      .loadEmployees(
+                        page: state.currentPage - 1,
+                        search: _searchQuery,
+                      )
                 : null,
             icon: const Icon(Icons.chevron_left),
           ),
@@ -592,10 +624,12 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
           ),
           IconButton(
             onPressed: state.currentPage < state.totalPages
-                ? () => ref.read(employeeProvider.notifier).loadEmployees(
-                      page: state.currentPage + 1,
-                      search: _searchQuery,
-                    )
+                ? () => ref
+                      .read(employeeProvider.notifier)
+                      .loadEmployees(
+                        page: state.currentPage + 1,
+                        search: _searchQuery,
+                      )
                 : null,
             icon: const Icon(Icons.chevron_right),
           ),
@@ -769,21 +803,29 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
                             ),
                             border: OutlineInputBorder(),
                           ),
-                          hint: const Text('Select Dept', style: TextStyle(fontSize: 12)),
+                          hint: const Text(
+                            'Select Dept',
+                            style: TextStyle(fontSize: 12),
+                          ),
                           items: ref
                               .watch(departmentProvider)
                               .departments
-                              .where((d) => d.status || d.id == _selectedEditDepartmentId)
+                              .where(
+                                (d) =>
+                                    d.status ||
+                                    d.id == _selectedEditDepartmentId,
+                              )
                               .map((dept) {
-                            return DropdownMenuItem(
-                              value: dept.id,
-                              child: Text(
-                                dept.departmentName,
-                                style: const TextStyle(fontSize: 13),
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            );
-                          }).toList(),
+                                return DropdownMenuItem(
+                                  value: dept.id,
+                                  child: Text(
+                                    dept.departmentName,
+                                    style: const TextStyle(fontSize: 13),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                );
+                              })
+                              .toList(),
                           onChanged: (value) {
                             setState(() {
                               _selectedEditDepartmentId = value;
@@ -840,7 +882,10 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
                             ),
                             border: OutlineInputBorder(),
                           ),
-                          hint: const Text('Select Position', style: TextStyle(fontSize: 12)),
+                          hint: const Text(
+                            'Select Position',
+                            style: TextStyle(fontSize: 12),
+                          ),
                           items: ref
                               .watch(designationProvider)
                               .designations
@@ -853,15 +898,16 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
                                     d.id == _selectedEditDesignationId,
                               )
                               .map((desig) {
-                            return DropdownMenuItem(
-                              value: desig.id,
-                              child: Text(
-                                desig.designationName,
-                                style: const TextStyle(fontSize: 13),
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            );
-                          }).toList(),
+                                return DropdownMenuItem(
+                                  value: desig.id,
+                                  child: Text(
+                                    desig.designationName,
+                                    style: const TextStyle(fontSize: 13),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                );
+                              })
+                              .toList(),
                           onChanged: (value) {
                             setState(() {
                               _selectedEditDesignationId = value;
@@ -1430,9 +1476,7 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
                                   .loadDesignations(departmentId: value);
                             }
                           },
-                          validator: (value) => value == null
-                              ? 'Please select a department'
-                              : null,
+                          // validator removed
                         ),
                         const SizedBox(height: 16),
                         // Designation Dropdown (filtered by selected department)
@@ -1455,19 +1499,19 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
                           items: selectedDepartmentId == null
                               ? []
                               : allDesignations
-                                  .where(
-                                    (d) =>
-                                        d.departmentId ==
-                                            selectedDepartmentId &&
-                                        d.status,
-                                  )
-                                  .map((desig) {
-                                    return DropdownMenuItem(
-                                      value: desig.id,
-                                      child: Text(desig.designationName),
-                                    );
-                                  })
-                                  .toList(),
+                                    .where(
+                                      (d) =>
+                                          d.departmentId ==
+                                              selectedDepartmentId &&
+                                          d.status,
+                                    )
+                                    .map((desig) {
+                                      return DropdownMenuItem(
+                                        value: desig.id,
+                                        child: Text(desig.designationName),
+                                      );
+                                    })
+                                    .toList(),
                           onChanged: selectedDepartmentId == null
                               ? null
                               : (value) {
@@ -1475,9 +1519,7 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
                                     selectedDesignationId = value;
                                   });
                                 },
-                          validator: (value) => value == null
-                              ? 'Please select a designation'
-                              : null,
+                          // validator removed
                           disabledHint: Text(
                             'Select department first',
                             style: TextStyle(color: Colors.grey[400]),
@@ -1542,19 +1584,15 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
                                 (d) => d.id == selectedDesignationId,
                               );
 
-                              if (dept == null || desig == null) {
-                                ToastHelper.error('Selected department or designation not found');
-                                return;
-                              }
                               _addEmployeeManually(
                                 context,
                                 nameController.text,
                                 mobileController.text,
-                                desig.designationName,
-                                dept.departmentName,
-                                double.parse(salaryController.text),
-                                selectedDepartmentId!,
-                                selectedDesignationId!,
+                                desig?.designationName ?? '',
+                                dept?.departmentName ?? '',
+                                double.tryParse(salaryController.text) ?? 0,
+                                selectedDepartmentId,
+                                selectedDesignationId,
                                 isStatusActive,
                                 selectedJoinDate,
                               );
@@ -1579,43 +1617,81 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
     );
   }
 
-  Future<void> _pickAndImportCSV(BuildContext context) async {
-    developer.log('=== CSV IMPORT STARTED ===', name: 'EmployeesScreen');
+  Future<void> _exportData(BuildContext context) async {
+    final token = ref.read(authProvider).token;
+    final companyId = ref.read(companyProvider).company?.id;
 
+    if (token == null || companyId == null) return;
+
+    try {
+      final response = await ApiService.exportEmployeesCSV(
+        companyId.toString(),
+        token,
+      );
+
+      if (response.statusCode == 200) {
+        final bytes = response.bodyBytes;
+        final fileName =
+            'employees_export_${DateFormat('yyyyMMdd_HHmmss').format(DateTime.now())}';
+
+        if (kIsWeb) {
+          await FileSaver.instance.saveFile(
+            name: fileName,
+            bytes: bytes,
+            ext: 'csv',
+            mimeType: MimeType.csv,
+          );
+        } else {
+          await FileSaver.instance.saveAs(
+            name: fileName,
+            bytes: bytes,
+            ext: 'csv',
+            mimeType: MimeType.csv,
+          );
+        }
+        ToastHelper.success('Data exported successfully');
+      } else {
+        ToastHelper.error('Export failed: ${response.statusCode}');
+      }
+    } catch (e) {
+      ToastHelper.error('Export error: $e');
+    }
+  }
+
+  Future<void> _pickAndImportCSV(BuildContext context) async {
+    developer.log('=== DATA IMPORT STARTED ===', name: 'EmployeesScreen');
+ 
     final result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
-      allowedExtensions: ['csv'],
+      allowedExtensions: ['csv', 'xlsx', 'xls'],
       allowMultiple: false,
       withData: true,
     );
 
     if (result == null || result.files.isEmpty) {
-      developer.log('User cancelled file selection', name: 'EmployeesScreen');
       return;
     }
 
     final platformFile = result.files.single;
 
-    // Validate file type
-    if (!platformFile.name.toLowerCase().endsWith('.csv')) {
-      if (!mounted) return;
-      ToastHelper.error('Please select a CSV file (.csv)');
+    if (platformFile.bytes == null) {
+      ToastHelper.error('Could not read file data');
       return;
     }
 
-    if (!mounted) return;
-
-    // Open preview dialog immediately
-    final resultData = await showDialog<List<EmployeeModel>>(
+    // Restore preview dialog
+    if (!context.mounted) return;
+    
+    final List<EmployeeModel>? resultData = await showDialog<List<EmployeeModel>>(
       context: context,
       barrierDismissible: false,
       builder: (context) => CsvPreviewDialog(file: platformFile),
     );
 
-    if (resultData != null && resultData.isNotEmpty) {
-      // Import employees
-      await ref.read(employeeProvider.notifier).importEmployees(resultData);
-    }
+    if (resultData == null || resultData.isEmpty) return;
+
+    // Send the edited list to backend for robust processing (creating depts/desigs etc.)
+    await ref.read(employeeProvider.notifier).importData(resultData);
   }
 
   void _addEmployeeManually(
@@ -1625,8 +1701,8 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
     String position,
     String department,
     double salary,
-    int departmentId,
-    int designationId,
+    int? departmentId,
+    int? designationId,
     bool status,
     DateTime joinDate,
   ) {
@@ -1780,8 +1856,7 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
                         ),
                         items: departments
                             .where(
-                              (d) =>
-                                  d.status || d.id == selectedDepartmentId,
+                              (d) => d.status || d.id == selectedDepartmentId,
                             )
                             .map((dept) {
                               return DropdownMenuItem(
@@ -1825,20 +1900,20 @@ class _EmployeesScreenState extends ConsumerState<EmployeesScreen> {
                         items: selectedDepartmentId == null
                             ? []
                             : allDesignations
-                                .where(
-                                  (d) =>
-                                      d.departmentId ==
-                                          selectedDepartmentId &&
-                                      (d.status ||
-                                          d.id == selectedDesignationId),
-                                )
-                                .map((desig) {
-                                  return DropdownMenuItem(
-                                    value: desig.id,
-                                    child: Text(desig.designationName),
-                                  );
-                                })
-                                .toList(),
+                                  .where(
+                                    (d) =>
+                                        d.departmentId ==
+                                            selectedDepartmentId &&
+                                        (d.status ||
+                                            d.id == selectedDesignationId),
+                                  )
+                                  .map((desig) {
+                                    return DropdownMenuItem(
+                                      value: desig.id,
+                                      child: Text(desig.designationName),
+                                    );
+                                  })
+                                  .toList(),
                         onChanged: selectedDepartmentId == null
                             ? null
                             : (value) {

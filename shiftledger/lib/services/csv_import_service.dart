@@ -24,12 +24,19 @@ class CsvImportService {
     }
 
     final header = lines[0].toLowerCase();
-    final requiredColumns = ['id', 'name', 'position', 'department', 'salary'];
-
-    for (final column in requiredColumns) {
-      if (!header.contains(column)) {
-        throw Exception('CSV header must contain "$column" column');
+    
+    // Check if we have at least some recognizable columns
+    final possibleColumns = ['id', 'name', 'code', 'position', 'designation', 'department', 'salary'];
+    bool hasAny = false;
+    for (final column in possibleColumns) {
+      if (header.contains(column)) {
+        hasAny = true;
+        break;
       }
+    }
+    
+    if (!hasAny) {
+      throw Exception('CSV header does not contain recognizable columns (ID, Name, Salary, etc.)');
     }
 
     for (int i = 1; i < lines.length; i++) {
@@ -68,30 +75,36 @@ class CsvImportService {
       );
     }
 
+    // Use indexes based on header or try common patterns
+    // For now, keep it simple but handle more variations
     final employeeCode = parts[0];
     final name = parts[1];
 
-    // Check if we have 6 columns (with mobile) or 5 columns (without mobile)
-    String mobileNo, position, department, salaryString;
+    String mobileNo = '';
+    String position = '';
+    String department = '';
+    String salaryString = '';
 
-    if (parts.length >= 6) {
-      // 6 columns: ID, Name, Mobile, Position, Department, Salary
+    if (parts.length >= 6 && parts.length < 8) {
+      // Common 6 column: ID, Name, Mobile, Position, Dept, Salary
       mobileNo = parts[2];
       position = parts[3];
       department = parts[4];
       salaryString = parts[5];
-    } else {
-      // 5 columns: ID, Name, Position, Department, Salary
-      mobileNo = ''; // No mobile number provided
+    } else if (parts.length == 5) {
+      // 5 column: ID, Name, Position, Dept, Salary
       position = parts[2];
       department = parts[3];
       salaryString = parts[4];
+    } else if (parts.length >= 8) {
+      // Exported format: id, employee_code, full_name, phone, department, designation, monthly_salary, join_date
+      mobileNo = parts[3];
+      department = parts[4];
+      position = parts[5];
+      salaryString = parts[6];
     }
 
-    if (employeeCode.isEmpty) throw Exception('Employee ID cannot be empty');
-    if (name.isEmpty) throw Exception('Employee name cannot be empty');
-    if (position.isEmpty) throw Exception('Position cannot be empty');
-    if (department.isEmpty) throw Exception('Department cannot be empty');
+    if (name.isEmpty) throw Exception('Name cannot be empty at line $lineNumber');
 
     // Split name into first and last name
     final nameParts = name
